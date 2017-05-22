@@ -36,7 +36,7 @@ public class BridgeWorkerPlatformSqsCallback implements PollSqsCallback {
 
     /** Parses the SQS message. */
     @Override
-    public void callback(String messageBody) throws IOException, PollSqsWorkerBadRequestException {
+    public void callback(String messageBody) throws IOException, InterruptedException, PollSqsWorkerBadRequestException {
         BridgeWorkerPlatformRequest request;
         try {
             request = DefaultObjectMapper.INSTANCE.readValue(messageBody, BridgeWorkerPlatformRequest.class);
