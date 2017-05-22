@@ -59,7 +59,7 @@
         <dependency>
             <groupId>org.sagebionetworks</groupId>
             <artifactId>Bridge-Reporter</artifactId>
-            <version>1.0.2</version>
+            <version>1.0.3</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
