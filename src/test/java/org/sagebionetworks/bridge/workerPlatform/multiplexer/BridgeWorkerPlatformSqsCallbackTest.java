@@ -2,7 +2,7 @@ package org.sagebionetworks.bridge.workerPlatform.multiplexer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
-import org.sagebionetworks.bridge.reporter.request.ReportScheduleName;
+import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.reporter.worker.BridgeReporterProcessor;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.udd.worker.BridgeUddProcessor;
@@ -23,7 +23,7 @@ public class BridgeWorkerPlatformSqsCallbackTest {
     private static final String TEST_SCHEDULER = "test-scheduler";
     private static final String TEST_STUDY_ID = "api";
     private static final String TEST_EMAIL = "zhizhen.lin@sagebase.org";
-    private static final ReportScheduleName TEST_SCHEDULE_TYPE = ReportScheduleName.DAILY;
+    private static final ReportType TEST_SCHEDULE_TYPE = ReportType.DAILY;
 
     private static final String REQUEST_JSON_MSG = "{\n" +
             "   \"service\":\"REPORTER\",\n" +
