@@ -9,11 +9,11 @@ deploy:
   access_key_id: ${ACCESS_KEY_ID}
   secret_access_key: ${SECRET_ACCESS_KEY}
   region: us-east-1
-  app: Bridge-WorkerPlatform
+  app: bridgeworker-$TRAVIS_BRANCH-application
   env:
-    develop: Bridge-WorkerPlatform-dev
-    uat: Bridge-WorkerPlatform-uat
-    prod: Bridge-WorkerPlatform-prod
+    develop: bridgeworker-develop
+    uat: bridgeworker-uat
+    prod: bridgeworker-prod
   bucket_name: elasticbeanstalk-us-east-1-649232250620
   zip-file: target/BridgeWorkerPlatform-1.0.war
   on:
