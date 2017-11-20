@@ -6,8 +6,9 @@ before_deploy: mvn clean verify
 deploy:
   skip_cleanup: true
   provider: elasticbeanstalk
-  access_key_id: ${ACCESS_KEY_ID}
-  secret_access_key: ${SECRET_ACCESS_KEY}
+  access_key_id: AKIAJ6YWVFOX3GHDXVRQ
+  secret_access_key:
+    secure: TVc0HAeNPKZs/aFQpf5c/67MGCe/yF2Rd9xAnp/t4VzbfFcgYwmWy3cut4QsOA3zbe8igCF/XKdnpC0ivOAIJ2roCaf7hMyVDyv1hnoTHWgAmcfH5rlflgO4e6eM3LfDTID6/JUOfRTbsiBYHjVmj0yNo4GlPyjI1wea4M9jEpBomEiu/0vq+IFTeWvRrnviFhLtA//DV358JdnlADyB1Zg5lcLi+mM1akm6ZvcfM4LVbS6T/7z9Iz6q7EfBk40m9jAQnJ5yADb96sT8BdRhn7Tx4as0EoLSuAYZOKeZqbbJkns549u3Q/ddAOIy45xG/9m4HjGc7KrsP5tFxSiASmY0BJ+HLWlQzQSKPm/ti9t+cH3P1iSonTjFxNqYKkZkgOZ1rXIeGC22O9X9eOyHCNFwvYB1pYylTVjzBOg2txBydT8lLUjyruk9K2/6B7gjONTScz7IzOBJuygszdMVU0HuYBHKRasMJdPiOrcsKfzffJ6WeaJbdrKAaWlc32PigJLezRG43hDU1DdNOsxN1JWlQKOJeOXMSmjz5XCVB0Bps6nqR1/Q2gi0jWjZ0+9QKihrMzwuqjhGonKSxvQ2NGLhEtgIBRUYAtRkqjT73I3saFa8LE8WOY1cf8x91L3b5RxxZsxYfM1+UCvYmKsXYaOBFtqwYpj9EMC3AinwDt0=
   region: us-east-1
   app: bridgeworker-$TRAVIS_BRANCH-application
   env:
