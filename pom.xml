@@ -54,12 +54,12 @@
         <dependency>
             <groupId>org.sagebionetworks</groupId>
             <artifactId>BridgeUserDataDownloadService</artifactId>
-            <version>1.0.4</version>
+            <version>1.0.6</version>
         </dependency>
         <dependency>
             <groupId>org.sagebionetworks</groupId>
             <artifactId>Bridge-Reporter</artifactId>
-            <version>1.0.6</version>
+            <version>1.0.7</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -99,7 +99,7 @@
         <dependency>
             <groupId>org.sagebionetworks.bridge</groupId>
             <artifactId>rest-client</artifactId>
-            <version>0.13.3</version>
+            <version>0.13.22</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
