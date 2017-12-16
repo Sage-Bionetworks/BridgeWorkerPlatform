@@ -3,21 +3,20 @@ package org.sagebionetworks.bridge.workerPlatform.multiplexer;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import org.sagebionetworks.bridge.workerPlatform.request.ServiceType;
 
 /** Represents a request to the Bridge Reporting Service. */
 @JsonDeserialize(builder = BridgeWorkerPlatformRequest.Builder.class)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class BridgeWorkerPlatformRequest {
-    private final ServiceType service;
+    private final String service;
     private final JsonNode body;
 
-    public BridgeWorkerPlatformRequest(ServiceType service, JsonNode body) {
+    private BridgeWorkerPlatformRequest(String service, JsonNode body) {
         this.service = service;
         this.body = body;
     }
 
-    public ServiceType getService() {
+    public String getService() {
         return this.service;
     }
 
@@ -28,10 +27,10 @@ public class BridgeWorkerPlatformRequest {
     Bridge-WorkerPlatform request builder
      */
     public static class Builder {
-        private ServiceType service;
+        private String service;
         private JsonNode body;
 
-        public Builder withService(ServiceType service) {
+        public Builder withService(String service) {
             this.service = service;
             return this;
         }

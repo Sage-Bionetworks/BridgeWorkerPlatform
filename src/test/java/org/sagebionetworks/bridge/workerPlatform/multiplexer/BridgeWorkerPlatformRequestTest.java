@@ -1,12 +1,13 @@
 package org.sagebionetworks.bridge.workerPlatform.multiplexer;
 
+import static org.sagebionetworks.bridge.json.DefaultObjectMapper.INSTANCE;
+import static org.testng.Assert.assertEquals;
+
 import com.fasterxml.jackson.databind.JsonNode;
-import org.sagebionetworks.bridge.json.DefaultObjectMapper;
-import org.sagebionetworks.bridge.workerPlatform.request.ServiceType;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
-import static org.sagebionetworks.bridge.json.DefaultObjectMapper.*;
-import static org.testng.Assert.assertEquals;
+
+import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 
 public class BridgeWorkerPlatformRequestTest {
     private static final String TEST_JSON_NODE_STRING = "{\n" +
@@ -16,22 +17,29 @@ public class BridgeWorkerPlatformRequestTest {
             "   \"endDateTime\":\"2016-10-20T23:59:59.000Z\"\n" +
             "}";
 
-    private static final ServiceType TEST_SERVICE_TYPE = ServiceType.REPORTER;
-    private static JsonNode TEST_BODY;
+    private static JsonNode testBody;
 
     @BeforeClass
     public void setup() throws Exception{
-        TEST_BODY = DefaultObjectMapper.INSTANCE.readTree(TEST_JSON_NODE_STRING);
+        testBody = DefaultObjectMapper.INSTANCE.readTree(TEST_JSON_NODE_STRING);
+    }
+
+    @Test
+    public void normalCase() {
+        BridgeWorkerPlatformRequest request = new BridgeWorkerPlatformRequest.Builder()
+                .withService(Constants.SERVICE_TYPE_REPORTER).withBody(testBody).build();
+        assertEquals(request.getService(), Constants.SERVICE_TYPE_REPORTER);
+        assertEquals(request.getBody(), testBody);
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = ".*service.*")
     public void nullServiceType() {
-        new BridgeWorkerPlatformRequest.Builder().withBody(TEST_BODY).build();
+        new BridgeWorkerPlatformRequest.Builder().withBody(testBody).build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = ".*body.*")
     public void nullBody() {
-        new BridgeWorkerPlatformRequest.Builder().withService(TEST_SERVICE_TYPE).build();
+        new BridgeWorkerPlatformRequest.Builder().withService(Constants.SERVICE_TYPE_REPORTER).build();
     }
 
     @Test
@@ -49,7 +57,7 @@ public class BridgeWorkerPlatformRequestTest {
 
         // convert to POJO
         BridgeWorkerPlatformRequest request = INSTANCE.readValue(jsonText, BridgeWorkerPlatformRequest.class);
-        assertEquals(request.getBody(), TEST_BODY);
-        assertEquals(request.getService(), TEST_SERVICE_TYPE);
+        assertEquals(request.getBody(), testBody);
+        assertEquals(request.getService(), Constants.SERVICE_TYPE_REPORTER);
     }
 }

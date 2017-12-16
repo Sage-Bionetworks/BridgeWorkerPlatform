@@ -1,18 +1,19 @@
 package org.sagebionetworks.bridge.workerPlatform.multiplexer;
 
+import java.io.IOException;
+import java.util.Map;
+
 import com.fasterxml.jackson.databind.JsonNode;
-import org.sagebionetworks.bridge.json.DefaultObjectMapper;
-import org.sagebionetworks.bridge.reporter.worker.BridgeReporterProcessor;
-import org.sagebionetworks.bridge.sqs.PollSqsCallback;
-import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
-import org.sagebionetworks.bridge.udd.worker.BridgeUddProcessor;
-import org.sagebionetworks.bridge.workerPlatform.request.ServiceType;
+import com.google.common.base.Joiner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
+import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.sqs.PollSqsCallback;
+import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
+import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 
 /**
  * SQS callback. Called by the PollSqsWorker. This handles a reporting request.
@@ -21,22 +22,19 @@ import java.io.IOException;
 public class BridgeWorkerPlatformSqsCallback implements PollSqsCallback {
     private static final Logger LOG = LoggerFactory.getLogger(BridgeWorkerPlatformSqsCallback.class);
 
-    private BridgeReporterProcessor bridgeReporterProcessor;
-    private BridgeUddProcessor bridgeUddProcessor;
+    private static final Joiner COMMA_SPACE_JOINER = Joiner.on(", ").useForNull("");
+
+    private Map<String, ThrowingConsumer<JsonNode>> workersByServiceName;
 
     @Autowired
-    public final void setBridgeReporterProcessor(BridgeReporterProcessor bridgeReporterProcessor) {
-        this.bridgeReporterProcessor = bridgeReporterProcessor;
-    }
-
-    @Autowired
-    public final void setBridgeUddProcessor(BridgeUddProcessor bridgeUddProcessor) {
-        this.bridgeUddProcessor = bridgeUddProcessor;
+    public final void setWorkersByServiceName(Map<String, ThrowingConsumer<JsonNode>> workersByServiceName) {
+        LOG.info("Workers: " + COMMA_SPACE_JOINER.join(workersByServiceName.keySet()));
+        this.workersByServiceName = workersByServiceName;
     }
 
     /** Parses the SQS message. */
     @Override
-    public void callback(String messageBody) throws IOException, InterruptedException, PollSqsWorkerBadRequestException {
+    public void callback(String messageBody) throws Exception {
         BridgeWorkerPlatformRequest request;
         try {
             request = DefaultObjectMapper.INSTANCE.readValue(messageBody, BridgeWorkerPlatformRequest.class);
@@ -44,17 +42,15 @@ public class BridgeWorkerPlatformSqsCallback implements PollSqsCallback {
             throw new PollSqsWorkerBadRequestException("Error parsing request: " + ex.getMessage(), ex);
         }
 
-        ServiceType service = request.getService();
+        String service = request.getService();
         JsonNode body = request.getBody();
 
-        LOG.info("Received request for service=" + service.name());
-
-        if (service == ServiceType.REPORTER) {
-            bridgeReporterProcessor.process(body);
-        } else if (service == ServiceType.EXPORTER) {
-            // TODO: left exporter for later testing
-        } else if (service == ServiceType.UDD) {
-            bridgeUddProcessor.process(body);
+        ThrowingConsumer<JsonNode> worker = workersByServiceName.get(service);
+        if (worker != null) {
+            LOG.info("Received request for service=" + service);
+            worker.accept(body);
+        } else {
+            throw new PollSqsWorkerBadRequestException("Invalid service " + service);
         }
     }
 }

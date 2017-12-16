@@ -8,7 +8,7 @@ In your home directory, add a file BridgeWorkerPlatform.conf and add
 To run a full build (including compile, unit tests, findbugs, and jacoco test coverage), run:
 mvn verify
 
-(A full build takes about 1 min 15 seconds on my laptop, from a clean workspace.)
+(A full build takes about 30 seconds on my laptop, from a clean workspace.)
 
 To just run findbugs, run:
 mvn compile findbugs:check
@@ -23,6 +23,9 @@ Jacoco report will be in target/site/jacoco/index.html
 
 To run this locally, run
 mvn spring-boot:run
+
+To debug remotely, run:
+mvn spring-boot:run -Drun.jvmArguments="-Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005"
 
 Useful Spring Boot / Maven development resouces:
 http://stackoverflow.com/questions/27323104/spring-boot-and-maven-exec-plugin-issue
