@@ -144,8 +144,8 @@ public class SpringConfig {
     }
 
     @Bean(name="synapsePrincipalId")
-    public String synapsePrincipalId() {
-        return bridgeConfig().get("synapse.principal.id");
+    public long synapsePrincipalId() {
+        return bridgeConfig().getInt("synapse.principal.id");
     }
 
     @Bean(name = Constants.SERVICE_TYPE_REPORTER)
