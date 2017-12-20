@@ -27,11 +27,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.sagebionetworks</groupId>
-            <artifactId>bridge-base</artifactId>
-            <version>2.7.2</version>
-        </dependency>
-        <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-dynamodb</artifactId>
             <version>${aws.version}</version>
@@ -50,16 +45,6 @@
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-sqs</artifactId>
             <version>${aws.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.sagebionetworks</groupId>
-            <artifactId>BridgeUserDataDownloadService</artifactId>
-            <version>1.0.6</version>
-        </dependency>
-        <dependency>
-            <groupId>org.sagebionetworks</groupId>
-            <artifactId>Bridge-Reporter</artifactId>
-            <version>1.0.7</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -97,9 +82,29 @@
             <version>1.8.7</version>
         </dependency>
         <dependency>
+            <groupId>org.sagebionetworks</groupId>
+            <artifactId>bridge-base</artifactId>
+            <version>2.7.8</version>
+        </dependency>
+        <dependency>
+            <groupId>org.sagebionetworks</groupId>
+            <artifactId>Bridge-FitBit-Worker</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.sagebionetworks</groupId>
+            <artifactId>Bridge-Reporter</artifactId>
+            <version>1.0.7</version>
+        </dependency>
+        <dependency>
+            <groupId>org.sagebionetworks</groupId>
+            <artifactId>BridgeUserDataDownloadService</artifactId>
+            <version>1.0.6</version>
+        </dependency>
+        <dependency>
             <groupId>org.sagebionetworks.bridge</groupId>
             <artifactId>rest-client</artifactId>
-            <version>0.13.22</version>
+            <version>0.13.27</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -109,6 +114,7 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-logging</artifactId>
         </dependency>
+
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
@@ -121,6 +127,7 @@
             <version>${logback.version}</version>
             <scope>runtime</scope>
         </dependency>
+
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
@@ -207,6 +214,7 @@
                 <configuration>
                     <excludes>
                         <exclude>org/sagebionetworks/bridge/workerPlatform/config/*</exclude>
+                        <exclude>org/sagebionetworks/bridge/workerPlatform/multiplexer/Constants.class</exclude>
                     </excludes>
                     <rules>
                         <rule>

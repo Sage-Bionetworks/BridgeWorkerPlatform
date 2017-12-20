@@ -1,22 +1,25 @@
 package org.sagebionetworks.bridge.workerPlatform.multiplexer;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import org.sagebionetworks.bridge.json.DefaultObjectMapper;
-import org.sagebionetworks.bridge.reporter.request.ReportType;
-import org.sagebionetworks.bridge.reporter.worker.BridgeReporterProcessor;
-import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
-import org.sagebionetworks.bridge.udd.worker.BridgeUddProcessor;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
-import java.io.IOException;
-
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+
+import java.io.IOException;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.collect.ImmutableMap;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
+import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.reporter.request.ReportType;
+import org.sagebionetworks.bridge.reporter.worker.BridgeReporterProcessor;
+import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
+import org.sagebionetworks.bridge.udd.worker.BridgeUddProcessor;
+import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 
 public class BridgeWorkerPlatformSqsCallbackTest {
     // simple strings for test
@@ -85,8 +88,10 @@ public class BridgeWorkerPlatformSqsCallbackTest {
 
         // set up callback
         callback = new BridgeWorkerPlatformSqsCallback();
-        callback.setBridgeReporterProcessor(mockReporterProcessor);
-        callback.setBridgeUddProcessor(mockUddProcessor);
+        callback.setWorkersByServiceName(ImmutableMap.<String, ThrowingConsumer<JsonNode>>builder()
+                .put(Constants.SERVICE_TYPE_REPORTER, mockReporterProcessor::process)
+                .put(Constants.SERVICE_TYPE_UDD, mockUddProcessor::process)
+                .build());
     }
 
     @Test
@@ -116,5 +121,15 @@ public class BridgeWorkerPlatformSqsCallbackTest {
     @Test(expectedExceptions = PollSqsWorkerBadRequestException.class)
     public void malformedRequest() throws Exception {
         callback.callback("not json");
+    }
+
+    @Test(expectedExceptions = PollSqsWorkerBadRequestException.class, expectedExceptionsMessageRegExp =
+            "Invalid service not-a-service")
+    public void invalidService() throws Exception {
+        String requestText = "{\n" +
+                "   \"service\":\"not-a-service\",\n" +
+                "   \"body\":{\"foo\":\"bar\"}\n" +
+                "}";
+        callback.callback(requestText);
     }
 }
