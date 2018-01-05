@@ -6,8 +6,9 @@ before_deploy: mvn clean verify
 deploy:
   skip_cleanup: true
   provider: elasticbeanstalk
-  access_key_id: ${ACCESS_KEY_ID}
-  secret_access_key: ${SECRET_ACCESS_KEY}
+  access_key_id: AKIAJ6YWVFOX3GHDXVRQ
+  secret_access_key:
+    secure: "RAZa/ml2xc9W+7Vc6mrpdLMifg9d1ciLAmtHXfGNMABvLMF5oAEq0aJpySxdvDUJOGy1aO6nsdva8YxHdLhBWmMkKvBtLA4i/hhuIgYAPh0ujgEHqlFxDQYEzlXm/7p/wLRUYClnMI6I1dEWPIcQ+TIBqCLezAW3P65AkGPmipWOJZ0bmhjflvTh/Ogdjluv4h++6qzFiW/GFzfnTZeEsqCL54D2rNV2gnzSPLzupVW404DWRS5BshdEN8ZDtCbK9V7X0LRpserauxrxapqnPEsorqyD/EXkVH0RVi0LFkiyFUnqcrcNih70/OH4b/Wb9sXZBjOQ1aPIOsisZQAgZG66uVE5yDZ6GZShnB8S5qxoRC48IxkE7zFvCpFcfC3DzrQxCpVO1m1LIV37GfTRZayfosBf7XsxhqhmHbDm2D5quZynJCyj/dY+8hsriZVs4cdx7PDPT2R8+F3B33wUn4Lp3jt1Ll6r3haGbSnamO4qPHU7usd5adLD5HXI4VlqrYIqoWWe60ct63xsyiosh6IBfL77Ls9Ko94pp1nHhGZE8QE5IViMRVl7i1fAsDV9RxLGoEsLAmCMnVIYQf0ygRVQgcF4EzYXp9qBjSSq3wp96NaQQmj+5j7MYVaJSLC1aVjJKb8BW8oBplXJs/9G0im6clSwVxOFpyNazQCvkPI="
   region: us-east-1
   app: Bridge-WorkerPlatform
   env:
