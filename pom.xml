@@ -46,7 +46,8 @@
             <artifactId>aws-java-sdk-sqs</artifactId>
             <version>${aws.version}</version>
         </dependency>
-        <!-- Recent additions of AWS libs don't include a recent enough version of httpclient. -->
+        <!-- Recent additions of AWS libs require a more recent version of httpclient than is being 
+	    pulled in by dependencies. -->
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
