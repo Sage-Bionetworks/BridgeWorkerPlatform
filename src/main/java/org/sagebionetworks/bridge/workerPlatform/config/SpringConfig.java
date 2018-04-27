@@ -41,8 +41,9 @@ import java.nio.file.Paths;
 @ComponentScan("org.sagebionetworks.bridge.workerPlatform")
 @Import({
         org.sagebionetworks.bridge.fitbit.config.SpringConfig.class,
+        org.sagebionetworks.bridge.notification.config.SpringConfig.class,
         org.sagebionetworks.bridge.reporter.config.SpringConfig.class,
-        org.sagebionetworks.bridge.udd.config.SpringConfig.class
+        org.sagebionetworks.bridge.udd.config.SpringConfig.class,
 })
 @Configuration("GeneralConfig")
 public class SpringConfig {
