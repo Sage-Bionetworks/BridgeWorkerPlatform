@@ -16,7 +16,6 @@
         <logback.version>1.1.6</logback.version>
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
-        <stormpath.version>1.0.RC4.5</stormpath.version>
     </properties>
 
     <parent>
@@ -101,17 +100,17 @@
         <dependency>
             <groupId>org.sagebionetworks</groupId>
             <artifactId>Bridge-FitBit-Worker</artifactId>
-            <version>1.0.4</version>
+            <version>1.0.5</version>
         </dependency>
         <dependency>
             <groupId>org.sagebionetworks</groupId>
             <artifactId>Bridge-Reporter</artifactId>
-            <version>1.0.8</version>
+            <version>1.0.9</version>
         </dependency>
         <dependency>
             <groupId>org.sagebionetworks</groupId>
             <artifactId>BridgeUserDataDownloadService</artifactId>
-            <version>1.0.8</version>
+            <version>1.0.9</version>
         </dependency>
         <dependency>
             <groupId>org.sagebionetworks.bridge</groupId>
