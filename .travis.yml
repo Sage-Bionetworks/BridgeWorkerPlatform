@@ -10,11 +10,8 @@ deploy:
   secret_access_key:
     secure: Nlj/PsYJuaY2YX6Lg97ZPr80PhCQW/1JVNPHWVM77N+vghO8JtZFbp2Eb6AAL+PQGX/MIKB9R7n57DiaBBhU+KMahoUylNvIwpdBycCKC25j/eHrRSdcz4yu12eVxpvdfm90hYOY83MVkw0t9Vf3v7gLSF7gmW9kA0v8u03ufUKBdALNXGp62+8cB80+mM50EdzwNWiD7hm7F+6+9x/C8H+iDubQsSSWgIHZdnTKtRPNOSzuNy6fzU8mvvsE+2+8OQG/aqWPgETYMoVo3XzE/v5IATn9Wcw0RPViQcteAHBLHBchehkmN79bVnQQ+jm+gduPdvF0GQLAXKAfmTSgcnj1mjxIp7+fuh9uPH0f68fYudkhd8laUZExXQkDNmkMmsecf4q/x+9arX3B3Y5W4EGFraJ3RJS2r/iAr6ybYreo3Z7GO9fqtOXmmRVhzLOH4CPQiJJZvcNgq5QHDWzKpJmAt4F8yXT+1xlNb4mcYMs7OP5D3KKa07pveSlcNO0c37tmKeEbTZ1/FAhxegSOO0+3MT3QaWJhH948VGEjluiNlutvB8aFXG5BPH6N5e3HtkLxVO2tMuHC+tT7bvjjDuvucC5BrbSSHw7auj7XexHtFLw4h4USsh66+gRIehiim0IXXMwqQs799YrKabOGEPv+blx2WX9n01uWlwM5wOQ=
   region: us-east-1
-  app: Bridge-WorkerPlatform
-  env:
-    develop: Bridge-WorkerPlatform-dev
-    uat: Bridge-WorkerPlatform-uat
-    prod: Bridge-WorkerPlatform-prod
+  app: bridgeworker-$TRAVIS_BRANCH-application
+  env: bridgeworker-$TRAVIS_BRANCH
   bucket_name: elasticbeanstalk-us-east-1-649232250620
   zip-file: target/BridgeWorkerPlatform-1.0.war
   on:
