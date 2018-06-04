@@ -1,3 +1,8 @@
 <FindBugsFilter>
-    <!-- Placeholder findbugs-exclude.xml -->
+    <Match>
+        <!-- We're counting lines, so we don't actually care about the value returned by readline() -->
+        <Class name="org.sagebionetworks.bridge.udd.synapse.SynapseDownloadFromTableTask" />
+        <Method name="filterNoDataCsvFiles" />
+        <Bug pattern="RV_DONT_JUST_NULL_CHECK_READLINE" />
+    </Match>
 </FindBugsFilter>

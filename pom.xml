@@ -42,14 +42,22 @@
         </dependency>
         <dependency>
             <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-sns</artifactId>
+            <version>${aws.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-sqs</artifactId>
             <version>${aws.version}</version>
         </dependency>
-        <!-- Recent additions of AWS libs require a more recent version of httpclient than is being 
-	    pulled in by dependencies. -->
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
+            <version>4.5.5</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>fluent-hc</artifactId>
             <version>4.5.5</version>
         </dependency>
         <dependency>
@@ -89,28 +97,13 @@
         </dependency>
         <dependency>
             <groupId>org.sagebionetworks</groupId>
-            <artifactId>BridgeActivityNotificationWorker</artifactId>
-            <version>1.0.3</version>
-        </dependency>
-        <dependency>
-            <groupId>org.sagebionetworks</groupId>
             <artifactId>bridge-base</artifactId>
             <version>2.7.14</version>
         </dependency>
         <dependency>
             <groupId>org.sagebionetworks</groupId>
-            <artifactId>Bridge-FitBit-Worker</artifactId>
-            <version>1.0.5</version>
-        </dependency>
-        <dependency>
-            <groupId>org.sagebionetworks</groupId>
-            <artifactId>Bridge-Reporter</artifactId>
-            <version>1.0.9</version>
-        </dependency>
-        <dependency>
-            <groupId>org.sagebionetworks</groupId>
-            <artifactId>BridgeUserDataDownloadService</artifactId>
-            <version>1.0.9</version>
+            <artifactId>synapseJavaClient</artifactId>
+            <version>157.0</version>
         </dependency>
         <dependency>
             <groupId>org.sagebionetworks.bridge</groupId>
@@ -139,6 +132,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <dependency>
+            <groupId>nl.jqno.equalsverifier</groupId>
+            <artifactId>equalsverifier</artifactId>
+            <version>2.4</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
@@ -237,8 +236,20 @@
                 <version>0.7.5.201505241946</version>
                 <configuration>
                     <excludes>
+                        <!-- config is inherently not testable -->
+                        <exclude>org/sagebionetworks/bridge/fitbit/config/*</exclude>
+                        <exclude>org/sagebionetworks/bridge/notification/config/*</exclude>
+                        <exclude>org/sagebionetworks/bridge/reporter/config/*</exclude>
+                        <exclude>org/sagebionetworks/bridge/udd/config/*</exclude>
                         <exclude>org/sagebionetworks/bridge/workerPlatform/config/*</exclude>
+
+                        <!-- constants are also not testable -->
+                        <exclude>org/sagebionetworks/bridge/fitbit/worker/Constants.class</exclude>
                         <exclude>org/sagebionetworks/bridge/workerPlatform/multiplexer/Constants.class</exclude>
+
+                        <!-- no point in testing exceptions, since they are entirely boilerplate code -->
+                        <exclude>org/sagebionetworks/bridge/reporter/exceptions/*</exclude>
+                        <exclude>org/sagebionetworks/bridge/udd/exceptions/*</exclude>
                     </excludes>
                     <rules>
                         <rule>

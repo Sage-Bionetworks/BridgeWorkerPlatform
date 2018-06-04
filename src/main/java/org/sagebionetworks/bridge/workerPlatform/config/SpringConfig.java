@@ -1,25 +1,18 @@
 package org.sagebionetworks.bridge.workerPlatform.config;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
+import com.amazonaws.services.dynamodbv2.document.Index;
+import com.amazonaws.services.dynamodbv2.document.Table;
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.simpleemail.AmazonSimpleEmailServiceClient;
+import com.amazonaws.services.sns.AmazonSNSClient;
 import com.amazonaws.services.sqs.AmazonSQSClient;
-import org.sagebionetworks.bridge.config.Config;
-import org.sagebionetworks.bridge.config.PropertiesConfig;
-import org.sagebionetworks.bridge.dynamodb.DynamoNamingHelper;
-import org.sagebionetworks.bridge.file.FileHelper;
-import org.sagebionetworks.bridge.heartbeat.HeartbeatLogger;
-import org.sagebionetworks.bridge.reporter.worker.BridgeReporterProcessor;
-import org.sagebionetworks.bridge.rest.ClientManager;
-import org.sagebionetworks.bridge.rest.model.ClientInfo;
-import org.sagebionetworks.bridge.rest.model.SignIn;
-import org.sagebionetworks.bridge.sqs.PollSqsWorker;
-import org.sagebionetworks.bridge.sqs.SqsHelper;
-import org.sagebionetworks.bridge.synapse.SynapseHelper;
-import org.sagebionetworks.bridge.udd.worker.BridgeUddProcessor;
-import org.sagebionetworks.bridge.worker.ThrowingConsumer;
-import org.sagebionetworks.bridge.workerPlatform.multiplexer.BridgeWorkerPlatformSqsCallback;
-import org.sagebionetworks.bridge.workerPlatform.multiplexer.Constants;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import org.sagebionetworks.client.SynapseAdminClientImpl;
 import org.sagebionetworks.client.SynapseClient;
@@ -29,10 +22,24 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import org.sagebionetworks.bridge.config.Config;
+import org.sagebionetworks.bridge.config.PropertiesConfig;
+import org.sagebionetworks.bridge.dynamodb.DynamoNamingHelper;
+import org.sagebionetworks.bridge.dynamodb.DynamoQueryHelper;
+import org.sagebionetworks.bridge.file.FileHelper;
+import org.sagebionetworks.bridge.heartbeat.HeartbeatLogger;
+import org.sagebionetworks.bridge.reporter.worker.BridgeReporterProcessor;
+import org.sagebionetworks.bridge.rest.ClientManager;
+import org.sagebionetworks.bridge.rest.model.ClientInfo;
+import org.sagebionetworks.bridge.rest.model.SignIn;
+import org.sagebionetworks.bridge.s3.S3Helper;
+import org.sagebionetworks.bridge.sqs.PollSqsWorker;
+import org.sagebionetworks.bridge.sqs.SqsHelper;
+import org.sagebionetworks.bridge.synapse.SynapseHelper;
+import org.sagebionetworks.bridge.udd.worker.BridgeUddProcessor;
+import org.sagebionetworks.bridge.worker.ThrowingConsumer;
+import org.sagebionetworks.bridge.workerPlatform.multiplexer.BridgeWorkerPlatformSqsCallback;
+import org.sagebionetworks.bridge.workerPlatform.multiplexer.Constants;
 
 // These configs get credentials from the default credential chain. For developer desktops, this is ~/.aws/credentials.
 // For EC2 instances, this happens transparently.
@@ -64,7 +71,7 @@ public class SpringConfig {
         return new ClientManager.Builder().withClientInfo(clientInfo).withSignIn(signIn).build();
     }
 
-    @Bean(name = "workerPlatformConfigProperties")
+    @Bean
     public Config bridgeConfig() {
         String defaultConfig = getClass().getClassLoader().getResource(DEFAULT_CONFIG_FILE).getPath();
         Path defaultConfigPath = Paths.get(defaultConfig);
@@ -92,6 +99,43 @@ public class SpringConfig {
     }
 
     @Bean
+    public DynamoQueryHelper ddbQueryHelper() {
+        return new DynamoQueryHelper();
+    }
+
+    @Bean(name = "ddbStudyTable")
+    public Table ddbStudyTable() {
+        String fullyQualifiedTableName = dynamoNamingHelper().getFullyQualifiedTableName("Study");
+        return ddbClient().getTable(fullyQualifiedTableName);
+    }
+
+    @Bean(name = "ddbSynapseMapTable")
+    public Table ddbSynapseMapTable() {
+        return ddbClient().getTable(bridgeConfig().get("synapse.map.table"));
+    }
+
+    // Naming note: This is a DDB table containing references to a set of Synapse tables. The name is a bit confusing,
+    // but I'm not sure how to make it less confusing.
+    @Bean(name = "ddbSynapseSurveyTablesTable")
+    public Table ddbSynapseSurveyTablesTable() {
+        String fullyQualifiedTableName = dynamoNamingHelper().getFullyQualifiedTableName(
+                "SynapseSurveyTables");
+        return ddbClient().getTable(fullyQualifiedTableName);
+    }
+
+    @Bean(name = "ddbUploadSchemaTable")
+    public Table ddbUploadSchemaTable(Config config) {
+        String fullyQualifiedTableName = dynamoNamingHelper().getFullyQualifiedTableName(
+                "UploadSchema");
+        return ddbClient().getTable(fullyQualifiedTableName);
+    }
+
+    @Bean(name = "ddbUploadSchemaStudyIndex")
+    public Index ddbUploadSchemaStudyIndex() {
+        return ddbUploadSchemaTable(bridgeConfig()).getIndex("studyId-index");
+    }
+
+    @Bean
     public FileHelper fileHelper() {
         return new FileHelper();
     }
@@ -101,6 +145,23 @@ public class SpringConfig {
         HeartbeatLogger heartbeatLogger = new HeartbeatLogger();
         heartbeatLogger.setIntervalMinutes(bridgeConfig().getInt("heartbeat.interval.minutes"));
         return heartbeatLogger;
+    }
+
+    @Bean
+    public S3Helper s3Helper() {
+        S3Helper s3Helper = new S3Helper();
+        s3Helper.setS3Client(new AmazonS3Client());
+        return s3Helper;
+    }
+
+    @Bean
+    public AmazonSimpleEmailServiceClient sesClient() {
+        return new AmazonSimpleEmailServiceClient();
+    }
+
+    @Bean
+    public AmazonSNSClient snsClient() {
+        return new AmazonSNSClient();
     }
 
     @Bean
@@ -126,7 +187,7 @@ public class SpringConfig {
     @Bean(name="workerPlatformSynapseClient")
     public SynapseClient synapseClient() {
         SynapseClient synapseClient = new SynapseAdminClientImpl();
-        synapseClient.setUsername(bridgeConfig().get("synapse.user"));
+        synapseClient.setUserName(bridgeConfig().get("synapse.user"));
         synapseClient.setApiKey(bridgeConfig().get("synapse.api.key"));
         return synapseClient;
     }
@@ -135,8 +196,8 @@ public class SpringConfig {
     public SynapseHelper synapseHelper() {
         Config config = bridgeConfig();
         SynapseHelper synapseHelper = new SynapseHelper();
-        synapseHelper.setAsyncIntervalMillis(config.getInt("synapse.async.interval.millis"));
-        synapseHelper.setAsyncTimeoutLoops(config.getInt("synapse.async.timeout.loops"));
+        synapseHelper.setAsyncIntervalMillis(config.getInt("synapse.poll.interval.millis"));
+        synapseHelper.setAsyncTimeoutLoops(config.getInt("synapse.poll.max.tries"));
         synapseHelper.setGetColumnModelsRateLimit(
                 config.getInt("synapse.get.column.models.rate.limit.per.minute") / 60.0);
         synapseHelper.setRateLimit(config.getInt("synapse.rate.limit.per.second"));
