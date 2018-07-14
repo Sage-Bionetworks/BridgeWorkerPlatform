@@ -3,17 +3,21 @@ package org.sagebionetworks.bridge.notification.worker;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import org.testng.annotations.Test;
 
 public class WorkerConfigTest {
-    private static final Map<String, String> DUMMY_MAP = ImmutableMap.of("dummy key", "dummy value");
+    private static final List<String> DUMMY_LIST = ImmutableList.of("dummy string");
+    private static final Map<String, List<String>> DUMMY_MAP = ImmutableMap.of("dummy key", ImmutableList.of(
+            "dummy value"));
     private static final Set<String> DUMMY_SET = ImmutableSet.of("dummy string");
 
     @Test
@@ -27,21 +31,21 @@ public class WorkerConfigTest {
     }
 
     @Test
-    public void missedCumulativeActivitiesMessagesByDataGroupNeverNull() {
-        testMapNeverNull(WorkerConfig::getMissedCumulativeActivitiesMessagesByDataGroup,
-                WorkerConfig::setMissedCumulativeActivitiesMessagesByDataGroup);
+    public void missedCumulativeActivitiesMessagesListNeverNull() {
+        testListNeverNull(WorkerConfig::getMissedCumulativeActivitiesMessagesList,
+                WorkerConfig::setMissedCumulativeActivitiesMessagesList);
     }
 
     @Test
-    public void missedEarlyActivitiesMessagesByDataGroupNeverNull() {
-        testMapNeverNull(WorkerConfig::getMissedEarlyActivitiesMessagesByDataGroup,
-                WorkerConfig::setMissedEarlyActivitiesMessagesByDataGroup);
+    public void missedEarlyActivitiesMessagesListNeverNull() {
+        testListNeverNull(WorkerConfig::getMissedEarlyActivitiesMessagesList,
+                WorkerConfig::setMissedEarlyActivitiesMessagesList);
     }
 
     @Test
-    public void missedLaterActivitiesMessagesByDataGroupNeverNull() {
-        testMapNeverNull(WorkerConfig::getMissedLaterActivitiesMessagesByDataGroup,
-                WorkerConfig::setMissedLaterActivitiesMessagesByDataGroup);
+    public void missedLaterActivitiesMessagesListNeverNull() {
+        testListNeverNull(WorkerConfig::getMissedLaterActivitiesMessagesList,
+                WorkerConfig::setMissedLaterActivitiesMessagesList);
     }
 
     @Test
@@ -50,14 +54,12 @@ public class WorkerConfigTest {
     }
 
     @Test
-    public void requiredDataGroupsOneOfSetNeverNull() {
-        testSetNeverNull(WorkerConfig::getRequiredDataGroupsOneOfSet, WorkerConfig::setRequiredDataGroupsOneOfSet);
-    }
-
-    @Test
     public void requiredSubpopulationGuidSetNeverNull() {
         testSetNeverNull(WorkerConfig::getRequiredSubpopulationGuidSet, WorkerConfig::setRequiredSubpopulationGuidSet);
     }
+
+    // The following tests are duplicated per collection type, because generics and inheritance behaves in ways that
+    // make this difficult to genericize.
 
     private static void testSetNeverNull(Function<WorkerConfig, Set<String>> getter,
             BiConsumer<WorkerConfig, Set<String>> setter) {
@@ -74,9 +76,24 @@ public class WorkerConfigTest {
         assertTrue(getter.apply(config).isEmpty());
     }
 
+    private static void testListNeverNull(Function<WorkerConfig, List<String>> getter,
+            BiConsumer<WorkerConfig, List<String>> setter) {
+        // Initially empty
+        WorkerConfig config = new WorkerConfig();
+        assertTrue(getter.apply(config).isEmpty());
+
+        // Set works
+        setter.accept(config, DUMMY_LIST);
+        assertEquals(getter.apply(config), DUMMY_LIST);
+
+        // Set to null gives us an empty set
+        setter.accept(config, null);
+        assertTrue(getter.apply(config).isEmpty());
+    }
+
     // Set and Map don't have a shared parent class, so sadly, we'll need to duplicate the test twice.
-    private static void testMapNeverNull(Function<WorkerConfig, Map<String, String>> getter,
-            BiConsumer<WorkerConfig, Map<String, String>> setter) {
+    private static void testMapNeverNull(Function<WorkerConfig, Map<String, List<String>>> getter,
+            BiConsumer<WorkerConfig, Map<String, List<String>>> setter) {
         // Initially empty
         WorkerConfig config = new WorkerConfig();
         assertTrue(getter.apply(config).isEmpty());

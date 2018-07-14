@@ -1,8 +1,10 @@
 package org.sagebionetworks.bridge.notification.worker;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
@@ -13,16 +15,15 @@ public class WorkerConfig {
     private String burstTaskId;
     private int earlyLateCutoffDays;
     private Set<String> excludedDataGroupSet = ImmutableSet.of();
-    private Map<String, String> missedCumulativeActivitiesMessagesByDataGroup = ImmutableMap.of();
-    private Map<String, String> missedEarlyActivitiesMessagesByDataGroup = ImmutableMap.of();
-    private Map<String, String> missedLaterActivitiesMessagesByDataGroup = ImmutableMap.of();
+    private List<String> missedCumulativeActivitiesMessagesList = ImmutableList.of();
+    private List<String> missedEarlyActivitiesMessagesList = ImmutableList.of();
+    private List<String> missedLaterActivitiesMessagesList = ImmutableList.of();
     private int notificationBlackoutDaysFromStart;
     private int notificationBlackoutDaysFromEnd;
     private int numActivitiesToCompleteBurst;
     private int numMissedConsecutiveDaysToNotify;
     private int numMissedDaysToNotify;
-    private Map<String, String> preburstMessagesByDataGroup = ImmutableMap.of();
-    private Set<String> requiredDataGroupsOneOfSet = ImmutableSet.of();
+    private Map<String, List<String>> preburstMessagesByDataGroup = ImmutableMap.of();
     private Set<String> requiredSubpopulationGuidSet = ImmutableSet.of();
 
     /** The length of the study burst, in days. */
@@ -82,48 +83,45 @@ public class WorkerConfig {
     }
 
     /**
-     * Messages to send if the participant misses a cumulative total of activities during this study burst, keyed by
-     * data group. The keys in this set should match the keys in {@link #getRequiredDataGroupsOneOfSet}.
+     * Messages to send if the participant misses a cumulative total of activities during this study burst. Worker
+     * will pick one at random.
      */
-    public Map<String, String> getMissedCumulativeActivitiesMessagesByDataGroup() {
-        return missedCumulativeActivitiesMessagesByDataGroup;
+    public List<String> getMissedCumulativeActivitiesMessagesList() {
+        return missedCumulativeActivitiesMessagesList;
     }
 
-    /** @see #getMissedCumulativeActivitiesMessagesByDataGroup */
-    public void setMissedCumulativeActivitiesMessagesByDataGroup(
-            Map<String, String> missedCumulativeActivitiesMessagesByDataGroup) {
-        this.missedCumulativeActivitiesMessagesByDataGroup = missedCumulativeActivitiesMessagesByDataGroup != null ?
-                ImmutableMap.copyOf(missedCumulativeActivitiesMessagesByDataGroup) : ImmutableMap.of();
+    /** @see #getMissedCumulativeActivitiesMessagesList */
+    public void setMissedCumulativeActivitiesMessagesList(List<String> missedCumulativeActivitiesMessagesList) {
+        this.missedCumulativeActivitiesMessagesList = missedCumulativeActivitiesMessagesList != null ?
+                ImmutableList.copyOf(missedCumulativeActivitiesMessagesList) : ImmutableList.of();
     }
 
     /**
-     * Messages to send if the participant misses consecutive activities early in the study burst, keyed by data group.
-     * The keys in this set should match the keys in {@link #getRequiredDataGroupsOneOfSet}.
+     * Messages to send if the participant misses consecutive activities early in the study burst. Worker will pick one
+     * at random.
      */
-    public Map<String, String> getMissedEarlyActivitiesMessagesByDataGroup() {
-        return missedEarlyActivitiesMessagesByDataGroup;
+    public List<String> getMissedEarlyActivitiesMessagesList() {
+        return missedEarlyActivitiesMessagesList;
     }
 
-    /** @see #getMissedEarlyActivitiesMessagesByDataGroup */
-    public void setMissedEarlyActivitiesMessagesByDataGroup(
-            Map<String, String> missedEarlyActivitiesMessagesByDataGroup) {
-        this.missedEarlyActivitiesMessagesByDataGroup = missedEarlyActivitiesMessagesByDataGroup != null ?
-                ImmutableMap.copyOf(missedEarlyActivitiesMessagesByDataGroup) : ImmutableMap.of();
+    /** @see #getMissedEarlyActivitiesMessagesList */
+    public void setMissedEarlyActivitiesMessagesList(List<String> missedEarlyActivitiesMessagesList) {
+        this.missedEarlyActivitiesMessagesList = missedEarlyActivitiesMessagesList != null ?
+                ImmutableList.copyOf(missedEarlyActivitiesMessagesList) : ImmutableList.of();
     }
 
     /**
-     * Messages to send if the participant misses consecutive activities late in the study burst, keyed by data group.
-     * The keys in this set should match the keys in {@link #getRequiredDataGroupsOneOfSet}.
+     * Messages to send if the participant misses consecutive activities late in the study burst. Worker will pick one
+     * at random.
      */
-    public Map<String, String> getMissedLaterActivitiesMessagesByDataGroup() {
-        return missedLaterActivitiesMessagesByDataGroup;
+    public List<String> getMissedLaterActivitiesMessagesList() {
+        return missedLaterActivitiesMessagesList;
     }
 
-    /** @see #getMissedLaterActivitiesMessagesByDataGroup */
-    public void setMissedLaterActivitiesMessagesByDataGroup(
-            Map<String, String> missedLaterActivitiesMessagesByDataGroup) {
-        this.missedLaterActivitiesMessagesByDataGroup = missedLaterActivitiesMessagesByDataGroup != null ?
-                ImmutableMap.copyOf(missedLaterActivitiesMessagesByDataGroup) : ImmutableMap.of();
+    /** @see #getMissedLaterActivitiesMessagesList */
+    public void setMissedLaterActivitiesMessagesList(List<String> missedLaterActivitiesMessagesList) {
+        this.missedLaterActivitiesMessagesList = missedLaterActivitiesMessagesList != null ?
+                ImmutableList.copyOf(missedLaterActivitiesMessagesList) : ImmutableList.of();
     }
 
     /** Number of days at the start of the study burst where we don't send notifications. */
@@ -177,28 +175,17 @@ public class WorkerConfig {
     }
 
     /**
-     * Messages to send before the start of the study burst, keyed by data group. The keys in this set should match the
-     * keys in {@link #getRequiredDataGroupsOneOfSet}.
+     * Messages to send before the start of the study burst, keyed by data group. Each entry is a list of possible
+     * messages, and the worker picks one of those messages at random.
      */
-    public Map<String, String> getPreburstMessagesByDataGroup() {
+    public Map<String, List<String>> getPreburstMessagesByDataGroup() {
         return preburstMessagesByDataGroup;
     }
 
     /** @see #getPreburstMessagesByDataGroup */
-    public void setPreburstMessagesByDataGroup(Map<String, String> preburstMessagesByDataGroup) {
+    public void setPreburstMessagesByDataGroup(Map<String, List<String>> preburstMessagesByDataGroup) {
         this.preburstMessagesByDataGroup = preburstMessagesByDataGroup != null ?
                 ImmutableMap.copyOf(preburstMessagesByDataGroup) : ImmutableMap.of();
-    }
-
-    /** Participant must be in one of these data groups to receive notifications. */
-    public Set<String> getRequiredDataGroupsOneOfSet() {
-        return requiredDataGroupsOneOfSet;
-    }
-
-    /** @see #getRequiredDataGroupsOneOfSet */
-    public void setRequiredDataGroupsOneOfSet(Set<String> requiredDataGroupsOneOfSet) {
-        this.requiredDataGroupsOneOfSet = requiredDataGroupsOneOfSet != null ?
-                ImmutableSet.copyOf(requiredDataGroupsOneOfSet) : ImmutableSet.of();
     }
 
     /** Set of subpopulations that the participant must be consented to in order to receive notifications. */
