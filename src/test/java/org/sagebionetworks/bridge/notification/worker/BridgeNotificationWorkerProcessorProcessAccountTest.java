@@ -342,8 +342,8 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
                 PREBURST_GROUP_1));
 
         // Technically, the notification worker will never process a user _before_ they're enrolled. But for the
-        // purposes of this test, this represents sending the pre-burst notification a day before the start of burst.
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), ACCOUNT_SUMMARY);
+        // purposes of this test, this represents sending the pre-burst notification the day of the start of burst.
+        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE, ACCOUNT_SUMMARY);
         verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_1);
     }
 
@@ -354,7 +354,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
                 PREBURST_GROUP_2));
 
         // Execute test.
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), ACCOUNT_SUMMARY);
+        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE, ACCOUNT_SUMMARY);
         verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_2);
     }
 
@@ -363,7 +363,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         // Mock preburst notification in the log.
         UserNotification userNotification = new UserNotification();
         userNotification.setMessage(MESSAGE_PRE_BURST_1);
-        userNotification.setTime(ENROLLMENT_TIME.minusDays(1).getMillis());
+        userNotification.setTime(ENROLLMENT_TIME.getMillis());
         userNotification.setType(NotificationType.PRE_BURST);
         userNotification.setUserId(USER_ID);
         when(mockDynamoHelper.getLastNotificationTimeForUser(USER_ID)).thenReturn(userNotification);

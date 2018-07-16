@@ -169,7 +169,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
                 .filter(activityEvent -> workerConfig.getBurstStartEventIdSet().contains(activityEvent.getEventId()))
                 .collect(Collectors.toList());
 
-        // Find the upcoming burst, if a burst is coming up tomorrow.
+        // If today's the start of a burst, send the pre-burst notification.
         ActivityEvent upcomingBurstEvent = findUpcomingActivityBurstEvent(date, participant,
                 filteredActivityEventList);
         if (upcomingBurstEvent != null) {
@@ -275,8 +275,8 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         DateTimeZone timeZone = DateUtils.parseZoneFromOffsetString(participant.getTimeZone());
 
         for (ActivityEvent oneActivityEvent : activityEventList) {
-            if (oneActivityEvent.getTimestamp().withZone(timeZone).toLocalDate().minusDays(1).equals(date)) {
-                // If the burst start is tomorrow, then we've found it!
+            if (oneActivityEvent.getTimestamp().withZone(timeZone).toLocalDate().equals(date)) {
+                // If the burst start is today, then we've found it!
                 return oneActivityEvent;
             }
         }
