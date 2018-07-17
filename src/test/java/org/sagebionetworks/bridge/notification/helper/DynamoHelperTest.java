@@ -11,6 +11,7 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 
+import java.util.List;
 import java.util.Map;
 
 import com.amazonaws.services.dynamodbv2.document.Item;
@@ -72,18 +73,15 @@ public class DynamoHelperTest {
     @Test
     public void getNotificationConfigForStudy() {
         // Set up dummy maps
-        Map<String, String> missedCumulativeMessagesMap = ImmutableMap.of(
-                "required-group-1", "cumulative-message-1",
-                "required-group-2", "cumulative-message-2");
-        Map<String, String> missedEarlyMessagesMap = ImmutableMap.of(
-                "required-group-1", "early-message-1",
-                "required-group-2", "early-message-2");
-        Map<String, String> missedLaterMessagesMap = ImmutableMap.of(
-                "required-group-1", "later-message-1",
-                "required-group-2", "later-message-2");
-        Map<String, String> preburstMessagesMap = ImmutableMap.of(
-                "required-group-1", "preburst-message-1",
-                "required-group-2", "preburst-message-2");
+        List<String> missedCumulativeMessagesList = ImmutableList.of("cumulative-message-0", "cumulative-message-1",
+                "cumulative-message-2");
+        List<String> missedEarlyMessagesList = ImmutableList.of("early-message-0", "early-message-1",
+                "early-message-2");
+        List<String> missedLaterMessagesList = ImmutableList.of("later-message-0", "later-message-1",
+                "later-message-2");
+        Map<String, List<String>> preburstMessagesMap = ImmutableMap.of(
+                "required-group-1", ImmutableList.of("preburst-message-1a", "preburst-message-1b"),
+                "required-group-2", ImmutableList.of("preburst-message-2a", "preburst-message-2b"));
 
         // Set up mock
         Item item = new Item()
@@ -93,16 +91,15 @@ public class DynamoHelperTest {
                 .withString(DynamoHelper.KEY_BURST_TASK_ID, "study-burst-task")
                 .withInt(DynamoHelper.KEY_EARLY_LATE_CUTOFF_DAYS, 7)
                 .withStringSet(DynamoHelper.KEY_EXCLUDED_DATA_GROUP_SET, "excluded-group-1", "excluded-group-2")
-                .withMap(DynamoHelper.KEY_MISSED_CUMULATIVE_MESSAGES, missedCumulativeMessagesMap)
-                .withMap(DynamoHelper.KEY_MISSED_EARLY_MESSAGES, missedEarlyMessagesMap)
-                .withMap(DynamoHelper.KEY_MISSED_LATER_MESSAGES, missedLaterMessagesMap)
+                .withList(DynamoHelper.KEY_MISSED_CUMULATIVE_MESSAGES, missedCumulativeMessagesList)
+                .withList(DynamoHelper.KEY_MISSED_EARLY_MESSAGES, missedEarlyMessagesList)
+                .withList(DynamoHelper.KEY_MISSED_LATER_MESSAGES, missedLaterMessagesList)
                 .withInt(DynamoHelper.KEY_NOTIFICATION_BLACKOUT_DAYS_FROM_START, 2)
                 .withInt(DynamoHelper.KEY_NOTIFICATION_BLACKOUT_DAYS_FROM_END, 1)
                 .withInt(DynamoHelper.KEY_NUM_ACTIVITIES_TO_COMPLETE, 6)
                 .withInt(DynamoHelper.KEY_NUM_MISSED_CONSECUTIVE_DAYS_TO_NOTIFY, 3)
                 .withInt(DynamoHelper.KEY_NUM_MISSED_DAYS_TO_NOTIFY, 4)
                 .withMap(DynamoHelper.KEY_PREBURST_MESSAGES, preburstMessagesMap)
-                .withStringSet(DynamoHelper.KEY_REQUIRED_DATA_GROUPS, "required-group-1", "required-group-2")
                 .withStringSet(DynamoHelper.KEY_REQUIRED_SUBPOPULATION_GUID_SET, STUDY_ID);
         when(mockNotificationConfigTable.getItem(DynamoHelper.KEY_STUDY_ID, STUDY_ID)).thenReturn(item);
 
@@ -115,17 +112,15 @@ public class DynamoHelperTest {
         assertEquals(config.getEarlyLateCutoffDays(), 7);
         assertEquals(config.getExcludedDataGroupSet(), ImmutableSet.of("excluded-group-1",
                 "excluded-group-2"));
-        assertEquals(config.getMissedCumulativeActivitiesMessagesByDataGroup(), missedCumulativeMessagesMap);
-        assertEquals(config.getMissedEarlyActivitiesMessagesByDataGroup(), missedEarlyMessagesMap);
-        assertEquals(config.getMissedLaterActivitiesMessagesByDataGroup(), missedLaterMessagesMap);
+        assertEquals(config.getMissedCumulativeActivitiesMessagesList(), missedCumulativeMessagesList);
+        assertEquals(config.getMissedEarlyActivitiesMessagesList(), missedEarlyMessagesList);
+        assertEquals(config.getMissedLaterActivitiesMessagesList(), missedLaterMessagesList);
         assertEquals(config.getNotificationBlackoutDaysFromStart(), 2);
         assertEquals(config.getNotificationBlackoutDaysFromEnd(), 1);
         assertEquals(config.getNumActivitiesToCompleteBurst(), 6);
         assertEquals(config.getNumMissedConsecutiveDaysToNotify(), 3);
         assertEquals(config.getNumMissedDaysToNotify(), 4);
         assertEquals(config.getPreburstMessagesByDataGroup(), preburstMessagesMap);
-        assertEquals(config.getRequiredDataGroupsOneOfSet(), ImmutableSet.of("required-group-1",
-                "required-group-2"));
         assertEquals(config.getRequiredSubpopulationGuidSet(), ImmutableSet.of(STUDY_ID));
 
         verify(mockNotificationConfigTable).getItem(DynamoHelper.KEY_STUDY_ID, STUDY_ID);

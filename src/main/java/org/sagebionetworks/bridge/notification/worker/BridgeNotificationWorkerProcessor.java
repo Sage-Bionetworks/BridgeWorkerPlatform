@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -50,6 +51,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
     private BridgeHelper bridgeHelper;
     private DynamoHelper dynamoHelper;
+    private Random rng = new Random();
 
     /** Bridge helper. */
     @Autowired
@@ -66,6 +68,11 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     /** Set rate limit, in users per second. This is primarily to allow unit tests to run without being throttled. */
     public final void setPerUserRateLimit(double rate) {
         perUserRateLimiter.setRate(rate);
+    }
+
+    /** Allows mocking of the RNG. */
+    public void setRng(Random rng) {
+        this.rng = rng;
     }
 
     /** Main entry point into the Notification Worker. */
@@ -193,7 +200,6 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     private boolean shouldExcludeUser(String studyId, StudyParticipant participant) {
         WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
         Set<String> excludedDataGroupSet = workerConfig.getExcludedDataGroupSet();
-        Set<String> requiredDataGroupsOneOfSet = workerConfig.getRequiredDataGroupsOneOfSet();
 
         // Unverified phone numbers can't be notified
         if (Boolean.FALSE.equals(participant.getPhoneVerified())) {
@@ -220,22 +226,16 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
         // Check required and excluded data groups.
         // If the user has any of the excluded data groups, exclude the user
-        boolean foundRequiredGroup = false;
         for (String oneUserDataGroup : participant.getDataGroups()) {
             if (excludedDataGroupSet.contains(oneUserDataGroup)) {
                 return true;
             }
-            if (requiredDataGroupsOneOfSet.contains(oneUserDataGroup)) {
-                foundRequiredGroup = true;
-            }
-        }
-        if (!foundRequiredGroup) {
-            return true;
         }
 
         // If user was already sent a notification in the last burst duration, don't send another one
         // Special case: If that notification was a PRE_BURST notification, that's fine.
         UserNotification lastNotification = dynamoHelper.getLastNotificationTimeForUser(participant.getId());
+        //noinspection RedundantIfStatement
         if (lastNotification != null &&
                 lastNotification.getTime() > DateTime.now().minusDays(workerConfig.getBurstDurationDays()).getMillis() &&
                 lastNotification.getType() != NotificationType.PRE_BURST) {
@@ -287,7 +287,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
     // Helper method to determine the study burst event that we should be processing for this user.
     private ActivityEvent findCurrentActivityBurstEventForParticipant(String studyId, LocalDate date,
-            StudyParticipant participant, List<ActivityEvent> activityEventList) throws IOException {
+            StudyParticipant participant, List<ActivityEvent> activityEventList) {
         WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
         for (ActivityEvent oneActivityEvent : activityEventList) {
             // Calculate burst bounds. End date is start + period - 1. Skip if the current day is not within the burst
@@ -410,35 +410,38 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
 
         // Get notification messages for type.
-        Map<String, String> messagesByDataGroup;
+        List<String> messageList = null;
         switch (notificationType) {
             case CUMULATIVE:
-                messagesByDataGroup = workerConfig.getMissedCumulativeActivitiesMessagesByDataGroup();
+                messageList = workerConfig.getMissedCumulativeActivitiesMessagesList();
                 break;
             case EARLY:
-                messagesByDataGroup = workerConfig.getMissedEarlyActivitiesMessagesByDataGroup();
+                messageList = workerConfig.getMissedEarlyActivitiesMessagesList();
                 break;
             case LATE:
-                messagesByDataGroup = workerConfig.getMissedLaterActivitiesMessagesByDataGroup();
+                messageList = workerConfig.getMissedLaterActivitiesMessagesList();
                 break;
             case PRE_BURST:
-                messagesByDataGroup = workerConfig.getPreburstMessagesByDataGroup();
+                // Narrow down notification messages for data group.
+                Map<String, List<String>> messagesByDataGroup = workerConfig.getPreburstMessagesByDataGroup();
+                for (String oneDataGroup : participant.getDataGroups()) {
+                    if (messagesByDataGroup.containsKey(oneDataGroup)) {
+                        messageList = messagesByDataGroup.get(oneDataGroup);
+                        break;
+                    }
+                }
                 break;
             default:
                 throw new IllegalStateException("Unexpected type " + notificationType);
         }
 
-        // Narrow down notification messages for data group.
-        String message = null;
-        for (String oneDataGroup : participant.getDataGroups()) {
-            if (messagesByDataGroup.containsKey(oneDataGroup)) {
-                message = messagesByDataGroup.get(oneDataGroup);
-                break;
-            }
-        }
-        if (message == null) {
+        if (messageList == null) {
             throw new IllegalStateException("No messages found for type " + notificationType + " for user " + userId);
         }
+
+        // Pick message at random.
+        int randomIndex = rng.nextInt(messageList.size());
+        String message = messageList.get(randomIndex);
 
         LOG.info("Sending " + notificationType.name() + " notification to user " + userId);
 

@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -43,16 +44,16 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     private static final String EXCLUDED_DATA_GROUP_1 = "excluded-group-1";
     private static final String EXCLUDED_DATA_GROUP_2 = "excluded-group-2";
     private static final String MESSAGE_CUMULATIVE = "message-cumulative";
-    private static final String MESSAGE_EARLY_1 = "message-early-1";
-    private static final String MESSAGE_EARLY_2 = "message-early-2";
+    private static final String MESSAGE_EARLY = "message-early";
     private static final String MESSAGE_LATE = "message-late";
-    private static final String MESSAGE_PRE_BURST = "message-pre-burst";
+    private static final String MESSAGE_PRE_BURST_1 = "message-pre-burst-1";
+    private static final String MESSAGE_PRE_BURST_2 = "message-pre-burst-2";
     private static final long MOCK_NOW_MILLIS = DateTime.parse("2018-04-30T16:41:15.831-0700").getMillis();
     private static final Phone PHONE = new Phone().regionCode("US").number("425-555-5555");
-    private static final String REQUIRED_DATA_GROUP_1 = "required-group-1";
-    private static final String REQUIRED_DATA_GROUP_2 = "required-group-2";
     private static final String REQUIRED_SUBPOP_1 = "required-subpop-1";
     private static final String REQUIRED_SUBPOP_2 = "required-subpop-2";
+    private static final String PREBURST_GROUP_1 = "preburst-group-1";
+    private static final String PREBURST_GROUP_2 = "preburst-group-2";
     private static final String STUDY_ID = "test-study";
     private static final String TASK_ID = "study-burst-task";
     private static final String USER_ID = "test-user";
@@ -70,6 +71,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     private DynamoHelper mockDynamoHelper;
     private StudyParticipant mockParticipant;
     private BridgeNotificationWorkerProcessor processor;
+    private WorkerConfig config;
 
     @BeforeClass
     public static void mockNow() {
@@ -105,8 +107,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         mockParticipant = mock(StudyParticipant.class);
         when(mockParticipant.getId()).thenReturn(USER_ID);
         when(mockParticipant.getConsentHistories()).thenReturn(consentHistoryMap);
-        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-data-group",
-                REQUIRED_DATA_GROUP_1));
+        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-data-group"));
         when(mockParticipant.getPhone()).thenReturn(PHONE);
         when(mockParticipant.getPhoneVerified()).thenReturn(true);
         when(mockParticipant.getTimeZone()).thenReturn("-07:00");
@@ -133,35 +134,28 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         when(mockDynamoHelper.getLastNotificationTimeForUser(USER_ID)).thenReturn(null);
 
         // Make worker config
-        Map<String, String> missedCumulativeMessageMap = ImmutableMap.of(
-                REQUIRED_DATA_GROUP_1, MESSAGE_CUMULATIVE,
-                REQUIRED_DATA_GROUP_2, MESSAGE_CUMULATIVE);
-        Map<String, String> missedEarlyMessageMap = ImmutableMap.of(
-                REQUIRED_DATA_GROUP_1, MESSAGE_EARLY_1,
-                REQUIRED_DATA_GROUP_2, MESSAGE_EARLY_2);
-        Map<String, String> missedLateMessageMap = ImmutableMap.of(
-                REQUIRED_DATA_GROUP_1, MESSAGE_LATE,
-                REQUIRED_DATA_GROUP_2, MESSAGE_LATE);
-        Map<String, String> preburstMessageMap = ImmutableMap.of(
-                REQUIRED_DATA_GROUP_1, MESSAGE_PRE_BURST,
-                REQUIRED_DATA_GROUP_2, MESSAGE_PRE_BURST);
+        List<String> missedCumulativeMessageList = ImmutableList.of(MESSAGE_CUMULATIVE);
+        List<String> missedEarlyMessageList = ImmutableList.of(MESSAGE_EARLY);
+        List<String> missedLateMessageList = ImmutableList.of(MESSAGE_LATE);
+        Map<String, List<String>> preburstMessageMap = ImmutableMap.of(
+                PREBURST_GROUP_1, ImmutableList.of(MESSAGE_PRE_BURST_1),
+                PREBURST_GROUP_2, ImmutableList.of(MESSAGE_PRE_BURST_2));
 
-        WorkerConfig config = new WorkerConfig();
+        config = new WorkerConfig();
         config.setBurstDurationDays(9);
         config.setBurstStartEventIdSet(ImmutableSet.of(EVENT_ID_ENROLLMENT, EVENT_ID_BURST_2_START));
         config.setBurstTaskId(TASK_ID);
         config.setEarlyLateCutoffDays(5);
         config.setExcludedDataGroupSet(ImmutableSet.of(EXCLUDED_DATA_GROUP_1, EXCLUDED_DATA_GROUP_2));
-        config.setMissedCumulativeActivitiesMessagesByDataGroup(missedCumulativeMessageMap);
-        config.setMissedEarlyActivitiesMessagesByDataGroup(missedEarlyMessageMap);
-        config.setMissedLaterActivitiesMessagesByDataGroup(missedLateMessageMap);
+        config.setMissedCumulativeActivitiesMessagesList(missedCumulativeMessageList);
+        config.setMissedEarlyActivitiesMessagesList(missedEarlyMessageList);
+        config.setMissedLaterActivitiesMessagesList(missedLateMessageList);
         config.setNotificationBlackoutDaysFromStart(3);
         config.setNotificationBlackoutDaysFromEnd(1);
         config.setNumActivitiesToCompleteBurst(6);
         config.setNumMissedConsecutiveDaysToNotify(2);
         config.setNumMissedDaysToNotify(3);
         config.setPreburstMessagesByDataGroup(preburstMessageMap);
-        config.setRequiredDataGroupsOneOfSet(ImmutableSet.of(REQUIRED_DATA_GROUP_1, REQUIRED_DATA_GROUP_2));
         config.setRequiredSubpopulationGuidSet(ImmutableSet.of(REQUIRED_SUBPOP_1, REQUIRED_SUBPOP_2));
         when(mockDynamoHelper.getNotificationConfigForStudy(STUDY_ID)).thenReturn(config);
 
@@ -215,16 +209,9 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     }
 
     @Test
-    public void missingRequiredDataGroup() throws Exception {
-        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group"));
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, ACCOUNT_SUMMARY);
-        verifyNoNotification();
-    }
-
-    @Test
     public void excludedByDataGroup() throws Exception {
         when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group",
-                REQUIRED_DATA_GROUP_1, EXCLUDED_DATA_GROUP_2));
+                EXCLUDED_DATA_GROUP_2));
         processor.processAccountForDate(STUDY_ID, TEST_DATE, ACCOUNT_SUMMARY);
         verifyNoNotification();
     }
@@ -307,7 +294,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         // For the purposes of this test, set the last notification time to enrollment time. This is very recent, so we
         // don't send another notification.
         UserNotification userNotification = new UserNotification();
-        userNotification.setMessage(MESSAGE_EARLY_1);
+        userNotification.setMessage(MESSAGE_EARLY);
         userNotification.setTime(ENROLLMENT_TIME.getMillis());
         userNotification.setType(NotificationType.EARLY);
         userNotification.setUserId(USER_ID);
@@ -336,7 +323,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         // This is the "base case" for our tests. Since the majority of our tests do no send notifications, we wanted
         // the basic configuration to send a notification, to help ensure that our tests are working properly.
         processor.processAccountForDate(STUDY_ID, TEST_DATE, ACCOUNT_SUMMARY);
-        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY_1);
+        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
     }
 
     @Test
@@ -350,17 +337,32 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
 
     @Test
     public void preburstNotification() throws Exception {
+        // Set up data group
+        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group",
+                PREBURST_GROUP_1));
+
         // Technically, the notification worker will never process a user _before_ they're enrolled. But for the
         // purposes of this test, this represents sending the pre-burst notification a day before the start of burst.
         processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), ACCOUNT_SUMMARY);
-        verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST);
+        verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_1);
+    }
+
+    @Test
+    public void preburstNotificationUsesDataGroup() throws Exception {
+        // Set up data group
+        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group",
+                PREBURST_GROUP_2));
+
+        // Execute test.
+        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), ACCOUNT_SUMMARY);
+        verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_2);
     }
 
     @Test
     public void preburstDoesNotPreventNormalNotification() throws Exception {
         // Mock preburst notification in the log.
         UserNotification userNotification = new UserNotification();
-        userNotification.setMessage(MESSAGE_PRE_BURST);
+        userNotification.setMessage(MESSAGE_PRE_BURST_1);
         userNotification.setTime(ENROLLMENT_TIME.minusDays(1).getMillis());
         userNotification.setType(NotificationType.PRE_BURST);
         userNotification.setUserId(USER_ID);
@@ -368,7 +370,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
 
         // User should still get a notification.
         processor.processAccountForDate(STUDY_ID, TEST_DATE, ACCOUNT_SUMMARY);
-        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY_1);
+        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
     }
 
     @Test
@@ -377,7 +379,24 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         activityList.get(0).setStatus(ScheduleStatus.FINISHED);
         activityList.get(1).setStatus(ScheduleStatus.FINISHED);
         processor.processAccountForDate(STUDY_ID, TEST_DATE, ACCOUNT_SUMMARY);
-        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY_1);
+        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
+    }
+
+    @Test
+    public void randomizedMessages() throws Exception {
+        // Mock RNG.
+        Random mockRng = mock(Random.class);
+        when(mockRng.nextInt(3)).thenReturn(1);
+        processor.setRng(mockRng);
+
+        // Mock config to have multiple messages to choose from.
+        config.setMissedEarlyActivitiesMessagesList(ImmutableList.of("message-0", "message-1", "message-2"));
+
+        // Mark day 0 and 1 as finished. We missed days 2 and days 3, and we send a notification.
+        activityList.get(0).setStatus(ScheduleStatus.FINISHED);
+        activityList.get(1).setStatus(ScheduleStatus.FINISHED);
+        processor.processAccountForDate(STUDY_ID, TEST_DATE, ACCOUNT_SUMMARY);
+        verifySentNotification(NotificationType.EARLY, "message-1");
     }
 
     @Test
@@ -391,27 +410,13 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         verifySentNotification(NotificationType.LATE, MESSAGE_LATE);
     }
 
-    @Test
-    public void differentMessageByDataGroup() throws Exception {
-        // Set up data group
-        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group",
-                REQUIRED_DATA_GROUP_2));
-
-        // Mark day 0 and 1 as finished. We missed days 2 and days 3, and we send a notification.
-        activityList.get(0).setStatus(ScheduleStatus.FINISHED);
-        activityList.get(1).setStatus(ScheduleStatus.FINISHED);
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, ACCOUNT_SUMMARY);
-
-        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY_2);
-    }
-
     // branch coverage
     @Test
     public void notifiedButNotRecently() throws Exception {
         // For branch coverage, this user was last notified 10 days before enrollment. This is long enough ago that we
         // still send a notification
         UserNotification userNotification = new UserNotification();
-        userNotification.setMessage(MESSAGE_EARLY_1);
+        userNotification.setMessage(MESSAGE_EARLY);
         userNotification.setTime(ENROLLMENT_TIME.minusDays(10).getMillis());
         userNotification.setType(NotificationType.EARLY);
         userNotification.setUserId(USER_ID);
@@ -419,7 +424,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
 
         // Execute and verify
         processor.processAccountForDate(STUDY_ID, TEST_DATE, ACCOUNT_SUMMARY);
-        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY_1);
+        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
     }
 
     private void verifySentNotification(NotificationType type, String message) throws Exception {
