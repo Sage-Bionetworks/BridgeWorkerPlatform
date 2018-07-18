@@ -15,7 +15,7 @@ import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 /** Resolves template variables in SMS message strings. */
 @Component
 public class TemplateVariableHelper {
-    private static final String KEY_STUDY_COMMITMENT = "studyCommitment";
+    private static final String KEY_BENEFITS = "benefits";
     private static final String TEMPLATE_VAR_STUDY_COMMITMENT = "${studyCommitment}";
     private static final String TEMPLATE_VAR_URL = "${url}";
 
@@ -65,7 +65,7 @@ public class TemplateVariableHelper {
         }
         ScheduledActivity engagementSurveyActivity = surveyIterator.next();
         String studyCommitment = getStudyCommitmentFromActivity(userId, engagementSurveyActivity,
-                KEY_STUDY_COMMITMENT);
+                KEY_BENEFITS);
 
         // Replace value.
         return message.replace(TEMPLATE_VAR_STUDY_COMMITMENT, studyCommitment);

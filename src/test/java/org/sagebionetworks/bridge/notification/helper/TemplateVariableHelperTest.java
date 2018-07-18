@@ -74,7 +74,7 @@ public class TemplateVariableHelperTest {
     public void resolveAllVars() {
         // Set Client Data.
         String clientDataJson = "{\n" +
-                "   \"studyCommitment\":\"dummy answer\"\n" +
+                "   \"benefits\":\"dummy answer\"\n" +
                 "}";
         Object clientDataObj = RestUtils.GSON.fromJson(clientDataJson, Map.class);
         engagementSurveyActivity.setClientData(clientDataObj);
@@ -140,7 +140,7 @@ public class TemplateVariableHelperTest {
     public void studyCommitment_otherTypesFine() {
         // Set Client Data.
         String clientDataJson = "{\n" +
-                "   \"studyCommitment\":true\n" +
+                "   \"benefits\":true\n" +
                 "}";
         Object clientDataObj = RestUtils.GSON.fromJson(clientDataJson, Map.class);
         engagementSurveyActivity.setClientData(clientDataObj);
