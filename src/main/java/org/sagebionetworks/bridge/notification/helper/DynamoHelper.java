@@ -31,9 +31,9 @@ public class DynamoHelper {
     static final String KEY_EXCLUDED_DATA_GROUP_SET = "excludedDataGroupSet";
     static final String KEY_FINISH_TIME = "finishTime";
     static final String KEY_MESSAGE = "message";
-    static final String KEY_MISSED_CUMULATIVE_MESSAGES = "missedCumulativeActivitiesMessagesByDataGroup";
-    static final String KEY_MISSED_EARLY_MESSAGES = "missedEarlyActivitiesMessagesByDataGroup";
-    static final String KEY_MISSED_LATER_MESSAGES = "missedLaterActivitiesMessagesByDataGroup";
+    static final String KEY_MISSED_CUMULATIVE_MESSAGES = "missedCumulativeActivitiesMessagesList";
+    static final String KEY_MISSED_EARLY_MESSAGES = "missedEarlyActivitiesMessagesList";
+    static final String KEY_MISSED_LATER_MESSAGES = "missedLaterActivitiesMessagesList";
     static final String KEY_NOTIFICATION_BLACKOUT_DAYS_FROM_START = "notificationBlackoutDaysFromStart";
     static final String KEY_NOTIFICATION_BLACKOUT_DAYS_FROM_END = "notificationBlackoutDaysFromEnd";
     static final String KEY_NOTIFICATION_TIME = "notificationTime";
@@ -42,7 +42,6 @@ public class DynamoHelper {
     static final String KEY_NUM_MISSED_DAYS_TO_NOTIFY = "numMissedDaysToNotify";
     static final String KEY_NUM_MISSED_CONSECUTIVE_DAYS_TO_NOTIFY = "numMissedConsecutiveDaysToNotify";
     static final String KEY_PREBURST_MESSAGES = "preburstMessagesByDataGroup";
-    static final String KEY_REQUIRED_DATA_GROUPS = "requiredDataGroupsOneOfSet";
     static final String KEY_REQUIRED_SUBPOPULATION_GUID_SET = "requiredSubpopulationGuidSet";
     static final String KEY_STUDY_ID = "studyId";
     static final String KEY_TAG = "tag";
@@ -85,6 +84,7 @@ public class DynamoHelper {
     }
 
     /** Gets the notification config for the given study. This method caches results for 5 minutes. */
+    @SuppressWarnings("DefaultAnnotationParam")
     @Cacheable(lifetime = 5, unit = TimeUnit.MINUTES)
     public WorkerConfig getNotificationConfigForStudy(String studyId) {
         Item item = ddbNotificationConfigTable.getItem(KEY_STUDY_ID, studyId);
@@ -96,16 +96,15 @@ public class DynamoHelper {
         workerConfig.setEarlyLateCutoffDays(item.getInt(KEY_EARLY_LATE_CUTOFF_DAYS));
         workerConfig.setEngagementSurveyGuid(item.getString(KEY_ENGAGEMENT_SURVEY_GUID));
         workerConfig.setExcludedDataGroupSet(item.getStringSet(KEY_EXCLUDED_DATA_GROUP_SET));
-        workerConfig.setMissedCumulativeActivitiesMessagesByDataGroup(item.getMap(KEY_MISSED_CUMULATIVE_MESSAGES));
-        workerConfig.setMissedEarlyActivitiesMessagesByDataGroup(item.getMap(KEY_MISSED_EARLY_MESSAGES));
-        workerConfig.setMissedLaterActivitiesMessagesByDataGroup(item.getMap(KEY_MISSED_LATER_MESSAGES));
+        workerConfig.setMissedCumulativeActivitiesMessagesList(item.getList(KEY_MISSED_CUMULATIVE_MESSAGES));
+        workerConfig.setMissedEarlyActivitiesMessagesList(item.getList(KEY_MISSED_EARLY_MESSAGES));
+        workerConfig.setMissedLaterActivitiesMessagesList(item.getList(KEY_MISSED_LATER_MESSAGES));
         workerConfig.setNotificationBlackoutDaysFromStart(item.getInt(KEY_NOTIFICATION_BLACKOUT_DAYS_FROM_START));
         workerConfig.setNotificationBlackoutDaysFromEnd(item.getInt(KEY_NOTIFICATION_BLACKOUT_DAYS_FROM_END));
         workerConfig.setNumActivitiesToCompleteBurst(item.getInt(KEY_NUM_ACTIVITIES_TO_COMPLETE));
         workerConfig.setNumMissedConsecutiveDaysToNotify(item.getInt(KEY_NUM_MISSED_CONSECUTIVE_DAYS_TO_NOTIFY));
         workerConfig.setNumMissedDaysToNotify(item.getInt(KEY_NUM_MISSED_DAYS_TO_NOTIFY));
         workerConfig.setPreburstMessagesByDataGroup(item.getMap(KEY_PREBURST_MESSAGES));
-        workerConfig.setRequiredDataGroupsOneOfSet(item.getStringSet(KEY_REQUIRED_DATA_GROUPS));
         workerConfig.setRequiredSubpopulationGuidSet(item.getStringSet(KEY_REQUIRED_SUBPOPULATION_GUID_SET));
         return workerConfig;
     }
