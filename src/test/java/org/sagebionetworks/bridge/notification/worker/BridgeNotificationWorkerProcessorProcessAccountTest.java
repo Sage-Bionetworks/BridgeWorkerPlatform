@@ -5,6 +5,7 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
@@ -28,6 +29,7 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.notification.helper.BridgeHelper;
 import org.sagebionetworks.bridge.notification.helper.DynamoHelper;
+import org.sagebionetworks.bridge.notification.helper.TemplateVariableHelper;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.ActivityEvent;
 import org.sagebionetworks.bridge.rest.model.Phone;
@@ -53,6 +55,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     private static final String REQUIRED_DATA_GROUP_2 = "required-group-2";
     private static final String REQUIRED_SUBPOP_1 = "required-subpop-1";
     private static final String REQUIRED_SUBPOP_2 = "required-subpop-2";
+    private static final String RESOLVED_TEMPLATE_VAR_SUFFIX = " w/ resolved variables";
     private static final String STUDY_ID = "test-study";
     private static final String TASK_ID = "study-burst-task";
     private static final String USER_ID = "test-user";
@@ -69,6 +72,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     private BridgeHelper mockBridgeHelper;
     private DynamoHelper mockDynamoHelper;
     private StudyParticipant mockParticipant;
+    private TemplateVariableHelper mockTemplateVariableHelper;
     private BridgeNotificationWorkerProcessor processor;
 
     @BeforeClass
@@ -165,10 +169,20 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         config.setRequiredSubpopulationGuidSet(ImmutableSet.of(REQUIRED_SUBPOP_1, REQUIRED_SUBPOP_2));
         when(mockDynamoHelper.getNotificationConfigForStudy(STUDY_ID)).thenReturn(config);
 
+        // Mock template variable helper. For this test, just append a string. Actually template variable logic is
+        // tested somewhere else.
+        mockTemplateVariableHelper = mock(TemplateVariableHelper.class);
+        when(mockTemplateVariableHelper.resolveTemplateVariables(eq(STUDY_ID), any(), any()))
+                .thenAnswer(invocation -> {
+                    String message = invocation.getArgumentAt(2, String.class);
+                    return message + RESOLVED_TEMPLATE_VAR_SUFFIX;
+                });
+
         // Create processor
         processor = new BridgeNotificationWorkerProcessor();
         processor.setBridgeHelper(mockBridgeHelper);
         processor.setDynamoHelper(mockDynamoHelper);
+        processor.setTemplateVariableHelper(mockTemplateVariableHelper);
     }
 
     @Test
@@ -329,6 +343,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     private void verifyNoNotification() throws Exception {
         verify(mockDynamoHelper, never()).setLastNotificationTimeForUser(any());
         verify(mockBridgeHelper, never()).sendSmsToUser(any(), any(), any());
+        verifyZeroInteractions(mockTemplateVariableHelper);
     }
 
     @Test
@@ -428,13 +443,13 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         verify(mockDynamoHelper).setLastNotificationTimeForUser(userNotificationCaptor.capture());
 
         UserNotification userNotification = userNotificationCaptor.getValue();
-        assertEquals(userNotification.getMessage(), message);
+        assertEquals(userNotification.getMessage(), message + RESOLVED_TEMPLATE_VAR_SUFFIX);
         assertEquals(userNotification.getTime(), MOCK_NOW_MILLIS);
         assertEquals(userNotification.getType(), type);
         assertEquals(userNotification.getUserId(), USER_ID);
 
         // Verify SMS message
-        verify(mockBridgeHelper).sendSmsToUser(STUDY_ID, USER_ID, message);
+        verify(mockBridgeHelper).sendSmsToUser(STUDY_ID, USER_ID, message + RESOLVED_TEMPLATE_VAR_SUFFIX);
     }
 
     private static List<UserConsentHistory> makeValidConsentHistory() {

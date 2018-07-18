@@ -35,6 +35,7 @@ public class BridgeHelperTest {
     private static final DateTime SCHEDULED_ON_START = DateTime.parse("2018-04-27T00:00-0700");
     private static final DateTime SCHEDULED_ON_END = DateTime.parse("2018-04-28T23:59:59.999-0700");
     private static final String STUDY_ID = "test-study";
+    private static final String SURVEY_GUID = "survey-guid";
     private static final String TASK_ID = "test-task";
     private static final String USER_ID = "test-user";
 
@@ -111,6 +112,29 @@ public class BridgeHelperTest {
         assertEquals(output.getId(), USER_ID);
 
         verify(mockWorkerApi).getParticipantById(STUDY_ID, USER_ID, true);
+    }
+
+    @Test
+    public void getSurveyHistory() throws Exception {
+        // Similarly for SurveyHistoryIterator.
+        ScheduledActivity activity = new ScheduledActivity().guid("test-guid");
+        ForwardCursorScheduledActivityList activityList = new ForwardCursorScheduledActivityList().addItemsItem(
+                activity);
+        Response<ForwardCursorScheduledActivityList> response = Response.success(activityList);
+
+        Call<ForwardCursorScheduledActivityList> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenReturn(response);
+
+        when(mockWorkerApi.getParticipantSurveyHistory(eq(STUDY_ID), eq(USER_ID), eq(SURVEY_GUID),
+                eq(SCHEDULED_ON_START), eq(SCHEDULED_ON_END), any(), any())).thenReturn(mockCall);
+
+        // Execute and validate
+        Iterator<ScheduledActivity> surveyHistoryIterator = bridgeHelper.getSurveyHistory(STUDY_ID, USER_ID,
+                SURVEY_GUID, SCHEDULED_ON_START, SCHEDULED_ON_END);
+        assertNotNull(surveyHistoryIterator);
+
+        verify(mockWorkerApi).getParticipantSurveyHistory(eq(STUDY_ID), eq(USER_ID), eq(SURVEY_GUID),
+                eq(SCHEDULED_ON_START), eq(SCHEDULED_ON_END), any(), any());
     }
 
     @Test

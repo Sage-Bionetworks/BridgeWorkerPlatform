@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.notification.helper.BridgeHelper;
 import org.sagebionetworks.bridge.notification.helper.DynamoHelper;
+import org.sagebionetworks.bridge.notification.helper.TemplateVariableHelper;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.ActivityEvent;
 import org.sagebionetworks.bridge.rest.model.ScheduleStatus;
@@ -50,6 +51,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
     private BridgeHelper bridgeHelper;
     private DynamoHelper dynamoHelper;
+    private TemplateVariableHelper templateVariableHelper;
 
     /** Bridge helper. */
     @Autowired
@@ -66,6 +68,12 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     /** Set rate limit, in users per second. This is primarily to allow unit tests to run without being throttled. */
     public final void setPerUserRateLimit(double rate) {
         perUserRateLimiter.setRate(rate);
+    }
+
+    /** Helper class that resolves template variables in SMS strings. */
+    @Autowired
+    public final void setTemplateVariableHelper(TemplateVariableHelper templateVariableHelper) {
+        this.templateVariableHelper = templateVariableHelper;
     }
 
     /** Main entry point into the Notification Worker. */
@@ -439,6 +447,9 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         if (message == null) {
             throw new IllegalStateException("No messages found for type " + notificationType + " for user " + userId);
         }
+
+        // Resolve template variables.
+        message = templateVariableHelper.resolveTemplateVariables(studyId, participant, message);
 
         LOG.info("Sending " + notificationType.name() + " notification to user " + userId);
 
