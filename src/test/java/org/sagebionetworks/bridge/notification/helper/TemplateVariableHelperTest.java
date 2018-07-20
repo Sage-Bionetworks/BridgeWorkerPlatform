@@ -80,10 +80,11 @@ public class TemplateVariableHelperTest {
         Object clientDataObj = RestUtils.GSON.fromJson(clientDataJson, Map.class);
         engagementSurveyActivity.setClientData(clientDataObj);
 
-        // Execute test.
+        // Execute test. Include the variables in the message string twice to make sure that we replace all.
         String result = templateVariableHelper.resolveTemplateVariables(STUDY_ID, mockParticipant,
-                "url=${url}, studyCommitment=${studyCommitment}");
-        assertEquals(result, "url=http://example.com/app-url, studyCommitment=dummy answer");
+                "url=${url} ${url}, studyCommitment=${studyCommitment} ${studyCommitment}");
+        assertEquals(result, "url=http://example.com/app-url http://example.com/app-url, " +
+                "studyCommitment=dummy answer dummy answer");
     }
 
     // branch coverage
