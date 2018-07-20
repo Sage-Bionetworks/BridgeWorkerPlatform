@@ -55,8 +55,13 @@ public class TemplateVariableHelper {
         String userId = participant.getId();
         DateTime participantCreatedOn = participant.getCreatedOn();
         WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
+
+        // Note that because scheduled activities use local time, if the worker is in a different timezone than the
+        // participant, it might appear that the survey is scheduled to the day _before_ the user is created. To
+        // account for this, the scheduledOnStartTime should be the day before the user is created.
         Iterator<ScheduledActivity> surveyIterator = bridgeHelper.getSurveyHistory(studyId, userId,
-                workerConfig.getEngagementSurveyGuid(), participantCreatedOn, participantCreatedOn.plusDays(30));
+                workerConfig.getEngagementSurveyGuid(), participantCreatedOn.minusDays(1),
+                participantCreatedOn.plusDays(30));
 
         // Engagement survey is scheduled upon enrollment, and is scheduled exactly once. There should be exactly one
         // engagement survey in the results.

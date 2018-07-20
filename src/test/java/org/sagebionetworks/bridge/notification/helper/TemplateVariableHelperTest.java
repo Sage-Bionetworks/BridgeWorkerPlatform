@@ -20,6 +20,7 @@ import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 public class TemplateVariableHelperTest {
     private static final String APP_URL = "http://example.com/app-url";
     private static final String ENGAGEMENT_SURVEY_GUID = "engagement-survey-guid";
+    private static final DateTime EXPECTED_START_TIME = DateTime.parse("2018-06-30T15:44:13.311-0700");
     private static final DateTime EXPECTED_END_TIME = DateTime.parse("2018-07-31T15:44:13.311-0700");
     private static final String STUDY_ID = "test-study";
     private static final DateTime USER_CREATED_ON = DateTime.parse("2018-07-01T15:44:13.311-0700");
@@ -36,7 +37,7 @@ public class TemplateVariableHelperTest {
         // Mock Engagement survey activity. All we care about is Client Data, which is different for each test.
         engagementSurveyActivity = new ScheduledActivity();
         mockBridgeHelper = mock(BridgeHelper.class);
-        when(mockBridgeHelper.getSurveyHistory(STUDY_ID, USER_ID, ENGAGEMENT_SURVEY_GUID, USER_CREATED_ON,
+        when(mockBridgeHelper.getSurveyHistory(STUDY_ID, USER_ID, ENGAGEMENT_SURVEY_GUID, EXPECTED_START_TIME,
                 EXPECTED_END_TIME)).thenReturn(Iterators.singletonIterator(engagementSurveyActivity));
 
         // Mock Worker Config.
@@ -89,7 +90,7 @@ public class TemplateVariableHelperTest {
     @Test(expectedExceptions = IllegalStateException.class)
     public void studyCommitment_noEngagementSurvey() {
         // Mock getSurveyHistory to return no results.
-        when(mockBridgeHelper.getSurveyHistory(STUDY_ID, USER_ID, ENGAGEMENT_SURVEY_GUID, USER_CREATED_ON,
+        when(mockBridgeHelper.getSurveyHistory(STUDY_ID, USER_ID, ENGAGEMENT_SURVEY_GUID, EXPECTED_START_TIME,
                 EXPECTED_END_TIME)).thenReturn(Iterators.forArray());
 
         // Execute test.
