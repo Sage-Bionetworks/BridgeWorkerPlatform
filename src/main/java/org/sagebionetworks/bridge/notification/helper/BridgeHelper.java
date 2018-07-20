@@ -48,6 +48,15 @@ public class BridgeHelper {
     }
 
     /**
+     * Get the user's survey history for the given user, study, survey GUID, and time range. Note that since
+     * getSurveyHistory is a paginated API, the iterator may continue to call the server.
+     */
+    public Iterator<ScheduledActivity> getSurveyHistory(String studyId, String userId, String surveyGuid,
+            DateTime scheduledOnStart, DateTime scheduledOnEnd) {
+        return new SurveyHistoryIterator(clientManager, studyId, userId, surveyGuid, scheduledOnStart, scheduledOnEnd);
+    }
+
+    /**
      * Get the user's task history for the given user, study, task ID, and time range. Note that since getTaskHistory
      * is a paginated API, the iterator may continue to call the server.
      * */

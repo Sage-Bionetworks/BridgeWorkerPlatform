@@ -86,10 +86,12 @@ public class DynamoHelperTest {
         // Set up mock
         Item item = new Item()
                 .withPrimaryKey(DynamoHelper.KEY_STUDY_ID, STUDY_ID)
+                .withString(DynamoHelper.KEY_APP_URL, "http://example.com/app-url")
                 .withInt(DynamoHelper.KEY_BURST_DURATION_DAYS, 19)
                 .withStringSet(DynamoHelper.KEY_BURST_EVENT_ID_SET, "enrollment", "custom:activityBurst2Start")
                 .withString(DynamoHelper.KEY_BURST_TASK_ID, "study-burst-task")
                 .withInt(DynamoHelper.KEY_EARLY_LATE_CUTOFF_DAYS, 7)
+                .withString(DynamoHelper.KEY_ENGAGEMENT_SURVEY_GUID, "dummy-survey-guid")
                 .withStringSet(DynamoHelper.KEY_EXCLUDED_DATA_GROUP_SET, "excluded-group-1", "excluded-group-2")
                 .withList(DynamoHelper.KEY_MISSED_CUMULATIVE_MESSAGES, missedCumulativeMessagesList)
                 .withList(DynamoHelper.KEY_MISSED_EARLY_MESSAGES, missedEarlyMessagesList)
@@ -105,11 +107,13 @@ public class DynamoHelperTest {
 
         // Execute and validate
         WorkerConfig config = dynamoHelper.getNotificationConfigForStudy(STUDY_ID);
+        assertEquals(config.getAppUrl(), "http://example.com/app-url");
         assertEquals(config.getBurstDurationDays(), 19);
         assertEquals(config.getBurstStartEventIdSet(), ImmutableSet.of("enrollment",
                 "custom:activityBurst2Start"));
         assertEquals(config.getBurstTaskId(), "study-burst-task");
         assertEquals(config.getEarlyLateCutoffDays(), 7);
+        assertEquals(config.getEngagementSurveyGuid(), "dummy-survey-guid");
         assertEquals(config.getExcludedDataGroupSet(), ImmutableSet.of("excluded-group-1",
                 "excluded-group-2"));
         assertEquals(config.getMissedCumulativeActivitiesMessagesList(), missedCumulativeMessagesList);
@@ -155,6 +159,19 @@ public class DynamoHelperTest {
         assertEquals(query.getHashKey().getValue(), USER_ID);
         assertFalse(query.isScanIndexForward());
         assertEquals(query.getMaxResultSize().intValue(), 1);
+    }
+
+    @Test
+    public void getLastNotificationTimeForUser_NoNotificationType() {
+        // Set up mock
+        Item item = new Item().withPrimaryKey(DynamoHelper.KEY_USER_ID, USER_ID,
+                DynamoHelper.KEY_NOTIFICATION_TIME, 1234L)
+                .withString(DynamoHelper.KEY_MESSAGE, "dummy message");
+        when(mockQueryHelper.query(same(mockNotificationLogTable), any())).thenReturn(ImmutableList.of(item));
+
+        // Execute and validate
+        UserNotification result = dynamoHelper.getLastNotificationTimeForUser(USER_ID);
+        assertEquals(result.getType(), NotificationType.UNKNOWN);
     }
 
     @Test

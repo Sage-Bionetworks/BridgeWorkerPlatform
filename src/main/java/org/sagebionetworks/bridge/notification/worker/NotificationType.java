@@ -13,4 +13,7 @@ public enum NotificationType {
 
     /** Notification sent before the start of an activity burst. */
     PRE_BURST,
+
+    /** Generally used for old notification logs that pre-date NotificationType. */
+    UNKNOWN,
 }

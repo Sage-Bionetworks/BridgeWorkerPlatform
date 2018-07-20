@@ -8,6 +8,7 @@ import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.Table;
 import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
 import com.jcabi.aspects.Cacheable;
+import org.apache.commons.lang3.StringUtils;
 import org.joda.time.DateTime;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -21,10 +22,12 @@ import org.sagebionetworks.bridge.notification.worker.WorkerConfig;
 @Component("NotificationWorkerDynamoHelper")
 public class DynamoHelper {
     // DDB column names. Package-scoped for unit tests.
+    static final String KEY_APP_URL = "appUrl";
     static final String KEY_BURST_DURATION_DAYS = "burstDurationDays";
     static final String KEY_BURST_EVENT_ID_SET = "burstStartEventIdSet";
     static final String KEY_BURST_TASK_ID = "burstTaskId";
     static final String KEY_EARLY_LATE_CUTOFF_DAYS = "earlyLateCutoffDays";
+    static final String KEY_ENGAGEMENT_SURVEY_GUID = "engagementSurveyGuid";
     static final String KEY_EXCLUDED_DATA_GROUP_SET = "excludedDataGroupSet";
     static final String KEY_FINISH_TIME = "finishTime";
     static final String KEY_MESSAGE = "message";
@@ -86,10 +89,12 @@ public class DynamoHelper {
     public WorkerConfig getNotificationConfigForStudy(String studyId) {
         Item item = ddbNotificationConfigTable.getItem(KEY_STUDY_ID, studyId);
         WorkerConfig workerConfig = new WorkerConfig();
+        workerConfig.setAppUrl(item.getString(KEY_APP_URL));
         workerConfig.setBurstDurationDays(item.getInt(KEY_BURST_DURATION_DAYS));
         workerConfig.setBurstStartEventIdSet(item.getStringSet(KEY_BURST_EVENT_ID_SET));
         workerConfig.setBurstTaskId(item.getString(KEY_BURST_TASK_ID));
         workerConfig.setEarlyLateCutoffDays(item.getInt(KEY_EARLY_LATE_CUTOFF_DAYS));
+        workerConfig.setEngagementSurveyGuid(item.getString(KEY_ENGAGEMENT_SURVEY_GUID));
         workerConfig.setExcludedDataGroupSet(item.getStringSet(KEY_EXCLUDED_DATA_GROUP_SET));
         workerConfig.setMissedCumulativeActivitiesMessagesList(item.getList(KEY_MISSED_CUMULATIVE_MESSAGES));
         workerConfig.setMissedEarlyActivitiesMessagesList(item.getList(KEY_MISSED_EARLY_MESSAGES));
@@ -119,8 +124,16 @@ public class DynamoHelper {
             UserNotification userNotification = new UserNotification();
             userNotification.setMessage(item.getString(KEY_MESSAGE));
             userNotification.setTime(item.getLong(KEY_NOTIFICATION_TIME));
-            userNotification.setType(NotificationType.valueOf(item.getString(KEY_NOTIFICATION_TYPE)));
             userNotification.setUserId(item.getString(KEY_USER_ID));
+
+            // Parse notification type. Need a null check in case of old notification logs that pre-date this enum.
+            String notificationTypeString = item.getString(KEY_NOTIFICATION_TYPE);
+            if (StringUtils.isNotBlank(notificationTypeString)) {
+                userNotification.setType(NotificationType.valueOf(notificationTypeString));
+            } else {
+                userNotification.setType(NotificationType.UNKNOWN);
+            }
+
             return userNotification;
         } else {
             return null;

@@ -10,10 +10,12 @@ import com.google.common.collect.ImmutableSet;
 
 /** Encapsulates configuration values necessary to determine if and when to send notifications. */
 public class WorkerConfig {
+    private String appUrl;
     private int burstDurationDays;
     private Set<String> burstStartEventIdSet = ImmutableSet.of();
     private String burstTaskId;
     private int earlyLateCutoffDays;
+    private String engagementSurveyGuid;
     private Set<String> excludedDataGroupSet = ImmutableSet.of();
     private List<String> missedCumulativeActivitiesMessagesList = ImmutableList.of();
     private List<String> missedEarlyActivitiesMessagesList = ImmutableList.of();
@@ -25,6 +27,19 @@ public class WorkerConfig {
     private int numMissedDaysToNotify;
     private Map<String, List<String>> preburstMessagesByDataGroup = ImmutableMap.of();
     private Set<String> requiredSubpopulationGuidSet = ImmutableSet.of();
+
+    /**
+     * URL that links back to the app (or to the study website, if for some reason the app is not installed).
+     * Example: http://mpower.sagebridge.org/
+     */
+    public String getAppUrl() {
+        return appUrl;
+    }
+
+    /** @see #getAppUrl */
+    public void setAppUrl(String appUrl) {
+        this.appUrl = appUrl;
+    }
 
     /** The length of the study burst, in days. */
     public int getBurstDurationDays() {
@@ -69,6 +84,16 @@ public class WorkerConfig {
     /** @see #getEarlyLateCutoffDays */
     public void setEarlyLateCutoffDays(int earlyLateCutoffDays) {
         this.earlyLateCutoffDays = earlyLateCutoffDays;
+    }
+
+    /** Survey GUID for the engagement survey, for use with the "studyCommitment" template variable. */
+    public String getEngagementSurveyGuid() {
+        return engagementSurveyGuid;
+    }
+
+    /** @see #getEngagementSurveyGuid */
+    public void setEngagementSurveyGuid(String engagementSurveyGuid) {
+        this.engagementSurveyGuid = engagementSurveyGuid;
     }
 
     /** Set of data groups that will never receive notifications. */
