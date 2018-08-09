@@ -21,19 +21,22 @@ import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 public class SesHelper {
     private static final Logger LOG = LoggerFactory.getLogger(SesHelper.class);
 
-    // TODO: move these to config
+    // JIRA for templatizing emails https://sagebionetworks.jira.com/browse/BRIDGE-2274
     private static final String SUBJECT_TEMPLATE = "Your requested data from %s";
 
     private static final String BODY_TEMPLATE_HTML = "<html>%n" +
             "   <body>%n" +
             "       <p>Your <a href=\"%s\">requested data download</a> is now available.</p>%n" +
             "       <p>This link will expire on %s.</p>%n" +
+            "       <p>Our system updates once per day. So, if you updated your information in the last 24 hours, it may not be available to download until tomorrow.</p>%n" +
             "   </body>%n" +
             "</html>";
     private static final String BODY_TEMPLATE_TEXT = "To download your requested data, please click on the following link:%n" +
             "%s%n" +
             "%n" +
-            "This link will expire on %s.";
+            "This link will expire on %s.%n" +
+            "%n" +
+            "Our system updates once per day. So, if you updated your information in the last 24 hours, it may not be available to download until tomorrow.";
 
     private static final String NO_DATA_BODY_TEXT = "There was no data available for your request. Data will only be available if your sharing\n" +
             "settings are set to share data. Please check your sharing settings and please wait at\n" +
