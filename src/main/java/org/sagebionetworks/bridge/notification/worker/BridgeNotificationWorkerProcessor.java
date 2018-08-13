@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.Iterators;
 import com.google.common.util.concurrent.RateLimiter;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -46,6 +47,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     private static final int MAX_TIMEZONE_OFFSET_MILLIS = -1 * 60 * 60 * 1000;
     static final String REQUEST_PARAM_DATE = "date";
     static final String REQUEST_PARAM_STUDY_ID = "studyId";
+    static final String REQUEST_PARAM_USER_LIST = "userList";
     static final String REQUEST_PARAM_TAG = "tag";
 
     private final RateLimiter perUserRateLimiter = RateLimiter.create(1.0);
@@ -123,22 +125,30 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
         LOG.info("Received request for study=" + studyId + ", date=" + dateString + ", tag=" + tag);
 
-        // Iterate over each user
-        Iterator<AccountSummary> accountSummaryIterator = bridgeHelper.getAllAccountSummaries(studyId);
+        // Iterate over each user. All we care about is the userID, so transform the iterator.
+        Iterator<String> userIdIterator;
+        JsonNode userListNode = jsonNode.get(REQUEST_PARAM_USER_LIST);
+        if (userListNode != null) {
+            userIdIterator = Iterators.transform(userListNode.elements(), JsonNode::textValue);
+            LOG.info("Custom user list received, " + userListNode.size() + " users");
+        } else {
+            userIdIterator = Iterators.transform(bridgeHelper.getAllAccountSummaries(studyId), AccountSummary::getId);
+        }
+
         int numUsers = 0;
         Stopwatch stopwatch = Stopwatch.createStarted();
-        while (accountSummaryIterator.hasNext()) {
+        while (userIdIterator.hasNext()) {
             // Rate limit
             perUserRateLimiter.acquire();
 
             // Process
             try {
-                AccountSummary oneAccountSummary = accountSummaryIterator.next();
+                String userId = userIdIterator.next();
 
                 try {
-                    processAccountForDate(studyId, date, oneAccountSummary);
+                    processAccountForDate(studyId, date, userId);
                 } catch (Exception ex) {
-                    LOG.error("Error processing user ID " + oneAccountSummary.getId() + ": " + ex.getMessage(), ex);
+                    LOG.error("Error processing user ID " + userId + ": " + ex.getMessage(), ex);
                 }
             } catch (Exception ex) {
                 LOG.error("Error getting next user: " + ex.getMessage(), ex);
@@ -161,9 +171,9 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     }
 
     // Processes a single user for the given date. Package-scoped for unit tests.
-    void processAccountForDate(String studyId, LocalDate date, AccountSummary accountSummary) throws IOException {
+    void processAccountForDate(String studyId, LocalDate date, String userId) throws IOException {
         // Get participant. We'll need some attributes.
-        StudyParticipant participant = bridgeHelper.getParticipant(studyId, accountSummary.getId());
+        StudyParticipant participant = bridgeHelper.getParticipant(studyId, userId);
 
         // Exclude users who are not eligible for notifications.
         if (shouldExcludeUser(studyId, participant)) {

@@ -4,6 +4,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import org.joda.time.LocalDate;
@@ -115,18 +117,42 @@ public class BridgeNotificationWorkerProcessorTest {
         when(mockBridgeHelper.getAllAccountSummaries(STUDY_ID)).thenReturn(ImmutableList.of(accountSummary1,
                 accountSummary2, accountSummary3).iterator());
 
-        doThrow(IOException.class).when(processor).processAccountForDate(STUDY_ID, DATE, accountSummary2);
+        doThrow(IOException.class).when(processor).processAccountForDate(STUDY_ID, DATE, "user-2");
 
         // Execute
         processor.accept(makeValidRequestNode());
 
         // Verify calls to processAccount()
-        verify(processor).processAccountForDate(STUDY_ID, DATE, accountSummary1);
-        verify(processor).processAccountForDate(STUDY_ID, DATE, accountSummary2);
-        verify(processor).processAccountForDate(STUDY_ID, DATE, accountSummary3);
+        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-1");
+        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-2");
+        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-3");
 
         // Verify call to dynamoHelper.writeWorkerLog()
         verify(mockDynamoHelper).writeWorkerLog(TAG);
+    }
+
+    @Test
+    public void userList() throws Exception {
+        // Pass in user list of 2 users.
+        ArrayNode userListNode = JSON_MAPPER.createArrayNode();
+        userListNode.add("user-A").add("user-B").add("user-C");
+
+        ObjectNode requestNode = makeValidRequestNode();
+        requestNode.set(BridgeNotificationWorkerProcessor.REQUEST_PARAM_USER_LIST, userListNode);
+
+        // Execute.
+        processor.accept(requestNode);
+
+        // Verify calls to processAccount()
+        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-A");
+        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-B");
+        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-C");
+
+        // Verify call to dynamoHelper.writeWorkerLog()
+        verify(mockDynamoHelper).writeWorkerLog(TAG);
+
+        // We don't call Bridge to get users.
+        verify(mockBridgeHelper, never()).getAllAccountSummaries(any());
     }
 
     private static ObjectNode makeValidRequestNode() {
