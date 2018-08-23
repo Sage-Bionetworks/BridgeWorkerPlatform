@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -30,7 +31,6 @@ import org.sagebionetworks.bridge.rest.model.ActivityEvent;
 import org.sagebionetworks.bridge.rest.model.ScheduleStatus;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
-import org.sagebionetworks.bridge.rest.model.UserConsentHistory;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.time.DateUtils;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
@@ -220,7 +220,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         Set<String> excludedDataGroupSet = workerConfig.getExcludedDataGroupSet();
 
         // Unverified phone numbers can't be notified
-        if (Boolean.FALSE.equals(participant.getPhoneVerified())) {
+        if (Boolean.FALSE.equals(participant.isPhoneVerified())) {
             return true;
         }
 
@@ -238,7 +238,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         }
 
         // Unconsented users can't be notified
-        if (!isUserConsented(studyId, participant)) {
+        if (!Objects.equals(participant.isConsented(), Boolean.TRUE)) {
             return true;
         }
 
@@ -262,29 +262,6 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
         // We've checked all the exclude conditions. Do not exclude user.
         return false;
-    }
-
-    // Helper method to determine if the user has signed the required consent(s).
-    private boolean isUserConsented(String studyId, StudyParticipant participant) {
-        // Check each required subpop. The user must have signed that consent.
-        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
-        Map<String, List<UserConsentHistory>> consentsBySubpop = participant.getConsentHistories();
-        for (String oneRequiredSubpopGuid : workerConfig.getRequiredSubpopulationGuidSet()) {
-            List<UserConsentHistory> oneConsentList = consentsBySubpop.get(oneRequiredSubpopGuid);
-            if (oneConsentList.isEmpty()) {
-                return false;
-            }
-
-            // Newest consent is always at the end. If consent signature exists and is not withdrawn, then the user is
-            // consented. This is consistent with the 412 logic in BridgePF.
-            UserConsentHistory newestConsent = oneConsentList.get(oneConsentList.size() - 1);
-            if (newestConsent.getWithdrewOn() != null) {
-                return false;
-            }
-        }
-
-        // If we make it this far, then we've verified that all consents are signed, up-to-date, and not withdrawn.
-        return true;
     }
 
     // Helper method to determine if there's an upcoming study burst coming up tomorrow.

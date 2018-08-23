@@ -53,11 +53,6 @@ public class WorkerConfigTest {
         testMapNeverNull(WorkerConfig::getPreburstMessagesByDataGroup, WorkerConfig::setPreburstMessagesByDataGroup);
     }
 
-    @Test
-    public void requiredSubpopulationGuidSetNeverNull() {
-        testSetNeverNull(WorkerConfig::getRequiredSubpopulationGuidSet, WorkerConfig::setRequiredSubpopulationGuidSet);
-    }
-
     // The following tests are duplicated per collection type, because generics and inheritance behaves in ways that
     // make this difficult to genericize.
 

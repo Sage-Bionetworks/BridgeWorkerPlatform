@@ -101,8 +101,7 @@ public class DynamoHelperTest {
                 .withInt(DynamoHelper.KEY_NUM_ACTIVITIES_TO_COMPLETE, 6)
                 .withInt(DynamoHelper.KEY_NUM_MISSED_CONSECUTIVE_DAYS_TO_NOTIFY, 3)
                 .withInt(DynamoHelper.KEY_NUM_MISSED_DAYS_TO_NOTIFY, 4)
-                .withMap(DynamoHelper.KEY_PREBURST_MESSAGES, preburstMessagesMap)
-                .withStringSet(DynamoHelper.KEY_REQUIRED_SUBPOPULATION_GUID_SET, STUDY_ID);
+                .withMap(DynamoHelper.KEY_PREBURST_MESSAGES, preburstMessagesMap);
         when(mockNotificationConfigTable.getItem(DynamoHelper.KEY_STUDY_ID, STUDY_ID)).thenReturn(item);
 
         // Execute and validate
@@ -125,7 +124,6 @@ public class DynamoHelperTest {
         assertEquals(config.getNumMissedConsecutiveDaysToNotify(), 3);
         assertEquals(config.getNumMissedDaysToNotify(), 4);
         assertEquals(config.getPreburstMessagesByDataGroup(), preburstMessagesMap);
-        assertEquals(config.getRequiredSubpopulationGuidSet(), ImmutableSet.of(STUDY_ID));
 
         verify(mockNotificationConfigTable).getItem(DynamoHelper.KEY_STUDY_ID, STUDY_ID);
 

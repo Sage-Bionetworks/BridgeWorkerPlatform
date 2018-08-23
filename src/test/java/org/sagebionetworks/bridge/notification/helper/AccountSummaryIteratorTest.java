@@ -10,6 +10,8 @@ import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -178,11 +180,13 @@ public class AccountSummaryIteratorTest {
         accountSummaryList.setTotal(total);
 
         // Make page elements
+        List<AccountSummary> items = new ArrayList<>();
         for (int i = 0; i < accountsInPage; i++) {
             AccountSummary accountSummary = new AccountSummary();
             accountSummary.setId(USER_ID_PREFIX + (offset + i));
-            accountSummaryList.addItemsItem(accountSummary);
+            items.add(accountSummary);
         }
+        accountSummaryList.setItems(items);
 
         // Mock Response and Call to return this.
         Response<AccountSummaryList> pageResponse = Response.success(accountSummaryList);

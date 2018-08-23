@@ -10,6 +10,8 @@ import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.joda.time.DateTime;
 import org.testng.annotations.BeforeMethod;
@@ -192,11 +194,13 @@ public class TaskHistoryIteratorTest {
         forwardCursorStringList.setNextPageOffsetKey(nextPageOffsetKey);
 
         // Make page elements
+        List<ScheduledActivity> scheduledActivityList = new ArrayList<>();
         for (int i = start; i <= end; i++) {
             ScheduledActivity scheduledActivity = new ScheduledActivity();
             scheduledActivity.setGuid(ACTIVITY_GUID_PREFIX + i);
-            forwardCursorStringList.addItemsItem(scheduledActivity);
+            scheduledActivityList.add(scheduledActivity);
         }
+        forwardCursorStringList.setItems(scheduledActivityList);
 
         // Mock Response and Call to return this.
         Response<ForwardCursorScheduledActivityList> pageResponse = Response.success(forwardCursorStringList);

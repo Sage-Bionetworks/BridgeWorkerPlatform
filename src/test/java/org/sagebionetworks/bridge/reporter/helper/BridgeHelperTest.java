@@ -72,7 +72,7 @@ public class BridgeHelperTest {
     private Upload testUpload;
 
     @BeforeClass
-    public void setup() throws IOException {
+    public void setup() {
         testUpload = RestUtils.GSON.fromJson(json, Upload.class);
     }
 
@@ -249,11 +249,16 @@ public class BridgeHelperTest {
     
     private Call<AccountSummaryList> createResponseForOffset(int offsetBy, AccountSummary... summaries) throws IOException {
         List<AccountSummary> page = new ArrayList<>();
-        RequestParams requestParams = new RequestParams().offsetBy(offsetBy).pageSize(100)
-                .startTime(TEST_START_DATETIME).endTime(TEST_END_DATETIME);
+
+        RequestParams mockRequestParams = mock(RequestParams.class);
+        when(mockRequestParams.getOffsetBy()).thenReturn(offsetBy);
+        when(mockRequestParams.getPageSize()).thenReturn(100);
+        when(mockRequestParams.getStartTime()).thenReturn(TEST_START_DATETIME);
+        when(mockRequestParams.getEndTime()).thenReturn(TEST_END_DATETIME);
+
         AccountSummaryList list = new AccountSummaryList();
         list.setItems(page);
-        list.setRequestParams(requestParams);
+        list.setRequestParams(mockRequestParams);
         list.setTotal(120);
 
         for (AccountSummary summary : summaries) {
