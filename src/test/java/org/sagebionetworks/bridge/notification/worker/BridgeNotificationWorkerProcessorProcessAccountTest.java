@@ -11,7 +11,6 @@ import static org.testng.Assert.assertEquals;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -36,7 +35,6 @@ import org.sagebionetworks.bridge.rest.model.Phone;
 import org.sagebionetworks.bridge.rest.model.ScheduleStatus;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
-import org.sagebionetworks.bridge.rest.model.UserConsentHistory;
 
 @SuppressWarnings("JavaReflectionMemberAccess")
 public class BridgeNotificationWorkerProcessorProcessAccountTest {
@@ -51,8 +49,6 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     private static final String MESSAGE_PRE_BURST_2 = "message-pre-burst-2";
     private static final long MOCK_NOW_MILLIS = DateTime.parse("2018-04-30T16:41:15.831-0700").getMillis();
     private static final Phone PHONE = new Phone().regionCode("US").number("425-555-5555");
-    private static final String REQUIRED_SUBPOP_1 = "required-subpop-1";
-    private static final String REQUIRED_SUBPOP_2 = "required-subpop-2";
     private static final String RESOLVED_TEMPLATE_VAR_SUFFIX = " w/ resolved variables";
     private static final String PREBURST_GROUP_1 = "preburst-group-1";
     private static final String PREBURST_GROUP_2 = "preburst-group-2";
@@ -66,7 +62,6 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     private static final DateTime STUDY_BURST_2_START_TIME = ENROLLMENT_TIME.plusDays(14);
 
     private List<ScheduledActivity> activityList;
-    private Map<String, List<UserConsentHistory>> consentHistoryMap;
     private BridgeHelper mockBridgeHelper;
     private DynamoHelper mockDynamoHelper;
     private StudyParticipant mockParticipant;
@@ -99,18 +94,13 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         when(mockBridgeHelper.getActivityEvents(STUDY_ID, USER_ID)).thenReturn(ImmutableList.of(enrollmentEvent,
                 unrelatedEvent, studyBurst2StartEvent));
 
-        // Participant consents
-        consentHistoryMap = new HashMap<>();
-        consentHistoryMap.put(REQUIRED_SUBPOP_1, makeValidConsentHistory());
-        consentHistoryMap.put(REQUIRED_SUBPOP_2, makeValidConsentHistory());
-
         // Participant needs to be mocked because we can't set ID
         mockParticipant = mock(StudyParticipant.class);
         when(mockParticipant.getId()).thenReturn(USER_ID);
-        when(mockParticipant.getConsentHistories()).thenReturn(consentHistoryMap);
+        when(mockParticipant.isConsented()).thenReturn(true);
         when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-data-group"));
         when(mockParticipant.getPhone()).thenReturn(PHONE);
-        when(mockParticipant.getPhoneVerified()).thenReturn(true);
+        when(mockParticipant.isPhoneVerified()).thenReturn(true);
         when(mockParticipant.getTimeZone()).thenReturn("-07:00");
         when(mockBridgeHelper.getParticipant(STUDY_ID, USER_ID)).thenReturn(mockParticipant);
 
@@ -157,7 +147,6 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         config.setNumMissedConsecutiveDaysToNotify(2);
         config.setNumMissedDaysToNotify(3);
         config.setPreburstMessagesByDataGroup(preburstMessageMap);
-        config.setRequiredSubpopulationGuidSet(ImmutableSet.of(REQUIRED_SUBPOP_1, REQUIRED_SUBPOP_2));
         when(mockDynamoHelper.getNotificationConfigForStudy(STUDY_ID)).thenReturn(config);
 
         // Mock template variable helper. For this test, just append a string. Actually template variable logic is
@@ -178,7 +167,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
 
     @Test
     public void unverifiedPhone() throws Exception {
-        when(mockParticipant.getPhoneVerified()).thenReturn(false);
+        when(mockParticipant.isPhoneVerified()).thenReturn(false);
         processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
@@ -205,16 +194,15 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     }
 
     @Test
-    public void noConsent() throws Exception {
-        // Consent history returns empty lists for each subpop.
-        consentHistoryMap.put(REQUIRED_SUBPOP_1, ImmutableList.of());
+    public void notConsented() throws Exception {
+        when(mockParticipant.isConsented()).thenReturn(false);
         processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
     @Test
-    public void consentWithdrawn() throws Exception {
-        consentHistoryMap.get(REQUIRED_SUBPOP_1).get(1).setWithdrewOn(ENROLLMENT_TIME);
+    public void nullConsent() throws Exception {
+        when(mockParticipant.isConsented()).thenReturn(null);
         processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
@@ -452,16 +440,5 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
 
         // Verify SMS message
         verify(mockBridgeHelper).sendSmsToUser(STUDY_ID, USER_ID, message + RESOLVED_TEMPLATE_VAR_SUFFIX);
-    }
-
-    private static List<UserConsentHistory> makeValidConsentHistory() {
-        // For good measure, there are 2 consents in the consent history. The first one is outdated. The second one is
-        // current.
-        // Timestamps are arbitrary for the purposes of this test.
-        UserConsentHistory consent1 = new UserConsentHistory().hasSignedActiveConsent(false).signedOn(DateTime.parse(
-                "2018-01-09T18:42:43.498-0700"));
-        UserConsentHistory consent2 = new UserConsentHistory().hasSignedActiveConsent(true).signedOn(DateTime.parse(
-                "2018-02-27T20:21:50.683-0700"));
-        return ImmutableList.of(consent1, consent2);
     }
 }

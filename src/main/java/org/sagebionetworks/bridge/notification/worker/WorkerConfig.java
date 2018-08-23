@@ -26,7 +26,6 @@ public class WorkerConfig {
     private int numMissedConsecutiveDaysToNotify;
     private int numMissedDaysToNotify;
     private Map<String, List<String>> preburstMessagesByDataGroup = ImmutableMap.of();
-    private Set<String> requiredSubpopulationGuidSet = ImmutableSet.of();
 
     /**
      * URL that links back to the app (or to the study website, if for some reason the app is not installed).
@@ -211,16 +210,5 @@ public class WorkerConfig {
     public void setPreburstMessagesByDataGroup(Map<String, List<String>> preburstMessagesByDataGroup) {
         this.preburstMessagesByDataGroup = preburstMessagesByDataGroup != null ?
                 ImmutableMap.copyOf(preburstMessagesByDataGroup) : ImmutableMap.of();
-    }
-
-    /** Set of subpopulations that the participant must be consented to in order to receive notifications. */
-    public Set<String> getRequiredSubpopulationGuidSet() {
-        return requiredSubpopulationGuidSet;
-    }
-
-    /** @see #getRequiredSubpopulationGuidSet */
-    public void setRequiredSubpopulationGuidSet(Set<String> requiredSubpopulationGuidSet) {
-        this.requiredSubpopulationGuidSet = requiredSubpopulationGuidSet != null ?
-                ImmutableSet.copyOf(requiredSubpopulationGuidSet) : ImmutableSet.of();
     }
 }

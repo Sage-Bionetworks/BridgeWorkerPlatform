@@ -71,7 +71,7 @@ public class FitBitUserIterator implements Iterator<FitBitUser> {
 
     // Helper method to determine if there is a next page.
     private boolean hasNextPage() {
-        return healthCodeList.getHasNext();
+        return healthCodeList.isHasNext();
     }
 
     /** {@inheritDoc} */

@@ -78,7 +78,7 @@ public abstract class ActivityHistoryIterator implements Iterator<ScheduledActiv
 
     // Helper method to determine if there is a next page.
     private boolean hasNextPage() {
-        return activityList.getHasNext();
+        return activityList.isHasNext();
     }
 
     /** {@inheritDoc} */
