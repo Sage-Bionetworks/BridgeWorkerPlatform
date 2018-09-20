@@ -99,7 +99,7 @@ public class UploadRedriveWorkerProcessorTest {
 
         // Verify worker log.
         verify(mockDynamoHelper).writeWorkerLog(UploadRedriveWorkerProcessor.WORKER_ID, "s3Bucket=" + S3_BUCKET +
-                ", s3Key=" + S3_KEY + ", redriveType=" + RedriveType.UPLOAD_ID.name());
+                ", s3Key=" + S3_KEY + ", redriveType=upload_id");
 
         // Verify metrics. Most metrics are logged by processId(). The only metric logged here is "error".
         ArgumentCaptor<Multiset> metricsCaptor = ArgumentCaptor.forClass(Multiset.class);
@@ -114,7 +114,10 @@ public class UploadRedriveWorkerProcessorTest {
         ObjectNode requestNode = JSON_MAPPER.createObjectNode();
         requestNode.put(UploadRedriveWorkerProcessor.REQUEST_PARAM_S3_BUCKET, S3_BUCKET);
         requestNode.put(UploadRedriveWorkerProcessor.REQUEST_PARAM_S3_KEY, S3_KEY);
-        requestNode.put(UploadRedriveWorkerProcessor.REQUEST_PARAM_REDRIVE_TYPE, RedriveType.UPLOAD_ID.name());
+
+        // Use lower-case to verify case insensitivity.
+        requestNode.put(UploadRedriveWorkerProcessor.REQUEST_PARAM_REDRIVE_TYPE, "upload_id");
+
         return requestNode;
     }
 }

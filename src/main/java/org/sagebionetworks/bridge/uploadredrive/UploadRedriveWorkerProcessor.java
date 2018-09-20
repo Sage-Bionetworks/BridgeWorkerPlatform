@@ -94,7 +94,7 @@ public class UploadRedriveWorkerProcessor implements ThrowingConsumer<JsonNode> 
         }
         RedriveType redriveType;
         try {
-            redriveType = RedriveType.valueOf(redriveTypeStr);
+            redriveType = RedriveType.valueOf(redriveTypeStr.toUpperCase());
         } catch (IllegalArgumentException ex) {
             throw new PollSqsWorkerBadRequestException("invalid redrive type: " + redriveTypeStr);
         }
