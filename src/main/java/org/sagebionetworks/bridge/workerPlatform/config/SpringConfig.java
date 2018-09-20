@@ -45,7 +45,10 @@ import org.sagebionetworks.bridge.workerPlatform.multiplexer.Constants;
 // For EC2 instances, this happens transparently.
 // See http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/credentials.html and
 // http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/java-dg-setup.html#set-up-creds for more info.
-@ComponentScan("org.sagebionetworks.bridge.workerPlatform")
+@ComponentScan({
+        "org.sagebionetworks.bridge.uploadredrive",
+        "org.sagebionetworks.bridge.workerPlatform",
+})
 @Import({
         org.sagebionetworks.bridge.fitbit.config.SpringConfig.class,
         org.sagebionetworks.bridge.notification.config.SpringConfig.class,
@@ -133,6 +136,12 @@ public class SpringConfig {
     @Bean(name = "ddbUploadSchemaStudyIndex")
     public Index ddbUploadSchemaStudyIndex() {
         return ddbUploadSchemaTable(bridgeConfig()).getIndex("studyId-index");
+    }
+
+    @Bean(name = "ddbWorkerLogTable")
+    public Table ddbWorkerLogTable() {
+        String fullyQualifiedTableName = dynamoNamingHelper().getFullyQualifiedTableName("WorkerLog");
+        return ddbClient().getTable(fullyQualifiedTableName);
     }
 
     @Bean

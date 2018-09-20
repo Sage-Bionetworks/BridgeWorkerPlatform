@@ -25,11 +25,4 @@ public class SpringConfig {
         String fullyQualifiedTableName = namingHelper.getFullyQualifiedTableName("NotificationLog");
         return ddbClient.getTable(fullyQualifiedTableName);
     }
-
-    @Bean(name = "ddbWorkerLogTable")
-    @Autowired
-    public Table ddbWorkerLogTable(DynamoDB ddbClient, DynamoNamingHelper namingHelper) {
-        String fullyQualifiedTableName = namingHelper.getFullyQualifiedTableName("WorkerLog");
-        return ddbClient.getTable(fullyQualifiedTableName);
-    }
 }
