@@ -5,10 +5,15 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
+
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -29,6 +34,7 @@ public class UploadRedriveWorkerProcessorTest {
     private static final String S3_KEY = "my-key";
 
     private DynamoHelper mockDynamoHelper;
+    private ExecutorService mockExecutorService;
     private S3Helper mockS3Helper;
     private UploadRedriveWorkerProcessor processor;
 
@@ -38,9 +44,20 @@ public class UploadRedriveWorkerProcessorTest {
         mockDynamoHelper = mock(DynamoHelper.class);
         mockS3Helper = mock(S3Helper.class);
 
+        // Mock thread pool. For the sake of this test, the executor will just return a mock Future that just calls the
+        // callable on get().
+        mockExecutorService = mock(ExecutorService.class);
+        when(mockExecutorService.submit(any(Callable.class))).thenAnswer(invocation -> {
+            Callable<?> callable = invocation.getArgumentAt(0, Callable.class);
+            Future<?> mockFuture = mock(Future.class);
+            when(mockFuture.get()).thenAnswer(invocation2 -> callable.call());
+            return mockFuture;
+        });
+
         // Create processor. Spy the processor so we can test processId() in a separate set of tests.
         processor = spy(new UploadRedriveWorkerProcessor());
         processor.setDynamoHelper(mockDynamoHelper);
+        processor.setExecutorService(mockExecutorService);
         processor.setS3Helper(mockS3Helper);
         processor.setPerUploadRateLimit(1000.0);
 
@@ -101,13 +118,38 @@ public class UploadRedriveWorkerProcessorTest {
         verify(mockDynamoHelper).writeWorkerLog(UploadRedriveWorkerProcessor.WORKER_ID, "s3Bucket=" + S3_BUCKET +
                 ", s3Key=" + S3_KEY + ", redriveType=upload_id");
 
-        // Verify metrics. Most metrics are logged by processId(). The only metric logged here is "error".
+        // Verify metrics. Most metrics are logged by processId(). The only metric logged here is "completion_error".
         ArgumentCaptor<Multiset> metricsCaptor = ArgumentCaptor.forClass(Multiset.class);
         verify(processor).logMetrics(metricsCaptor.capture());
 
         Multiset<String> metrics = metricsCaptor.getValue();
         assertEquals(metrics.size(), 1);
-        assertEquals(metrics.count("error"), 1);
+        assertEquals(metrics.count("completion_error"), 1);
+    }
+
+    // branch coverage
+    @Test
+    public void submittingToExecutorThrows() throws Exception {
+        // Mock S3 Helper.
+        when(mockS3Helper.readS3FileAsLines(S3_BUCKET, S3_KEY)).thenReturn(ImmutableList.of("upload-1", "upload-2",
+                "upload-3"));
+
+        // Mock executor throws.
+        doThrow(RuntimeException.class).when(mockExecutorService).submit(any(Callable.class));
+
+        // Execute.
+        processor.accept(makeValidRequestNode());
+
+        // Submit failed, so no calls to processId().
+        verify(processor, never()).processId(any(), any(), any());
+
+        // Verify metrics. Most metrics are logged by processId(). The only metric logged here is "submission_error".
+        ArgumentCaptor<Multiset> metricsCaptor = ArgumentCaptor.forClass(Multiset.class);
+        verify(processor).logMetrics(metricsCaptor.capture());
+
+        Multiset<String> metrics = metricsCaptor.getValue();
+        assertEquals(metrics.size(), 3);
+        assertEquals(metrics.count("submission_error"), 3);
     }
 
     private static ObjectNode makeValidRequestNode() {

@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
@@ -46,6 +48,7 @@ import org.sagebionetworks.bridge.workerPlatform.multiplexer.Constants;
 // See http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/credentials.html and
 // http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/java-dg-setup.html#set-up-creds for more info.
 @ComponentScan({
+        "org.sagebionetworks.bridge.udd",
         "org.sagebionetworks.bridge.uploadredrive",
         "org.sagebionetworks.bridge.workerPlatform",
 })
@@ -53,7 +56,6 @@ import org.sagebionetworks.bridge.workerPlatform.multiplexer.Constants;
         org.sagebionetworks.bridge.fitbit.config.SpringConfig.class,
         org.sagebionetworks.bridge.notification.config.SpringConfig.class,
         org.sagebionetworks.bridge.reporter.config.SpringConfig.class,
-        org.sagebionetworks.bridge.udd.config.SpringConfig.class,
 })
 @Configuration("GeneralConfig")
 public class SpringConfig {
@@ -142,6 +144,16 @@ public class SpringConfig {
     public Table ddbWorkerLogTable() {
         String fullyQualifiedTableName = dynamoNamingHelper().getFullyQualifiedTableName("WorkerLog");
         return ddbClient().getTable(fullyQualifiedTableName);
+    }
+
+    @Bean(name = "generalExecutorService")
+    public ExecutorService generalExecutorService() {
+        return Executors.newFixedThreadPool(bridgeConfig().getInt("threadpool.general.count"));
+    }
+
+    @Bean(name = "synapseExecutorService")
+    public ExecutorService synapseExecutorService() {
+        return Executors.newFixedThreadPool(bridgeConfig().getInt("threadpool.synapse.count"));
     }
 
     @Bean

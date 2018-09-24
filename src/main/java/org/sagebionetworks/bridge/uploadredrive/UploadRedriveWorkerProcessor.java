@@ -1,8 +1,13 @@
 package org.sagebionetworks.bridge.uploadredrive;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
+import javax.annotation.Resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Joiner;
@@ -44,6 +49,7 @@ public class UploadRedriveWorkerProcessor implements ThrowingConsumer<JsonNode> 
 
     private BridgeHelper bridgeHelper;
     private DynamoHelper dynamoHelper;
+    private ExecutorService executorService;
     private S3Helper s3Helper;
 
     /** Helps call Bridge Server APIs. */
@@ -58,12 +64,17 @@ public class UploadRedriveWorkerProcessor implements ThrowingConsumer<JsonNode> 
         this.dynamoHelper = dynamoHelper;
     }
 
+    /** Executor Service (thread pool) to allow parallel requests to Upload Complete. */
+    @Resource(name = "generalExecutorService")
+    public final void setExecutorService(ExecutorService executorService) {
+        this.executorService = executorService;
+    }
+
     /**
      * Set rate limit, in upload per second. This is primarily to allow unit tests to run without being throttled. Note
      * that in production, since we're running in synchronous mode (to allow better robustness), it's possible that
      * this will run slower than the rate limit.
      */
-    // TODO: Invest in making this both multi-threaded and robust.
     public final void setPerUploadRateLimit(double rate) {
         perUploadRateLimiter.setRate(rate);
     }
@@ -105,26 +116,55 @@ public class UploadRedriveWorkerProcessor implements ThrowingConsumer<JsonNode> 
         LOG.info("Received redrive request with params s3Bucket=" + s3Bucket + ", s3Key=" + s3Key + ", redriveType=" +
                 redriveTypeStr);
 
+        // Submit upload complete tasks to the thread pool.
         int numUploads = 0;
         Stopwatch stopwatch = Stopwatch.createStarted();
         Multiset<String> metrics = TreeMultiset.create();
+        List<UploadRedriveSubtask> subtaskList = new ArrayList<>();
         for (String id : sourceIdList) {
             // Rate limit.
             perUploadRateLimiter.acquire();
 
             // Process.
             try {
-                processId(id, redriveType, metrics);
+                Future<?> future = executorService.submit(() -> {
+                    processId(id, redriveType, metrics);
+
+                    // Callable requires a return value. We use Callable instead of Runnable because Callable can throw
+                    // checked exceptions.
+                    return null;
+                });
+                subtaskList.add(new UploadRedriveSubtask(id, future));
             } catch (Exception ex) {
-                LOG.error("Error processing id " + id + ": " + ex.getMessage(), ex);
-                metrics.add("error");
+                LOG.error("Error submitting task for id " + id + ": " + ex.getMessage(), ex);
+                metrics.add("submission_error");
             }
 
             // Reporting.
             numUploads++;
             if (numUploads % REPORTING_INTERVAL == 0) {
-                LOG.info("Processing uploads in progress: " + numUploads + " uploads in " +
+                LOG.info("Submitting tasks in progress: " + numUploads + " uploads in " +
                         stopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
+            }
+        }
+
+        // Wait for futures to complete.
+        int numCompleted = 0;
+        Stopwatch completionStopwatch = Stopwatch.createStarted();
+        for (UploadRedriveSubtask subtask : subtaskList) {
+            // Wait on futures.
+            try {
+                subtask.getFuture().get();
+            } catch (Exception ex) {
+                LOG.error("Error completing task for id " + subtask.getId() + ": " + ex.getMessage(), ex);
+                metrics.add("completion_error");
+            }
+
+            // Reporting.
+            numCompleted++;
+            if (numCompleted % REPORTING_INTERVAL == 0) {
+                LOG.info("Completing tasks in progress: " + numCompleted + " uploads in " +
+                        completionStopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
             }
         }
 

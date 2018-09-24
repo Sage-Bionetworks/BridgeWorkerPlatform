@@ -23,7 +23,6 @@ import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.config.Config;
@@ -62,7 +61,7 @@ public class SynapsePackager {
     /**
      * Auxiliary executor service (thread pool), used secondary thread tasks. (As opposed to listener executor service.
      */
-    @Resource(name = "auxiliaryExecutorService")
+    @Resource(name = "synapseExecutorService")
     public final void setAuxiliaryExecutorService(ExecutorService auxiliaryExecutorService) {
         this.auxiliaryExecutorService = auxiliaryExecutorService;
     }
