@@ -240,7 +240,6 @@
                         <exclude>org/sagebionetworks/bridge/fitbit/config/*</exclude>
                         <exclude>org/sagebionetworks/bridge/notification/config/*</exclude>
                         <exclude>org/sagebionetworks/bridge/reporter/config/*</exclude>
-                        <exclude>org/sagebionetworks/bridge/udd/config/*</exclude>
                         <exclude>org/sagebionetworks/bridge/workerPlatform/config/*</exclude>
 
                         <!-- constants are also not testable -->
