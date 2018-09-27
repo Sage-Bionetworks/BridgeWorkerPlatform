@@ -12,8 +12,8 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.rest.model.UploadStatus;
-import org.sagebionetworks.bridge.rest.model.UploadValidationStatus;
 import org.sagebionetworks.bridge.workerPlatform.helper.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.helper.UploadStatusAndMessages;
 
 public class UploadRedriveWorkerProcessorProcessIdTest {
     private static final String RECORD_ID = "my-record";
@@ -33,15 +33,16 @@ public class UploadRedriveWorkerProcessorProcessIdTest {
     @Test
     public void byUploadId() throws Exception {
         // Mock Bridge Helper.
-        UploadValidationStatus status = new UploadValidationStatus().status(UploadStatus.SUCCEEDED);
-        when(mockBridgeHelper.completeUploadSession(UPLOAD_ID, true, true)).thenReturn(status);
+        UploadStatusAndMessages status = new UploadStatusAndMessages(UPLOAD_ID, null,
+                UploadStatus.SUCCEEDED);
+        when(mockBridgeHelper.redriveUpload(UPLOAD_ID)).thenReturn(status);
 
         // Execute.
         Multiset<String> metrics = TreeMultiset.create();
         processor.processId(UPLOAD_ID, RedriveType.UPLOAD_ID, metrics);
 
         // Verify bridge call.
-        verify(mockBridgeHelper).completeUploadSession(UPLOAD_ID, true, true);
+        verify(mockBridgeHelper).redriveUpload(UPLOAD_ID);
 
         // Verify metrics.
         assertEquals(metrics.size(), 1);
@@ -54,15 +55,16 @@ public class UploadRedriveWorkerProcessorProcessIdTest {
         Upload upload = new Upload().uploadId(UPLOAD_ID);
         when(mockBridgeHelper.getUploadByRecordId(RECORD_ID)).thenReturn(upload);
 
-        UploadValidationStatus status = new UploadValidationStatus().status(UploadStatus.VALIDATION_FAILED);
-        when(mockBridgeHelper.completeUploadSession(UPLOAD_ID, true, true)).thenReturn(status);
+        UploadStatusAndMessages status = new UploadStatusAndMessages(UPLOAD_ID, null,
+                UploadStatus.VALIDATION_FAILED);
+        when(mockBridgeHelper.redriveUpload(UPLOAD_ID)).thenReturn(status);
 
         // Execute.
         Multiset<String> metrics = TreeMultiset.create();
         processor.processId(RECORD_ID, RedriveType.RECORD_ID, metrics);
 
         // Verify bridge call.
-        verify(mockBridgeHelper).completeUploadSession(UPLOAD_ID, true, true);
+        verify(mockBridgeHelper).redriveUpload(UPLOAD_ID);
 
         // Verify metrics.
         assertEquals(metrics.size(), 1);

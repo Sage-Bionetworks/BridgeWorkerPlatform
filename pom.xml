@@ -247,8 +247,8 @@
                         <exclude>org/sagebionetworks/bridge/workerPlatform/multiplexer/Constants.class</exclude>
 
                         <!-- no point in testing exceptions, since they are entirely boilerplate code -->
-                        <exclude>org/sagebionetworks/bridge/reporter/exceptions/*</exclude>
                         <exclude>org/sagebionetworks/bridge/udd/exceptions/*</exclude>
+                        <exclude>org/sagebionetworks/bridge/workerPlatform/exceptions/*</exclude>
                     </excludes>
                     <rules>
                         <rule>

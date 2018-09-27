@@ -22,12 +22,13 @@ import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.rest.model.UploadStatus;
-import org.sagebionetworks.bridge.rest.model.UploadValidationStatus;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTimeoutException;
 import org.sagebionetworks.bridge.workerPlatform.helper.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.helper.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.helper.UploadStatusAndMessages;
 import org.sagebionetworks.bridge.workerPlatform.util.JsonUtils;
 
 /** Worker used to redrive uploads. Takes in a list of upload IDs or a list of record IDs. */
@@ -179,7 +180,8 @@ public class UploadRedriveWorkerProcessor implements ThrowingConsumer<JsonNode> 
     }
 
     // Helper method to process a single upload. Package-scoped to facilitate unit tests.
-    void processId(String id, RedriveType redriveType, Multiset<String> metrics) throws IOException {
+    void processId(String id, RedriveType redriveType, Multiset<String> metrics) throws AsyncTimeoutException,
+            IOException {
         String uploadId;
         if (redriveType == RedriveType.RECORD_ID) {
             // We have record IDs. Fetch the upload so we can have upload IDs.
@@ -192,7 +194,7 @@ public class UploadRedriveWorkerProcessor implements ThrowingConsumer<JsonNode> 
 
         // Call the upload complete API again. redrive=true to allow us to redrive uploads that are already complete.
         // synchronous=true so we can have better logging for failed uploads.
-        UploadValidationStatus status = bridgeHelper.completeUploadSession(uploadId, true, true);
+        UploadStatusAndMessages status = bridgeHelper.redriveUpload(uploadId);
         metrics.add(status.getStatus().getValue());
         if (status.getStatus() != UploadStatus.SUCCEEDED) {
             LOG.error("Redrive failed for id=" + id + ", uploadId=" + uploadId + ": " + COMMA_SPACE_JOINER.join(
