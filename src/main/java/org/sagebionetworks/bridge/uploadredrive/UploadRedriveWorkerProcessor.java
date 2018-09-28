@@ -46,7 +46,7 @@ public class UploadRedriveWorkerProcessor implements ThrowingConsumer<JsonNode> 
     static final String REQUEST_PARAM_S3_KEY = "s3Key";
     static final String REQUEST_PARAM_REDRIVE_TYPE = "redriveType";
 
-    private final RateLimiter perUploadRateLimiter = RateLimiter.create(1.0);
+    private final RateLimiter perUploadRateLimiter = RateLimiter.create(0.5);
 
     private BridgeHelper bridgeHelper;
     private DynamoHelper dynamoHelper;
