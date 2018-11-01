@@ -7,11 +7,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertSame;
 
 import java.util.Iterator;
 import java.util.List;
 
 import org.joda.time.DateTime;
+import org.joda.time.LocalDate;
 import org.mockito.ArgumentCaptor;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -26,12 +28,17 @@ import org.sagebionetworks.bridge.rest.model.ActivityEvent;
 import org.sagebionetworks.bridge.rest.model.ActivityEventList;
 import org.sagebionetworks.bridge.rest.model.ForwardCursorScheduledActivityList;
 import org.sagebionetworks.bridge.rest.model.Message;
+import org.sagebionetworks.bridge.rest.model.ReportData;
+import org.sagebionetworks.bridge.rest.model.ReportDataList;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
 import org.sagebionetworks.bridge.rest.model.SmsTemplate;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 
 @SuppressWarnings("unchecked")
 public class BridgeHelperTest {
+    private static final LocalDate START_DATE = LocalDate.parse("2018-10-31");
+    private static final LocalDate END_DATE = LocalDate.parse("2018-11-01");
+    private static final String REPORT_ID = "test-report";
     private static final DateTime SCHEDULED_ON_START = DateTime.parse("2018-04-27T00:00-0700");
     private static final DateTime SCHEDULED_ON_END = DateTime.parse("2018-04-28T23:59:59.999-0700");
     private static final String STUDY_ID = "test-study";
@@ -112,6 +119,28 @@ public class BridgeHelperTest {
         assertEquals(output.getId(), USER_ID);
 
         verify(mockWorkerApi).getParticipantById(STUDY_ID, USER_ID, true);
+    }
+
+    @Test
+    public void getParticipantReports() throws Exception {
+        // Set up mocks.
+        ReportData dummyReport = new ReportData();
+        ReportDataList reportDataList = new ReportDataList().addItemsItem(dummyReport);
+        Response<ReportDataList> response = Response.success(reportDataList);
+
+        Call<ReportDataList> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenReturn(response);
+
+        when(mockWorkerApi.getParticipantReportsForParticipant(STUDY_ID, USER_ID, REPORT_ID, START_DATE, END_DATE))
+                .thenReturn(mockCall);
+
+        // Execute and validate.
+        List<ReportData> outputReportDataList = bridgeHelper.getParticipantReports(STUDY_ID, USER_ID, REPORT_ID,
+                START_DATE, END_DATE);
+        assertEquals(outputReportDataList.size(), 1);
+        assertSame(outputReportDataList.get(0), dummyReport);
+
+        verify(mockWorkerApi).getParticipantReportsForParticipant(STUDY_ID, USER_ID, REPORT_ID, START_DATE, END_DATE);
     }
 
     @Test

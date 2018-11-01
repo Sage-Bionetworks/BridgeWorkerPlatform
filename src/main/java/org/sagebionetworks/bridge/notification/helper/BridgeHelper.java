@@ -5,6 +5,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.joda.time.DateTime;
+import org.joda.time.LocalDate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -12,6 +13,7 @@ import org.sagebionetworks.bridge.rest.ClientManager;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.ActivityEvent;
+import org.sagebionetworks.bridge.rest.model.ReportData;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
 import org.sagebionetworks.bridge.rest.model.SmsTemplate;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
@@ -45,6 +47,13 @@ public class BridgeHelper {
     public StudyParticipant getParticipant(String studyId, String userId) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getParticipantById(studyId, userId, true)
                 .execute().body();
+    }
+
+    /** Gets the given report for the given user in the given study for the given date range (inclusive). */
+    public List<ReportData> getParticipantReports(String studyId, String userId, String reportId, LocalDate startDate,
+            LocalDate endDate) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getParticipantReportsForParticipant(studyId, userId,
+                reportId, startDate, endDate).execute().body().getItems();
     }
 
     /**
