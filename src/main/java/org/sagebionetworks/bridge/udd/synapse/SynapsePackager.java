@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import javax.annotation.Resource;
 
 import com.amazonaws.HttpMethod;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import org.joda.time.DateTime;
@@ -369,7 +370,9 @@ public class SynapsePackager {
         // upload to S3
         Stopwatch uploadToS3Stopwatch = Stopwatch.createStarted();
         try {
-            s3Helper.writeFileToS3(userdataBucketName, masterZipFile.getName(), masterZipFile);
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setSSEAlgorithm(ObjectMetadata.AES_256_SERVER_SIDE_ENCRYPTION);
+            s3Helper.writeFileToS3(userdataBucketName, masterZipFile.getName(), masterZipFile, metadata);
         } finally {
             uploadToS3Stopwatch.stop();
             LOG.info("Uploading file " + masterZipFile.getAbsolutePath() + " to S3 took " +
