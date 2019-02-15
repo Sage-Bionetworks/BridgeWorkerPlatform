@@ -30,6 +30,7 @@ import java.util.concurrent.Future;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.HttpMethod;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -63,6 +64,8 @@ public class SynapsePackagerTest {
     private static final BridgeUddRequest TEST_UDD_REQUEST = new BridgeUddRequest.Builder().withStudyId("dummy-study")
             .withUserId("dummy-user").withStartDate(LocalDate.parse(TEST_START_DATE))
             .withEndDate(LocalDate.parse(TEST_END_DATE)).build();
+    
+    private ArgumentCaptor<ObjectMetadata> objectMetadataCaptor;
 
     private S3Helper mockS3Helper;
     private InMemoryFileHelper inMemoryFileHelper;
@@ -200,6 +203,9 @@ public class SynapsePackagerTest {
 
         // validate mock file helper is clean
         assertTrue(inMemoryFileHelper.isEmpty());
+        
+        // validate encryption configuration via object metadata
+        assertEquals(ObjectMetadata.AES_256_SERVER_SIDE_ENCRYPTION, objectMetadataCaptor.getValue().getSSEAlgorithm());
     }
 
     @Test
@@ -271,7 +277,7 @@ public class SynapsePackagerTest {
         // validate mock file helper is clean
         assertTrue(inMemoryFileHelper.isEmpty());
     }
-
+    
     @Test
     public void lastErrorCase() throws Exception {
         // Test getting an error on the last step (get pre-signed URL). This allows us to test full cleanup.
@@ -432,6 +438,7 @@ public class SynapsePackagerTest {
         // mock S3 helper
         // Different tests do different things with pre-signed URL, so leave that one alone.
         mockS3Helper = mock(S3Helper.class);
+        objectMetadataCaptor = ArgumentCaptor.forClass(ObjectMetadata.class);
         doAnswer(invocation -> {
             // on cleanup, the file is destroyed, so we need to intercept that file now
             File s3File = invocation.getArgumentAt(2, File.class);
@@ -440,7 +447,7 @@ public class SynapsePackagerTest {
             // needed because Answer declares a return type, even if it's Void
             return null;
         }).when(mockS3Helper).writeFileToS3(eq(DUMMY_USER_DATA_BUCKET), startsWith(TEST_MASTER_ZIP_FILE_PREFIX),
-                any(File.class));
+                any(File.class), objectMetadataCaptor.capture());
         packager.setS3Helper(mockS3Helper);
     }
 
