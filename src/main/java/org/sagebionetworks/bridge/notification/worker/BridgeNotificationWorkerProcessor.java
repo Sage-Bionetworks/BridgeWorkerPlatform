@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import org.sagebionetworks.bridge.notification.exceptions.UserNotConfiguredException;
 import org.sagebionetworks.bridge.notification.helper.BridgeHelper;
 import org.sagebionetworks.bridge.notification.helper.DynamoHelper;
 import org.sagebionetworks.bridge.notification.helper.TemplateVariableHelper;
@@ -147,6 +148,10 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
                 try {
                     processAccountForDate(studyId, date, userId);
+                } catch (UserNotConfiguredException ex) {
+                    // Users not being configured properly is a fairly common occurence. Log a warning instead of an
+                    // error.
+                    LOG.warn("User ID " + userId + " is not configured for notifications: " + ex.getMessage(), ex);
                 } catch (Exception ex) {
                     LOG.error("Error processing user ID " + userId + ": " + ex.getMessage(), ex);
                 }
@@ -171,7 +176,8 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     }
 
     // Processes a single user for the given date. Package-scoped for unit tests.
-    void processAccountForDate(String studyId, LocalDate date, String userId) throws IOException {
+    void processAccountForDate(String studyId, LocalDate date, String userId)
+            throws IOException, UserNotConfiguredException {
         // Get participant. We'll need some attributes.
         StudyParticipant participant = bridgeHelper.getParticipant(studyId, userId);
 
@@ -400,7 +406,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
     // Encapsulates sending an SMS notification to the user.
     private void notifyUser(String studyId, StudyParticipant participant, NotificationType notificationType)
-            throws IOException {
+            throws IOException, UserNotConfiguredException {
         String userId = participant.getId();
         WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
 
@@ -431,7 +437,8 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         }
 
         if (messageList == null) {
-            throw new IllegalStateException("No messages found for type " + notificationType + " for user " + userId);
+            LOG.warn("No messages found for type " + notificationType + " for user " + userId);
+            return;
         }
 
         // Pick message at random.

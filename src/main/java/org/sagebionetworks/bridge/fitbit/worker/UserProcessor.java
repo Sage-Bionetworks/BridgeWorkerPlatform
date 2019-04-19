@@ -11,6 +11,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.http.client.HttpResponseException;
 import org.apache.http.client.fluent.Request;
 import org.joda.time.DateTime;
 import org.sagebionetworks.client.exceptions.SynapseException;
@@ -67,7 +68,23 @@ public class UserProcessor {
 
         // Get data from FitBit
         String url = String.format(endpointSchema.getUrl(), resolvedUrlParamList.toArray());
-        String response = makeHttpRequest(url, user.getAccessToken());
+        String response;
+        try {
+            response = makeHttpRequest(url, user.getAccessToken());
+        } catch (HttpResponseException ex) {
+            // 403s are fairly common, if the participant grants Fitbit permissions and then revokes
+            // them. In this case, log a warning instead of an error.
+            if (ex.getStatusCode() == 403) {
+                LOG.warn("403 Unauthorized for healthCode " + user.getHealthCode() +
+                        " on endpoint " + endpointSchema.getEndpointId());
+            } else {
+                LOG.error("HTTP error " + ex.getStatusCode() + " for healthCode " +
+                        user.getHealthCode() + " on endpoint " + endpointSchema.getEndpointId());
+            }
+
+            // We don't have permissions, so just return.
+            return;
+        }
         JsonNode responseNode = DefaultObjectMapper.INSTANCE.readTree(response);
 
         // Process each key (top-level table) in the response
