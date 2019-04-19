@@ -38,6 +38,8 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.joda.time.LocalDate;
 import org.mockito.ArgumentCaptor;
+import org.sagebionetworks.client.exceptions.SynapseServerException;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.config.Config;
@@ -49,6 +51,7 @@ import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelperTest;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.udd.worker.BridgeUddRequest;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.SynapseUnavailableException;
 
 @SuppressWarnings({ "unchecked", "rawtypes" })
 public class SynapsePackagerTest {
@@ -324,6 +327,88 @@ public class SynapsePackagerTest {
 
         // validate mock file helper is clean
         assertTrue(inMemoryFileHelper.isEmpty());
+    }
+
+    @Test
+    public void tableQuerySynapseReadOnly() throws Exception {
+        // Test that when Synapse is read-only, that this gets propagated up the call stack.
+
+        // Setup test.
+        // We don't care about data inside the schema. Use mock schemas.
+        Map<String, UploadSchema> synapseTableToSchema = ImmutableMap.of("test-table-id", mock(UploadSchema.class));
+        Map<String, SynapseTaskResultContent> synapseTableToResult = ImmutableMap.of();
+        Map<String, String> surveyTableToResultContent = ImmutableMap.of();
+
+        Map<String, ExecutionException> synapseTableToException = ImmutableMap.of("test-table-id",
+                new ExecutionException(new SynapseServerException(503)));
+
+        setupPackager(synapseTableToSchema, synapseTableToResult, synapseTableToException, surveyTableToResultContent,
+                null);
+
+        // Execute (throws exception).
+        try {
+            packager.packageSynapseData(STUDY_ID, synapseTableToSchema, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
+                    ImmutableSet.of());
+            fail("expected exception");
+        } catch (SynapseUnavailableException ex) {
+            assertEquals(ex.getMessage(), "Synapse not in writable state");
+        }
+
+        // Validate mock file helper is clean.
+        assertTrue(inMemoryFileHelper.isEmpty());
+    }
+
+    @Test
+    public void surveyQuerySynapseReadOnly() throws Exception {
+        // Test that when Synapse is read-only, that this gets propagated up the call stack.
+
+        // Setup test.
+        // We don't care about data inside the schema. Use mock schemas.
+        Map<String, UploadSchema> synapseTableToSchema = ImmutableMap.of("test-table-id", mock(UploadSchema.class));
+        Map<String, SynapseTaskResultContent> synapseTableToResult = ImmutableMap.of("test-table-id",
+                new SynapseTaskResultContent("csv.csv", "dummy csv content",
+                        "bulkdownload.zip", "dummy bulk download content"));
+
+        Map<String, String> surveyTableToResultContent = ImmutableMap.of();
+        Map<String, ExecutionException> surveyTableToException = ImmutableMap.of("test-survey",
+                new ExecutionException(new SynapseServerException(503)));
+
+        setupPackager(synapseTableToSchema, synapseTableToResult, null,
+                surveyTableToResultContent, surveyTableToException);
+
+        // Execute (throws exception).
+        try {
+            packager.packageSynapseData(STUDY_ID, synapseTableToSchema, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
+                    ImmutableSet.of("test-survey"));
+            fail("expected exception");
+        } catch (SynapseUnavailableException ex) {
+            assertEquals(ex.getMessage(), "Synapse not in writable state");
+        }
+
+        // Validate mock file helper is clean.
+        assertTrue(inMemoryFileHelper.isEmpty());
+    }
+
+    @DataProvider(name = "notSynapseReadOnlyDataProvider")
+    public Object[][] notSynapseReadOnlyDataProvider() {
+        return new Object[][] {
+                { new ExecutionException("no cause", null) },
+                { new ExecutionException("not Synapse exception", new RuntimeException()) },
+                { new ExecutionException("Synapse 400 Bad Request", new SynapseServerException(400)) },
+        };
+    }
+
+    @Test(dataProvider = "notSynapseReadOnlyDataProvider")
+    public void notSynapseReadOnly(ExecutionException ex) throws Exception {
+        // If this method doesn't throw, then that's a successfuly test.
+        SynapsePackager.rethrowIfSynapseIsReadOnly(ex);
+    }
+
+    @Test(expectedExceptions = SynapseUnavailableException.class,
+            expectedExceptionsMessageRegExp = "Synapse not in writable state")
+    public void throwSynapseReadOnlyException() throws Exception {
+        ExecutionException ex = new ExecutionException("Synapse 503 Unavailable", new SynapseServerException(503));
+        SynapsePackager.rethrowIfSynapseIsReadOnly(ex);
     }
 
     private void setupPackager(Map<String, UploadSchema> synapseTableToSchema,

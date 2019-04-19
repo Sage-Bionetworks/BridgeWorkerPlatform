@@ -6,7 +6,11 @@ import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertSame;
+import static org.testng.Assert.fail;
 
 import java.io.IOException;
 import java.util.Map;
@@ -16,6 +20,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+
+import org.sagebionetworks.client.exceptions.SynapseServerException;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -32,7 +38,9 @@ import org.sagebionetworks.bridge.udd.dynamodb.StudyInfo;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
 import org.sagebionetworks.bridge.udd.helper.SnsHelper;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
+import org.sagebionetworks.bridge.udd.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.udd.synapse.SynapsePackager;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.SynapseUnavailableException;
 
 @SuppressWarnings("unchecked")
 public class BridgeUddProcessorTest {
@@ -79,6 +87,7 @@ public class BridgeUddProcessorTest {
     private SynapsePackager mockPackager;
     private SesHelper mockSesHelper;
     private SnsHelper mockSnsHelper;
+    private SynapseHelper mockSynapseHelper;
 
     @BeforeClass
     public void generalSetup() throws IOException{
@@ -107,12 +116,17 @@ public class BridgeUddProcessorTest {
         // mock Synapse packager
         mockPackager = mock(SynapsePackager.class);
 
+        // Mock Synapse helper.
+        mockSynapseHelper = mock(SynapseHelper.class);
+        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
+
         // set up callback
         callback = new BridgeUddProcessor();
         callback.setBridgeHelper(mockBridgeHelper);
         callback.setDynamoHelper(mockDynamoHelper);
         callback.setSesHelper(mockSesHelper);
         callback.setSnsHelper(mockSnsHelper);
+        callback.setSynapseHelper(mockSynapseHelper);
         callback.setSynapsePackager(mockPackager);
     }
 
@@ -154,7 +168,54 @@ public class BridgeUddProcessorTest {
     public void malformedRequest() throws Exception {
         callback.process(invalidRequestJson);
     }
-    
+
+    @Test
+    public void noHealthCode() throws Exception {
+        // Mock Bridge helper with an account that's missing health code.
+        when(mockBridgeHelper.getAccountInfo(STUDY_ID, USER_ID)).thenReturn(ACCOUNT_INFO_NO_HEALTH_CODE);
+
+        // Execute (throws exception).
+        try {
+            callback.process(userIdRequestJson);
+            fail("expected exception");
+        } catch (PollSqsWorkerBadRequestException ex) {
+            assertEquals(ex.getMessage(), "Health code not found for account " + USER_ID);
+        }
+
+        // Verify no back-end calls.
+        verifyZeroInteractions(mockPackager, mockSesHelper, mockSnsHelper);
+    }
+
+    @Test
+    public void synapseWritableThrows() throws Exception {
+        // Mock Synapse helper to throw.
+        Exception originalEx = new SynapseServerException(503, "test exception");
+        when(mockSynapseHelper.isSynapseWritable()).thenThrow(originalEx);
+
+        // Execute (throws exception).
+        try {
+            callback.process(userIdRequestJson);
+            fail("expected exception");
+        } catch (SynapseUnavailableException ex) {
+            assertEquals(ex.getMessage(), "Error calling Synapse: test exception");
+            assertSame(ex.getCause(), originalEx);
+        }
+    }
+
+    @Test
+    public void synapseWritableFalse() throws Exception {
+        // Mock Synapse helper with writable=false.
+        when(mockSynapseHelper.isSynapseWritable()).thenReturn(false);
+
+        // Execute (throws exception).
+        try {
+            callback.process(userIdRequestJson);
+            fail("expected exception");
+        } catch (SynapseUnavailableException ex) {
+            assertEquals(ex.getMessage(), "Synapse not in writable state");
+        }
+    }
+
     @Test
     public void userWithPhoneNumber() throws Exception { 
         Phone phone = new Phone().regionCode("US").number("4082588569");
