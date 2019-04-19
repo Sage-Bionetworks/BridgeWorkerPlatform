@@ -190,7 +190,7 @@ public class BridgeUddProcessorTest {
     }
 
     private void mockPackagerWithResult(PresignedUrlInfo presignedUrlInfo) throws Exception {
-        when(mockPackager.packageSynapseData(same(MOCK_SYNAPSE_TO_SCHEMA), eq(HEALTH_CODE),
+        when(mockPackager.packageSynapseData(eq(STUDY_ID), same(MOCK_SYNAPSE_TO_SCHEMA), eq(HEALTH_CODE),
                 any(BridgeUddRequest.class), same(MOCK_SURVEY_TABLE_ID_SET))).thenReturn(presignedUrlInfo);
     }
 

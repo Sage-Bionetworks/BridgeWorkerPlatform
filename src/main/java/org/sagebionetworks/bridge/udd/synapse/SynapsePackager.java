@@ -30,6 +30,7 @@ import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.schema.UploadSchema;
+import org.sagebionetworks.bridge.udd.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.udd.worker.BridgeUddRequest;
@@ -52,6 +53,7 @@ public class SynapsePackager {
     private static final Joiner LINE_JOINER = Joiner.on('\n');
 
     private ExecutorService auxiliaryExecutorService;
+    private DynamoHelper dynamoHelper;
     private FileHelper fileHelper;
     private S3Helper s3Helper;
     private SynapseHelper synapseHelper;
@@ -72,6 +74,12 @@ public class SynapsePackager {
     public final void setConfig(Config config) {
         urlExpirationHours = config.getInt(CONFIG_KEY_EXPIRATION_HOURS);
         userdataBucketName = config.get(CONFIG_KEY_USERDATA_BUCKET);
+    }
+
+    /** DynamoDB helper, used to delete entries from the table mappings when the table has been deleted. */
+    @Autowired
+    public final void setDynamoHelper(DynamoHelper dynamoHelper) {
+        this.dynamoHelper = dynamoHelper;
     }
 
     /**
@@ -109,6 +117,8 @@ public class SynapsePackager {
      * Schema map and survey table ID set are guaranteed by the DynamoHelper to be non-null.
      * </p>
      *
+     * @param studyId
+     *         study to download data for
      * @param synapseToSchemaMap
      *         map from Synapse table IDs to schemas, used to enumerate Synapse tables and determine file names
      * @param healthCode
@@ -119,7 +129,7 @@ public class SynapsePackager {
      *         set of survey table IDs, which need to be downloaded in their entirety
      * @return pre-signed URL and expiration time
      */
-    public PresignedUrlInfo packageSynapseData(Map<String, UploadSchema> synapseToSchemaMap, String healthCode,
+    public PresignedUrlInfo packageSynapseData(String studyId, Map<String, UploadSchema> synapseToSchemaMap, String healthCode,
             BridgeUddRequest request, Set<String> surveyTableIdSet) throws IOException {
         List<File> allFileList = new ArrayList<>();
         File masterZipFile = null;
@@ -128,7 +138,7 @@ public class SynapsePackager {
             // create and execute Synapse downloads asynchronously
             List<Future<SynapseDownloadFromTableResult>> queryFutureList = initAsyncQueryTasks(synapseToSchemaMap,
                     healthCode, request, tmpDir);
-            List<Future<File>> surveyFutureList = initAsyncSurveyTasks(surveyTableIdSet, tmpDir);
+            List<Future<File>> surveyFutureList = initAsyncSurveyTasks(studyId, surveyTableIdSet, tmpDir);
 
             // wait for async tasks - We need to wait for all tasks and gather up all files before we check whether we
             // have no query results. Otherwise, we won't know to clean up these files, and we'll leave garbage on our
@@ -191,6 +201,7 @@ public class SynapsePackager {
 
             // kick off async task
             SynapseDownloadFromTableTask task = new SynapseDownloadFromTableTask(param);
+            task.setDynamoHelper(dynamoHelper);
             task.setFileHelper(fileHelper);
             task.setSynapseHelper(synapseHelper);
             Future<SynapseDownloadFromTableResult> taskFuture = auxiliaryExecutorService.submit(task);
@@ -203,21 +214,24 @@ public class SynapsePackager {
     /**
      * Kicks off async tasks to download survey metadata from Synapse.
      *
+     * @param studyId
+     *         study ID for the surveys to download
      * @param surveyTableIdSet
      *         set of survey metadata table IDs to download
      * @param tmpDir
      *         temp dir to download tables to
      * @return list of Futures for the async tasks
      */
-    private List<Future<File>> initAsyncSurveyTasks(Set<String> surveyTableIdSet, File tmpDir) {
+    private List<Future<File>> initAsyncSurveyTasks(String studyId, Set<String> surveyTableIdSet, File tmpDir) {
         List<Future<File>> futureList = new ArrayList<>();
         for (String oneTableId : surveyTableIdSet) {
             // create params
-            SynapseDownloadSurveyParameters param = new SynapseDownloadSurveyParameters.Builder()
+            SynapseDownloadSurveyParameters param = new SynapseDownloadSurveyParameters.Builder().withStudyId(studyId)
                     .withSynapseTableId(oneTableId).withTempDir(tmpDir).build();
 
             // kick off async task
             SynapseDownloadSurveyTask task = new SynapseDownloadSurveyTask(param);
+            task.setDynamoHelper(dynamoHelper);
             task.setFileHelper(fileHelper);
             task.setSynapseHelper(synapseHelper);
             Future<File> future = auxiliaryExecutorService.submit(task);

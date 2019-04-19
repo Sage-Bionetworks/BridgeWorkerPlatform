@@ -95,7 +95,7 @@ public class BridgeUddProcessor {
 
             Map<String, UploadSchema> synapseToSchemaMap = dynamoHelper.getSynapseTableIdsForStudy(studyId);
             Set<String> surveyTableIdSet = dynamoHelper.getSynapseSurveyTablesForStudy(studyId);
-            PresignedUrlInfo presignedUrlInfo = synapsePackager.packageSynapseData(synapseToSchemaMap,
+            PresignedUrlInfo presignedUrlInfo = synapsePackager.packageSynapseData(studyId, synapseToSchemaMap,
                     healthCode, request, surveyTableIdSet);
 
             if (presignedUrlInfo == null) {

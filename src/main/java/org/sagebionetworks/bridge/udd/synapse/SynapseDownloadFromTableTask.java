@@ -16,6 +16,7 @@ import au.com.bytecode.opencsv.CSVWriter;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
 import org.sagebionetworks.client.exceptions.SynapseException;
+import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 import org.sagebionetworks.repo.model.file.BulkFileDownloadResponse;
 import org.sagebionetworks.repo.model.file.FileDownloadSummary;
 import org.slf4j.Logger;
@@ -23,6 +24,8 @@ import org.slf4j.LoggerFactory;
 
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.schema.UploadSchema;
+import org.sagebionetworks.bridge.schema.UploadSchemaKey;
+import org.sagebionetworks.bridge.udd.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.udd.exceptions.AsyncTaskExecutionException;
 import org.sagebionetworks.bridge.udd.exceptions.AsyncTimeoutException;
 
@@ -45,6 +48,7 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
 
     // Helpers and config objects. Originates from Spring configs and is passed in through setters using a similar
     // pattern.
+    private DynamoHelper dynamoHelper;
     private FileHelper fileHelper;
     private SynapseHelper synapseHelper;
 
@@ -58,6 +62,16 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
         this.params = params;
     }
 
+    /** DynamoDB helper, used to delete entries from the table mappings when the table has been deleted. */
+    public final void setDynamoHelper(DynamoHelper dynamoHelper) {
+        this.dynamoHelper = dynamoHelper;
+    }
+
+    // Package-scoped for unit tests.
+    DynamoHelper getDynamoHelper() {
+        return dynamoHelper;
+    }
+
     /**
      * Wrapper class around the file system. Used by unit tests to test the functionality without hitting the real file
      * system.
@@ -66,9 +80,19 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
         this.fileHelper = fileHelper;
     }
 
+    // Package-scoped for unit tests.
+    FileHelper getFileHelper() {
+        return fileHelper;
+    }
+
     /** Synapse helper, used to download CSV and bulk file download from Synapse. */
     public final void setSynapseHelper(SynapseHelper synapseHelper) {
         this.synapseHelper = synapseHelper;
+    }
+
+    // Package-scoped for unit tests.
+    SynapseHelper getSynapseHelper() {
+        return synapseHelper;
     }
 
     /**
@@ -120,14 +144,23 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
      */
     private void downloadCsv() throws AsyncTaskExecutionException {
         String synapseTableId = params.getSynapseTableId();
-        File csvFile = fileHelper.newFile(params.getTempDir(), params.getSchema().getKey().toString() + ".csv");
+        UploadSchemaKey schemaKey = params.getSchema().getKey();
+        File csvFile = fileHelper.newFile(params.getTempDir(), schemaKey.toString() + ".csv");
         String csvFilePath = csvFile.getAbsolutePath();
 
         Stopwatch downloadCsvStopwatch = Stopwatch.createStarted();
         try {
             String query = String.format(QUERY_TEMPLATE, synapseTableId, params.getHealthCode(), params.getStartDate(),
                     params.getEndDate());
-            String csvFileHandleId = synapseHelper.generateFileHandleFromTableQuery(query, synapseTableId);
+            String csvFileHandleId;
+            try {
+                csvFileHandleId = synapseHelper.generateFileHandleFromTableQuery(query, synapseTableId);
+            } catch (SynapseNotFoundException ex) {
+                // Clean this table from the table mapping to prevent future errors.
+                dynamoHelper.deleteSynapseTableIdMapping(schemaKey);
+                throw new AsyncTaskExecutionException("Synapse table " + synapseTableId + " for schema " +
+                        schemaKey.toString() + " no longer exists");
+            }
             synapseHelper.downloadFileHandle(csvFileHandleId, csvFile);
             ctx.setCsvFile(csvFile);
         } catch (AsyncTimeoutException | SynapseException ex) {

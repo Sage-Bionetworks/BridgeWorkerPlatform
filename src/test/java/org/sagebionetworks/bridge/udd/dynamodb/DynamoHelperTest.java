@@ -1,6 +1,7 @@
 package org.sagebionetworks.bridge.udd.dynamodb;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -17,6 +18,7 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.dynamodb.DynamoQueryHelper;
 import org.sagebionetworks.bridge.schema.UploadSchema;
+import org.sagebionetworks.bridge.schema.UploadSchemaKey;
 
 public class DynamoHelperTest {
     private static final String DUMMY_FIELD_DEF_LIST_JSON = "[\n" +
@@ -25,6 +27,8 @@ public class DynamoHelperTest {
             "       \"type\":\"STRING\"\n" +
             "   }\n" +
             "]";
+    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withStudyId("test-study")
+            .withSchemaId("test-schema").withRevision(42).build();
 
     @Test
     public void testGetStudy() {
@@ -161,5 +165,17 @@ public class DynamoHelperTest {
 
     private static Item makeSynapseMapDdbItem(String schemaKey, String synapseTableId) {
         return new Item().withString("schemaKey", schemaKey).withString("tableId", synapseTableId);
+    }
+
+    @Test
+    public void deleteSynapseTableIdMapping() {
+        // Set up.
+        Table mockSynapseMapTable = mock(Table.class);
+        DynamoHelper helper = new DynamoHelper();
+        helper.setDdbSynapseMapTable(mockSynapseMapTable);
+
+        // Execute and validate.
+        helper.deleteSynapseTableIdMapping(TEST_SCHEMA_KEY);
+        verify(mockSynapseMapTable).deleteItem("schemaKey", TEST_SCHEMA_KEY.toString());
     }
 }
