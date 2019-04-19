@@ -44,6 +44,7 @@ import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.schema.UploadSchema;
+import org.sagebionetworks.bridge.udd.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelperTest;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
@@ -53,6 +54,7 @@ import org.sagebionetworks.bridge.udd.worker.BridgeUddRequest;
 public class SynapsePackagerTest {
     private static final String DUMMY_USER_DATA_BUCKET = "dummy-user-data-bucket";
     private static final DateTime MOCK_NOW = DateTime.parse("2015-09-17T12:43:41-07:00");
+    private static final String STUDY_ID = "my-study";
     private static final String TEST_START_DATE = "2015-03-09";
     private static final String TEST_END_DATE = "2015-09-17";
     private static final String TEST_HEALTH_CODE = "test-health-code";
@@ -67,7 +69,9 @@ public class SynapsePackagerTest {
     
     private ArgumentCaptor<ObjectMetadata> objectMetadataCaptor;
 
+    private DynamoHelper mockDynamoHelper;
     private S3Helper mockS3Helper;
+    private SynapseHelper mockSynapseHelper;
     private InMemoryFileHelper inMemoryFileHelper;
     private SynapsePackager packager;
     private byte[] s3FileBytes;
@@ -82,7 +86,7 @@ public class SynapsePackagerTest {
         setupPackager(synapseTableToSchema, synapseTableToResult, null, surveyTableToResultContent, null);
 
         // execute and validate
-        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(synapseTableToSchema, TEST_HEALTH_CODE,
+        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(STUDY_ID, synapseTableToSchema, TEST_HEALTH_CODE,
                 TEST_UDD_REQUEST, surveyTableIdSet);
         assertNull(presignedUrlInfo);
 
@@ -106,7 +110,7 @@ public class SynapsePackagerTest {
         setupPackager(synapseTableToSchema, synapseTableToResult, null, surveyTableToResultContent, null);
 
         // execute and validate
-        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(synapseTableToSchema, TEST_HEALTH_CODE,
+        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(STUDY_ID, synapseTableToSchema, TEST_HEALTH_CODE,
                 TEST_UDD_REQUEST, surveyTableIdSet);
         assertNull(presignedUrlInfo);
 
@@ -174,7 +178,7 @@ public class SynapsePackagerTest {
 
         // execute and validate
         long expectedExpirationTimeMillis = MOCK_NOW.plusHours(URL_EXPIRATION_HOURS).getMillis();
-        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(synapseTableToSchema, TEST_HEALTH_CODE,
+        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(STUDY_ID, synapseTableToSchema, TEST_HEALTH_CODE,
                 TEST_UDD_REQUEST, surveyTableIdSet);
         assertEquals(presignedUrlInfo.getUrl().toString(), "http://example.com/");
         assertEquals(presignedUrlInfo.getExpirationTime().getMillis(), expectedExpirationTimeMillis);
@@ -227,7 +231,7 @@ public class SynapsePackagerTest {
 
         // execute and validate
         long expectedExpirationTimeMillis = MOCK_NOW.plusHours(URL_EXPIRATION_HOURS).getMillis();
-        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(synapseTableToSchema, TEST_HEALTH_CODE,
+        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(STUDY_ID, synapseTableToSchema, TEST_HEALTH_CODE,
                 TEST_UDD_REQUEST, surveyTableIdSet);
         assertEquals(presignedUrlInfo.getUrl().toString(), "http://example.com/");
         assertEquals(presignedUrlInfo.getExpirationTime().getMillis(), expectedExpirationTimeMillis);
@@ -266,7 +270,7 @@ public class SynapsePackagerTest {
         // execute
         Exception thrownEx = null;
         try {
-            packager.packageSynapseData(synapseTableToSchema, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
+            packager.packageSynapseData(STUDY_ID, synapseTableToSchema, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
                     ImmutableSet.of("test-survey"));
             fail("expected exception");
         } catch (RuntimeException ex) {
@@ -300,7 +304,7 @@ public class SynapsePackagerTest {
         // execute
         Exception thrownEx = null;
         try {
-            packager.packageSynapseData(synapseTableToSchema, TEST_HEALTH_CODE, TEST_UDD_REQUEST, surveyTableIdSet);
+            packager.packageSynapseData(STUDY_ID, synapseTableToSchema, TEST_HEALTH_CODE, TEST_UDD_REQUEST, surveyTableIdSet);
             fail("expected exception");
         } catch (AmazonClientException ex) {
             thrownEx = ex;
@@ -339,6 +343,13 @@ public class SynapsePackagerTest {
         inMemoryFileHelper = new InMemoryFileHelper();
         packager.setFileHelper(inMemoryFileHelper);
 
+        // Mock other helpers.
+        mockDynamoHelper = mock(DynamoHelper.class);
+        packager.setDynamoHelper(mockDynamoHelper);
+
+        mockSynapseHelper = mock(SynapseHelper.class);
+        packager.setSynapseHelper(mockSynapseHelper);
+
         // mock executor service to just call the callables directly
         ExecutorService mockExecutorService = mock(ExecutorService.class);
         packager.setAuxiliaryExecutorService(mockExecutorService);
@@ -348,8 +359,14 @@ public class SynapsePackagerTest {
         when(mockExecutorService.submit(any(Callable.class))).then(invocation -> {
             Callable<?> callable = invocation.getArgumentAt(0, Callable.class);
             if (callable instanceof SynapseDownloadFromTableTask) {
-                // validate params
                 SynapseDownloadFromTableTask task = (SynapseDownloadFromTableTask) callable;
+
+                // Validate helpers.
+                assertSame(task.getDynamoHelper(), mockDynamoHelper);
+                assertSame(task.getFileHelper(), inMemoryFileHelper);
+                assertSame(task.getSynapseHelper(), mockSynapseHelper);
+
+                // validate params
                 SynapseDownloadFromTableParameters params = task.getParameters();
                 String synapseTableId = params.getSynapseTableId();
                 File tmpDir = params.getTempDir();
@@ -389,9 +406,16 @@ public class SynapsePackagerTest {
                 when(mockFuture.get()).thenReturn(taskResultBuilder.build());
                 return mockFuture;
             } else if (callable instanceof SynapseDownloadSurveyTask) {
-                // validate params
                 SynapseDownloadSurveyTask task = invocation.getArgumentAt(0, SynapseDownloadSurveyTask.class);
+
+                // Validate helpers.
+                assertSame(task.getDynamoHelper(), mockDynamoHelper);
+                assertSame(task.getFileHelper(), inMemoryFileHelper);
+                assertSame(task.getSynapseHelper(), mockSynapseHelper);
+
+                // validate params
                 SynapseDownloadSurveyParameters params = task.getParameters();
+                assertEquals(params.getStudyId(), STUDY_ID);
                 String synapseTableId = params.getSynapseTableId();
                 assertFalse(Strings.isNullOrEmpty(synapseTableId));
                 File tmpDir = params.getTempDir();

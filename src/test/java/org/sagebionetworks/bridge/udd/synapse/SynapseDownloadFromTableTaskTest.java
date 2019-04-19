@@ -6,6 +6,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -29,6 +30,7 @@ import com.google.common.io.CharStreams;
 import org.joda.time.LocalDate;
 import org.mockito.ArgumentCaptor;
 import org.sagebionetworks.client.exceptions.SynapseException;
+import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 import org.sagebionetworks.repo.model.file.BulkFileDownloadResponse;
 import org.sagebionetworks.repo.model.file.FileDownloadSummary;
 import org.testng.annotations.Test;
@@ -36,6 +38,7 @@ import org.testng.annotations.Test;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.schema.UploadSchema;
 import org.sagebionetworks.bridge.schema.UploadSchemaKey;
+import org.sagebionetworks.bridge.udd.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.udd.exceptions.AsyncTaskExecutionException;
 
 @SuppressWarnings({ "rawtypes", "unchecked" })
@@ -346,6 +349,49 @@ public class SynapseDownloadFromTableTaskTest {
         postValidation(null);
     }
 
+    @Test
+    public void tableDoesntExist() throws Exception {
+        // Mock Dynamo Helper.
+        DynamoHelper mockDynamoHelper = mock(DynamoHelper.class);
+
+        // Mock filehelper and temp dir.
+        inMemoryFileHelper = new InMemoryFileHelper();
+        tmpDir = inMemoryFileHelper.createTempDir();
+
+        // Mock Synapse Helper. Query is tested in other tests. Just throw.
+        SynapseHelper mockSynapseHelper = mock(SynapseHelper.class);
+        when(mockSynapseHelper.generateFileHandleFromTableQuery(any(), eq("test-table-id"))).thenThrow(
+                SynapseNotFoundException.class);
+
+        // Set up params and task.
+        SynapseDownloadFromTableParameters params = new SynapseDownloadFromTableParameters.Builder()
+                .withSynapseTableId("test-table-id").withHealthCode("test-health-code")
+                .withStartDate(LocalDate.parse("2015-03-09")).withEndDate(LocalDate.parse("2015-09-16"))
+                .withTempDir(tmpDir).withSchema(DEFAULT_TEST_SCHEMA).build();
+
+        task = new SynapseDownloadFromTableTask(params);
+        task.setDynamoHelper(mockDynamoHelper);
+        task.setFileHelper(inMemoryFileHelper);
+        task.setSynapseHelper(mockSynapseHelper);
+
+        // Execute (throws exception).
+        try {
+            task.call();
+            fail("expected exception");
+        } catch (AsyncTaskExecutionException ex) {
+            assertEquals(ex.getMessage(), "Synapse table test-table-id for schema " +
+                    TEST_SCHEMA_KEY.toString() + " no longer exists");
+        }
+
+        // Verify we delete the schema from the table mapping.
+        verify(mockDynamoHelper).deleteSynapseTableIdMapping(TEST_SCHEMA_KEY);
+
+        // Since we never download the CSV, we don't create any files other than the temp dir. Delete the temp dir and
+        // then verify that the filehelper is empty.
+        inMemoryFileHelper.deleteDir(tmpDir);
+        assertTrue(inMemoryFileHelper.isEmpty());
+    }
+
     private void setupTestWithArgs(UploadSchema schema, String csvContent, SynapseException csvException,
             List<FileDownloadSummary> fileSummaryList) throws Exception {
         // mock file helper and temp dir
@@ -411,7 +457,7 @@ public class SynapseDownloadFromTableTaskTest {
         }
     }
 
-    private void postValidation(SynapseDownloadFromTableResult result) throws Exception {
+    private void postValidation(SynapseDownloadFromTableResult result) {
         // SynapseDownloadFromTableTask should only leave behind the files it returned and the temp dir. Clean these
         // files up (which is what the packager would do) and then verify that the mock file system is now empty.
         if (result != null) {

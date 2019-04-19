@@ -11,6 +11,8 @@ import javax.annotation.Resource;
 import com.amazonaws.services.dynamodbv2.document.Index;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.Table;
+import com.amazonaws.services.dynamodbv2.document.spec.UpdateItemSpec;
+import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
@@ -19,10 +21,15 @@ import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.dynamodb.DynamoQueryHelper;
 import org.sagebionetworks.bridge.schema.UploadSchema;
+import org.sagebionetworks.bridge.schema.UploadSchemaKey;
 
 /** Helper class to wrap some Dynamo DB queries we make. */
 @Component("uddDynamoHelper")
 public class DynamoHelper {
+    // Package-scoped for unit tests.
+    static final String ATTR_STUDY_ID = "studyId";
+    static final String ATTR_TABLE_ID_SET = "tableIdSet";
+
     private Table ddbStudyTable;
     private Table ddbSynapseMapTable;
     private Table ddbSynapseSurveyTablesTable;
@@ -42,7 +49,7 @@ public class DynamoHelper {
         this.ddbSynapseMapTable = ddbSynapseMapTable;
     }
 
-    // TODO doc
+    /** Wrapper around the DynamoDB query API, which makes it easier to mock. */
     @Autowired
     public final void setQueryHelper(DynamoQueryHelper queryHelper) {
         this.queryHelper = queryHelper;
@@ -96,17 +103,52 @@ public class DynamoHelper {
      * @return set of survey table IDs, may be empty, but will never be null
      */
     public Set<String> getSynapseSurveyTablesForStudy(String studyId) {
-        Item item = ddbSynapseSurveyTablesTable.getItem("studyId", studyId);
+        Item item = ddbSynapseSurveyTablesTable.getItem(ATTR_STUDY_ID, studyId);
         if (item == null) {
             return ImmutableSet.of();
         }
 
-        Set<String> tableIdSet = item.getStringSet("tableIdSet");
+        Set<String> tableIdSet = item.getStringSet(ATTR_TABLE_ID_SET);
         if (tableIdSet == null) {
             return ImmutableSet.of();
         }
 
         return tableIdSet;
+    }
+
+    /**
+     * <p>
+     * Deletes the survey from the survey table mapping. This is generally used for when the Synapse table is already
+     * deleted and we want to clean up.
+     * </p>
+     * <p>
+     * Synchronized, because different survey tasks are executed in parallel, so we want to avoid race conditions.
+     * </p>
+     */
+    public synchronized void deleteSynapseSurveyTableMapping(String studyId, String tableId) {
+        Item item = ddbSynapseSurveyTablesTable.getItem(ATTR_STUDY_ID, studyId);
+        if (item == null) {
+            // Somehow, the study doesn't exist in the survey table mapping anymore. Nothing to delete.
+            return;
+        }
+
+        Set<String> tableIdSet = item.getStringSet(ATTR_TABLE_ID_SET);
+        if (tableIdSet == null || !tableIdSet.contains(tableId)) {
+            // Somehow, the study doesn't contain the specified table ID anymore. Nothing to delete.
+            return;
+        }
+
+        // Update the mapping and save it back to DDB.
+        tableIdSet.remove(tableId);
+        if (tableIdSet.isEmpty()) {
+            // DDB doesn't like empty sets. Null out the set.
+            tableIdSet = null;
+        }
+        UpdateItemSpec updateItemSpec = new UpdateItemSpec()
+                .withPrimaryKey(ATTR_STUDY_ID, studyId)
+                .withUpdateExpression("set " + ATTR_TABLE_ID_SET + "=:s")
+                .withValueMap(new ValueMap().withStringSet(":s", tableIdSet));
+        ddbSynapseSurveyTablesTable.updateItem(updateItemSpec);
     }
 
     /**
@@ -120,7 +162,7 @@ public class DynamoHelper {
     public Map<String, UploadSchema> getSynapseTableIdsForStudy(String studyId) throws IOException {
         // query and iterate
         List<UploadSchema> schemaList = new ArrayList<>();
-        Iterable<Item> schemaItemIter = queryHelper.query(ddbUploadSchemaStudyIndex, "studyId", studyId);
+        Iterable<Item> schemaItemIter = queryHelper.query(ddbUploadSchemaStudyIndex, ATTR_STUDY_ID, studyId);
         for (Item oneSchemaItem : schemaItemIter) {
             // Index only contains study ID, key, and revision. Re-query the table to get all fields.
             String key = oneSchemaItem.getString("key");
@@ -165,5 +207,13 @@ public class DynamoHelper {
         }
 
         return synapseToSchemaMap;
+    }
+
+    /**
+     * Deletes the schema key from the schema to table mapping. This is generally used for when the Synapse table is
+     * already deleted and we want to clean up.
+     */
+    public void deleteSynapseTableIdMapping(UploadSchemaKey schemaKey) {
+        ddbSynapseMapTable.deleteItem("schemaKey", schemaKey.toString());
     }
 }
