@@ -21,6 +21,7 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import org.joda.time.DateTime;
+import org.sagebionetworks.client.exceptions.SynapseServerException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,7 @@ import org.sagebionetworks.bridge.udd.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.udd.worker.BridgeUddRequest;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.SynapseUnavailableException;
 
 /**
  * Helper to query Synapse, download the results, and upload the results to S3 as a pre-signed URL. This acts as a
@@ -130,7 +132,7 @@ public class SynapsePackager {
      * @return pre-signed URL and expiration time
      */
     public PresignedUrlInfo packageSynapseData(String studyId, Map<String, UploadSchema> synapseToSchemaMap, String healthCode,
-            BridgeUddRequest request, Set<String> surveyTableIdSet) throws IOException {
+            BridgeUddRequest request, Set<String> surveyTableIdSet) throws IOException, SynapseUnavailableException {
         List<File> allFileList = new ArrayList<>();
         File masterZipFile = null;
         File tmpDir = fileHelper.createTempDir();
@@ -254,7 +256,7 @@ public class SynapsePackager {
      *         if writing the error log fails
      */
     private List<File> waitForAsyncQueryTasks(File tmpDir, List<Future<SynapseDownloadFromTableResult>> taskFutureList)
-            throws IOException {
+            throws IOException, SynapseUnavailableException {
         // join on threads until they're all done
         List<File> allFileList = new ArrayList<>();
         List<String> errorList = new ArrayList<>();
@@ -270,6 +272,8 @@ public class SynapsePackager {
                     allFileList.add(taskResult.getBulkDownloadFile());
                 }
             } catch (ExecutionException | InterruptedException ex) {
+                rethrowIfSynapseIsReadOnly(ex);
+
                 String errorMsg = "Error downloading CSV: " + ex.getMessage();
                 LOG.error(errorMsg, ex);
                 errorList.add(errorMsg);
@@ -301,7 +305,8 @@ public class SynapsePackager {
      * @throws IOException
      *         if writing the error log fails
      */
-    private List<File> waitForAsyncSurveyTasks(File tmpDir, List<Future<File>> futureList) throws IOException {
+    private List<File> waitForAsyncSurveyTasks(File tmpDir, List<Future<File>> futureList) throws IOException,
+            SynapseUnavailableException {
         // join on threads until they're all done
         List<File> fileList = new ArrayList<>();
         List<String> errorList = new ArrayList<>();
@@ -310,6 +315,8 @@ public class SynapsePackager {
                 File file = oneFuture.get();
                 fileList.add(file);
             } catch (ExecutionException | InterruptedException ex) {
+                rethrowIfSynapseIsReadOnly(ex);
+
                 String errorMsg = "Error downloading survey: " + ex.getMessage();
                 LOG.error(errorMsg, ex);
                 errorList.add(errorMsg);
@@ -327,6 +334,20 @@ public class SynapsePackager {
             fileList.add(errorLogFile);
         }
         return fileList;
+    }
+
+    // Advice from Synapse team is that 503 means Synapse is down (either for maintenance or otherwise). In this case,
+    // instead of continuing, we should abort the request and restart BridgeEX immediately.
+    //
+    // Package-scoped for unit tests.
+    static void rethrowIfSynapseIsReadOnly(Exception ex) throws SynapseUnavailableException {
+        // The real exception is in the inner exception (if it's an ExecutionException).
+        Throwable originalEx = ex.getCause();
+
+        if (originalEx instanceof SynapseServerException &&
+                ((SynapseServerException) originalEx).getStatusCode() == 503) {
+            throw new SynapseUnavailableException("Synapse not in writable state");
+        }
     }
 
     /**

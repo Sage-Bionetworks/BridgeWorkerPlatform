@@ -17,8 +17,11 @@ import org.sagebionetworks.repo.model.file.BulkFileDownloadRequest;
 import org.sagebionetworks.repo.model.file.BulkFileDownloadResponse;
 import org.sagebionetworks.repo.model.file.FileHandleAssociateType;
 import org.sagebionetworks.repo.model.file.FileHandleAssociation;
+import org.sagebionetworks.repo.model.status.StackStatus;
+import org.sagebionetworks.repo.model.status.StatusEnum;
 import org.sagebionetworks.repo.model.table.DownloadFromTableResult;
 import org.sagebionetworks.repo.model.table.TableEntity;
+import org.sagebionetworks.schema.adapter.JSONObjectAdapterException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -197,6 +200,17 @@ public class SynapseHelper {
     public TableEntity getTable(String tableId) throws SynapseException {
         rateLimiter.acquire();
         return synapseClient.getEntity(tableId, TableEntity.class);
+    }
+
+    /**
+     * Gets the Synapse stack status and returns true if Synapse is up and in read/write state. Also includes retries.
+     */
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
+            randomize = false)
+    public boolean isSynapseWritable() throws JSONObjectAdapterException, SynapseException {
+        rateLimiter.acquire();
+        StackStatus status = synapseClient.getCurrentStackStatus();
+        return status.getStatus() == StatusEnum.READ_WRITE;
     }
 
     /**
