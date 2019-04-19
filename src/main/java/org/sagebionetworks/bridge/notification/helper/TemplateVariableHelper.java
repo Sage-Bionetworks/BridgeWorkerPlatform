@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import org.sagebionetworks.bridge.notification.exceptions.UserNotConfiguredException;
 import org.sagebionetworks.bridge.notification.worker.WorkerConfig;
 import org.sagebionetworks.bridge.rest.RestUtils;
 import org.sagebionetworks.bridge.rest.model.ReportData;
@@ -46,7 +47,7 @@ public class TemplateVariableHelper {
      * result.
      */
     public String resolveTemplateVariables(String studyId, StudyParticipant participant, String message)
-            throws IOException {
+            throws IOException, UserNotConfiguredException {
         message = resolveStudyCommitmentVariable(studyId, participant, message);
         message = resolveUrlVariable(studyId, message);
         return message;
@@ -54,7 +55,7 @@ public class TemplateVariableHelper {
 
     // Helper method that resolve ${studyCommitment}.
     private String resolveStudyCommitmentVariable(String studyId, StudyParticipant participant, String message)
-            throws IOException {
+            throws IOException, UserNotConfiguredException {
         // Short-cut: No template variable to resolve.
         if (!message.contains(TEMPLATE_VAR_STUDY_COMMITMENT)) {
             return message;
@@ -67,7 +68,7 @@ public class TemplateVariableHelper {
         List<ReportData> reportDataList = bridgeHelper.getParticipantReports(studyId, userId, REPORT_ID_ENGAGEMENT,
                 GLOBAL_REPORT_DATE, GLOBAL_REPORT_DATE);
         if (reportDataList.isEmpty()) {
-            throw new IllegalStateException("User " + userId + " does not have an Engagement report");
+            throw new UserNotConfiguredException("User " + userId + " does not have an Engagement report");
         }
         if (reportDataList.size() > 1) {
             LOG.warn("User " + userId + " has multiple Engagement reports for " + GLOBAL_REPORT_DATE);
@@ -83,10 +84,11 @@ public class TemplateVariableHelper {
     // follows keys to extract the expected result. Throws if the key or value are missing from the Data. This
     // method exists primarily to reduce code duplication and make it easier to modify if needed.
     @SuppressWarnings("unchecked")
-    private String getStudyCommitmentFromReport(String userId, ReportData report, String... keys) {
+    private String getStudyCommitmentFromReport(String userId, ReportData report, String... keys)
+            throws UserNotConfiguredException {
         Object obj = report.getData();
         if (obj == null) {
-            throw new IllegalStateException("User " + userId + " has no data for engagement report");
+            throw new UserNotConfiguredException("User " + userId + " has no data for engagement report");
         }
         obj = RestUtils.toType(obj, Map.class);
 
@@ -94,11 +96,11 @@ public class TemplateVariableHelper {
         for (String oneKey : keys) {
             Map<String, Object> map = (Map<String, Object>) obj;
             if (map.isEmpty()) {
-                throw new IllegalStateException("User " + userId + " engagement report data has no key " + oneKey);
+                throw new UserNotConfiguredException("User " + userId + " engagement report data has no key " + oneKey);
             }
             obj = map.get(oneKey);
             if (obj == null) {
-                throw new IllegalStateException("User " + userId + " engagement report data has no value for key " +
+                throw new UserNotConfiguredException("User " + userId + " engagement report data has no value for key " +
                         oneKey);
             }
         }

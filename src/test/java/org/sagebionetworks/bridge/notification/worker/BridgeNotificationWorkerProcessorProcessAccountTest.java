@@ -359,6 +359,16 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     }
 
     @Test
+    public void preburstNotificationWithNoDataGroups() throws Exception {
+        // Set up data group
+        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group"));
+
+        // Execute test.
+        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
+        verifyNoNotification();
+    }
+
+    @Test
     public void preburstDoesNotPreventNormalNotification() throws Exception {
         // Mock preburst notification in the log.
         UserNotification userNotification = new UserNotification();

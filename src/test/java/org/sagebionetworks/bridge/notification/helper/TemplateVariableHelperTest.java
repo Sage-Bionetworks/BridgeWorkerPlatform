@@ -11,6 +11,7 @@ import com.google.common.collect.ImmutableList;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import org.sagebionetworks.bridge.notification.exceptions.UserNotConfiguredException;
 import org.sagebionetworks.bridge.notification.worker.WorkerConfig;
 import org.sagebionetworks.bridge.rest.RestUtils;
 import org.sagebionetworks.bridge.rest.model.ReportData;
@@ -82,7 +83,7 @@ public class TemplateVariableHelperTest {
     }
 
     // branch coverage
-    @Test(expectedExceptions = IllegalStateException.class)
+    @Test(expectedExceptions = UserNotConfiguredException.class)
     public void studyCommitment_noEngagementReport() throws Exception {
         // Mock getParticipantReports to return no results.
         when(mockBridgeHelper.getParticipantReports(STUDY_ID, USER_ID, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
@@ -121,7 +122,7 @@ public class TemplateVariableHelperTest {
     }
 
     // branch coverage
-    @Test(expectedExceptions = IllegalStateException.class)
+    @Test(expectedExceptions = UserNotConfiguredException.class)
     public void studyCommitment_noClientData() throws Exception {
         // By default, engagement report contains no client data.
 
@@ -131,7 +132,7 @@ public class TemplateVariableHelperTest {
     }
 
     // branch coverage
-    @Test(expectedExceptions = IllegalStateException.class)
+    @Test(expectedExceptions = UserNotConfiguredException.class)
     public void studyCommitment_emptyClientData() throws Exception {
         // Set Report Data.
         String reportDataJson = "{}";
@@ -144,7 +145,7 @@ public class TemplateVariableHelperTest {
     }
 
     // branch coverage
-    @Test(expectedExceptions = IllegalStateException.class)
+    @Test(expectedExceptions = UserNotConfiguredException.class)
     public void studyCommitment_noStudyCommitment() throws Exception {
         // Set Report Data. Add a dummy key so that this test hits a different codepath than the empty case.
         String reportDataJson = "{\n" +

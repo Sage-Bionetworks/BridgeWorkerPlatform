@@ -19,6 +19,7 @@ import org.joda.time.LocalDate;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import org.sagebionetworks.bridge.notification.exceptions.UserNotConfiguredException;
 import org.sagebionetworks.bridge.notification.helper.BridgeHelper;
 import org.sagebionetworks.bridge.notification.helper.DynamoHelper;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
@@ -108,16 +109,20 @@ public class BridgeNotificationWorkerProcessorTest {
 
     @Test
     public void multipleUsers() throws Exception {
-        // Bridge returns 3 users. The second user throws an exception during processing.
+        // Bridge returns 4 users. The second user throws an exception during processing. The third user throws a
+        // UserNotConfiguredException
 
         // Set up mocks
         AccountSummary accountSummary1 = new AccountSummary().id("user-1");
         AccountSummary accountSummary2 = new AccountSummary().id("user-2");
         AccountSummary accountSummary3 = new AccountSummary().id("user-3");
+        AccountSummary accountSummary4 = new AccountSummary().id("user-4");
         when(mockBridgeHelper.getAllAccountSummaries(STUDY_ID)).thenReturn(ImmutableList.of(accountSummary1,
-                accountSummary2, accountSummary3).iterator());
+                accountSummary2, accountSummary3, accountSummary4).iterator());
 
         doThrow(IOException.class).when(processor).processAccountForDate(STUDY_ID, DATE, "user-2");
+        doThrow(UserNotConfiguredException.class).when(processor).processAccountForDate(STUDY_ID, DATE,
+                "user-3");
 
         // Execute
         processor.accept(makeValidRequestNode());
@@ -126,6 +131,7 @@ public class BridgeNotificationWorkerProcessorTest {
         verify(processor).processAccountForDate(STUDY_ID, DATE, "user-1");
         verify(processor).processAccountForDate(STUDY_ID, DATE, "user-2");
         verify(processor).processAccountForDate(STUDY_ID, DATE, "user-3");
+        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-4");
 
         // Verify call to dynamoHelper.writeWorkerLog()
         verify(mockDynamoHelper).writeWorkerLog(TAG);

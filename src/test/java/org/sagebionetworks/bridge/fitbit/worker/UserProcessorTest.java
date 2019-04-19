@@ -2,6 +2,7 @@ package org.sagebionetworks.bridge.fitbit.worker;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -27,6 +28,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import org.apache.http.client.HttpResponseException;
 import org.mockito.ArgumentCaptor;
 import org.sagebionetworks.repo.model.file.FileHandle;
 import org.sagebionetworks.repo.model.table.ColumnType;
@@ -310,6 +312,21 @@ public class UserProcessorTest {
 
         verify(processor).makeHttpRequest(URL, ACCESS_TOKEN);
         verify(processor, never()).warnWrapper(any());
+    }
+
+    @Test
+    public void http403Suppressed() throws Exception {
+        doThrow(new HttpResponseException(403, "Forbidden")).when(processor).makeHttpRequest(URL, ACCESS_TOKEN);
+        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        assertTrue(ctx.getPopulatedTablesById().isEmpty());
+    }
+
+    @Test
+    public void http500Suppressed() throws Exception {
+        doThrow(new HttpResponseException(500, "Internal Server Error")).when(processor).makeHttpRequest(URL,
+                ACCESS_TOKEN);
+        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        assertTrue(ctx.getPopulatedTablesById().isEmpty());
     }
 
     // Validate the PopulatedTablesById is correct, and returns the row list.
