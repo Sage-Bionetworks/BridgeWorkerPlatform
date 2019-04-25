@@ -26,12 +26,14 @@ import org.sagebionetworks.bridge.fitbit.util.Utils;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 
 /** Worker consumer for the FitBit Worker. This is called by BridgeWorkerPlatform and is the main entry point. */
 @Component("FitBitWorker")
 public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
     private static final Logger LOG = LoggerFactory.getLogger(BridgeFitBitWorkerProcessor.class);
 
+    private static final int USER_ERROR_LIMIT = 100;
     private static final int REPORTING_INTERVAL = 10;
     static final String REQUEST_PARAM_DATE = "date";
     static final String REQUEST_PARAM_STUDY_WHITELIST = "studyWhitelist";
@@ -43,6 +45,7 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
     private List<EndpointSchema> endpointSchemas;
     private FileHelper fileHelper;
     private TableProcessor tableProcessor;
+    private int userErrorLimit = USER_ERROR_LIMIT;
     private UserProcessor userProcessor;
 
     /** Bridge Helper */
@@ -77,6 +80,11 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
     @Autowired
     public final void setTableProcessor(TableProcessor tableProcessor) {
         this.tableProcessor = tableProcessor;
+    }
+
+    // Called by unit tests to make it easier to test error conditions.
+    void setUserErrorLimit(int userErrorLimit) {
+        this.userErrorLimit = userErrorLimit;
     }
 
     /** User Processor */
@@ -149,7 +157,7 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
     }
 
     // Visible for testing
-    void processStudy(String dateString, Study study) {
+    void processStudy(String dateString, Study study) throws WorkerException {
         String studyId = study.getIdentifier();
 
         // Set up request context
@@ -160,6 +168,7 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
             // Get list of users (and their keys)
             Iterator<FitBitUser> fitBitUserIter = bridgeHelper.getFitBitUsersForStudy(study.getIdentifier());
             LOG.info("Processing users in study " + studyId);
+            int numErrors = 0;
             int numUsers = 0;
             Stopwatch userStopwatch = Stopwatch.createStarted();
             while (fitBitUserIter.hasNext()) {
@@ -178,6 +187,15 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
                     }
                 } catch (Exception ex) {
                     LOG.error("Error getting next user: " + ex.getMessage(), ex);
+
+                    // The Iterator is a paginated iterator that calls Bridge for each user. If for some reason, it
+                    // keeps throwing exceptions (for example, Bridge is down), this could retry infinitely. Cap the
+                    // number of errors, and if we hit that threshold, break out of the loop and propagate the
+                    // exception up the call stack.
+                    numErrors++;
+                    if (numErrors >= userErrorLimit) {
+                        throw new WorkerException("User error limit reached, aborting for study " + studyId);
+                    }
                 }
 
                 // Reporting

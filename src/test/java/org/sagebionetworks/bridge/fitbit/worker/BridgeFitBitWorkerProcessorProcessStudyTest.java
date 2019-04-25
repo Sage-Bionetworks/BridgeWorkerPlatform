@@ -6,12 +6,15 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -27,8 +30,11 @@ import org.sagebionetworks.bridge.fitbit.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.fitbit.bridge.FitBitUser;
 import org.sagebionetworks.bridge.fitbit.schema.EndpointSchema;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
+import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 
+@SuppressWarnings({ "ResultOfMethodCallIgnored", "unchecked" })
 public class BridgeFitBitWorkerProcessorProcessStudyTest {
     private static final String DATE_STRING = "2017-12-11";
     private static final String STUDY_ID = "test-study";
@@ -226,6 +232,43 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         assertTrue(tableIdSet.contains("table-1A"));
         assertTrue(tableIdSet.contains("table-1B"));
         assertTrue(tableIdSet.contains("table-2"));
+
+        // Validate we cleaned up the file helper
+        assertTrue(fileHelper.isEmpty());
+    }
+
+    @Test
+    public void errorsGettingNextUsers() {
+        // Test cases: FitBitUserIterator keeps throwing on next(). We abort when we hit the error limit.
+
+        // Set user error limit to something small, to make it easier to test.
+        processor.setUserErrorLimit(3);
+
+        // Mock BridgeHelper to return an iterator that always throws.
+        Iterator<FitBitUser> mockIterator = mock(Iterator.class);
+        when(mockIterator.hasNext()).thenReturn(true);
+        when(mockIterator.next()).thenThrow(new BridgeSDKException("mock Bridge down", 503));
+        when(mockBridgeHelper.getFitBitUsersForStudy(STUDY_ID)).thenReturn(mockIterator);
+
+        // Mock endpoint schema. We're never going to use this, but if for some reason the test fails, we want there
+        // to be an inner loop that we can verify is never called.
+        EndpointSchema mockEndpointSchema0 = mockEndpointSchema(0);
+        processor.setEndpointSchemas(ImmutableList.of(mockEndpointSchema0));
+
+        // Execute (throws exception).
+        try {
+            processor.processStudy(DATE_STRING, STUDY);
+            fail("expected exception");
+        } catch (WorkerException ex) {
+            assertEquals(ex.getMessage(), "User error limit reached, aborting for study " + STUDY_ID);
+        }
+
+        // We call the iterator exactly 3 times.
+        verify(mockIterator, times(3)).hasNext();
+        verify(mockIterator, times(3)).next();
+
+        // User processor is never called.
+        verifyZeroInteractions(mockUserProcessor);
 
         // Validate we cleaned up the file helper
         assertTrue(fileHelper.isEmpty());
