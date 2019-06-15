@@ -119,6 +119,11 @@ public class SpringConfig {
         return ddbClient().getTable(bridgeConfig().get("synapse.map.table"));
     }
 
+    @Bean(name = "ddbSynapseMetaTable")
+    public Table ddbSynapseMetaTable() {
+        return ddbClient().getTable(bridgeConfig().get("synapse.meta.table"));
+    }
+
     // Naming note: This is a DDB table containing references to a set of Synapse tables. The name is a bit confusing,
     // but I'm not sure how to make it less confusing.
     @Bean(name = "ddbSynapseSurveyTablesTable")

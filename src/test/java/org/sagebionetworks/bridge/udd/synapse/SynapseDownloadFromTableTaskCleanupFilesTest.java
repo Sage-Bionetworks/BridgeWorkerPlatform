@@ -16,7 +16,9 @@ import org.sagebionetworks.bridge.schema.UploadSchemaKey;
 // Deep tests for SynapseDownloadFromTableTask.cleanupFiles()
 public class SynapseDownloadFromTableTaskCleanupFilesTest {
     private static final byte[] EMPTY_FILE_CONTENT = new byte[0];
-    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withStudyId("test-study")
+
+    private static final String TEST_STUDY_ID = "test-study";
+    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withStudyId(TEST_STUDY_ID)
             .withSchemaId("test-schema").withRevision(42).build();
     private static final UploadSchema TEST_SCHEMA = new UploadSchema.Builder().withKey(TEST_SCHEMA_KEY)
             .addField("foo", "STRING").build();
@@ -34,13 +36,13 @@ public class SynapseDownloadFromTableTaskCleanupFilesTest {
         SynapseDownloadFromTableParameters params = new SynapseDownloadFromTableParameters.Builder()
                 .withSynapseTableId("test-table-id").withHealthCode("test-health-code")
                 .withStartDate(LocalDate.parse("2015-03-09")).withEndDate(LocalDate.parse("2015-09-16"))
-                .withTempDir(tmpDir).withSchema(TEST_SCHEMA).build();
-        task = new SynapseDownloadFromTableTask(params);
+                .withTempDir(tmpDir).withSchema(TEST_SCHEMA).withStudyId(TEST_STUDY_ID).build();
+        task = new SchemaBasedTableTask(params);
         task.setFileHelper(inMemoryFileHelper);
     }
 
     @Test
-    public void noFiles() throws Exception {
+    public void noFiles() {
         // Default context has all null files.
         executeTest();
     }
@@ -75,7 +77,7 @@ public class SynapseDownloadFromTableTaskCleanupFilesTest {
 
     // branch coverage
     @Test
-    public void nonNullFilesButDontExist() throws Exception {
+    public void nonNullFilesButDontExist() {
         // Create the files, but don't write any content to them, so they won't exist.
         task.getContext().setCsvFile(inMemoryFileHelper.newFile(tmpDir, "csv.csv"));
         task.getContext().setBulkDownloadFile(inMemoryFileHelper.newFile(tmpDir, "download.zip"));
@@ -84,7 +86,7 @@ public class SynapseDownloadFromTableTaskCleanupFilesTest {
     }
 
     // We don't want to use AfterMethod for this, because if it fails, TestNG won't tell us which test failed.
-    public void executeTest() throws Exception {
+    public void executeTest() {
         // Run the actual cleanup.
         task.cleanupFiles();
 

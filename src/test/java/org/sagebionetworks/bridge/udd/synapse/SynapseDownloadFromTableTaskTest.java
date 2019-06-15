@@ -6,7 +6,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -30,7 +29,6 @@ import com.google.common.io.CharStreams;
 import org.joda.time.LocalDate;
 import org.mockito.ArgumentCaptor;
 import org.sagebionetworks.client.exceptions.SynapseException;
-import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 import org.sagebionetworks.repo.model.file.BulkFileDownloadResponse;
 import org.sagebionetworks.repo.model.file.FileDownloadSummary;
 import org.testng.annotations.Test;
@@ -38,12 +36,14 @@ import org.testng.annotations.Test;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.schema.UploadSchema;
 import org.sagebionetworks.bridge.schema.UploadSchemaKey;
-import org.sagebionetworks.bridge.udd.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.udd.exceptions.AsyncTaskExecutionException;
 
+// This test had tests for SynapseDownloadFromTableTask before that class was split into DefaultTableTask and
+// SchemaBasedTableTask. Now, a lot of the tests use SchemaBasedTableTask.
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class SynapseDownloadFromTableTaskTest {
-    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withStudyId("test-study")
+    private static final String TEST_STUDY_ID = "test-study";
+    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withStudyId(TEST_STUDY_ID)
             .withSchemaId("test-schema").withRevision(42).build();
 
     // The default test schema should include at least 2 file handle IDs and a mix of file handles and
@@ -293,6 +293,71 @@ public class SynapseDownloadFromTableTaskTest {
     }
 
     @Test
+    public void rawData() throws Exception {
+        // One row with attachments and raw data.
+
+        // Setup.
+        String csvContent = "\"recordId\",\"healthCode\",\"foo\",\"bar\",\"baz\",\"rawData\"\n" +
+                "\"my-record\",\"test-health-code\",\"42\",\"bar-file-handle\",\"baz-file-handle\",\"raw-data-file-handle\"";
+
+        List<FileDownloadSummary> fileSummaryList = new ArrayList<>();
+        {
+            FileDownloadSummary fileSummary = new FileDownloadSummary();
+            fileSummary.setFileHandleId("bar-file-handle");
+            fileSummary.setZipEntryName("bar-zip-entry");
+            fileSummaryList.add(fileSummary);
+        }
+        {
+            FileDownloadSummary fileSummary = new FileDownloadSummary();
+            fileSummary.setFileHandleId("baz-file-handle");
+            fileSummary.setZipEntryName("baz-zip-entry");
+            fileSummaryList.add(fileSummary);
+        }
+        {
+            FileDownloadSummary fileSummary = new FileDownloadSummary();
+            fileSummary.setFileHandleId("raw-data-file-handle");
+            fileSummary.setZipEntryName("raw-data-zip-entry");
+            fileSummaryList.add(fileSummary);
+        }
+
+        setupTestWithArgs(DEFAULT_TEST_SCHEMA, csvContent, null, fileSummaryList);
+
+        // Execute.
+        SynapseDownloadFromTableResult result = task.call();
+
+        // Validate CSV.
+        List<String[]> parsedCsv = parseCsv(result.getCsvFile());
+        assertEquals(parsedCsv.size(), 2);
+
+        // Header.
+        assertEquals(parsedCsv.get(0).length, 6);
+        assertEquals(parsedCsv.get(0)[0], "recordId");
+        assertEquals(parsedCsv.get(0)[1], "healthCode");
+        assertEquals(parsedCsv.get(0)[2], "foo");
+        assertEquals(parsedCsv.get(0)[3], "bar");
+        assertEquals(parsedCsv.get(0)[4], "baz");
+        assertEquals(parsedCsv.get(0)[5], "rawData");
+
+        // Row with data.
+        assertEquals(parsedCsv.get(1).length, 6);
+        assertEquals(parsedCsv.get(1)[0], "my-record");
+        assertTrue(Strings.isNullOrEmpty(parsedCsv.get(1)[1]));
+        assertEquals(parsedCsv.get(1)[2], "42");
+        assertEquals(parsedCsv.get(1)[3], "bar-zip-entry");
+        assertEquals(parsedCsv.get(1)[4], "baz-zip-entry");
+        assertEquals(parsedCsv.get(1)[5], "raw-data-zip-entry");
+
+        // Validate the file handles we sent to Synapse for the bulk download.
+        Set<String> fileHandleIdSet = synapseFileHandleIdSetCaptor.getValue();
+        assertEquals(fileHandleIdSet.size(), 3);
+        assertTrue(fileHandleIdSet.contains("bar-file-handle"));
+        assertTrue(fileHandleIdSet.contains("baz-file-handle"));
+        assertTrue(fileHandleIdSet.contains("raw-data-file-handle"));
+
+        postValidation(result);
+    }
+
+    @Test
     public void firstErrorCase() throws Exception {
         // Test getting an error on the first step (download CSV). This allows us to test that cleanup works even when
         // almost everything is null.
@@ -349,49 +414,6 @@ public class SynapseDownloadFromTableTaskTest {
         postValidation(null);
     }
 
-    @Test
-    public void tableDoesntExist() throws Exception {
-        // Mock Dynamo Helper.
-        DynamoHelper mockDynamoHelper = mock(DynamoHelper.class);
-
-        // Mock filehelper and temp dir.
-        inMemoryFileHelper = new InMemoryFileHelper();
-        tmpDir = inMemoryFileHelper.createTempDir();
-
-        // Mock Synapse Helper. Query is tested in other tests. Just throw.
-        SynapseHelper mockSynapseHelper = mock(SynapseHelper.class);
-        when(mockSynapseHelper.generateFileHandleFromTableQuery(any(), eq("test-table-id"))).thenThrow(
-                SynapseNotFoundException.class);
-
-        // Set up params and task.
-        SynapseDownloadFromTableParameters params = new SynapseDownloadFromTableParameters.Builder()
-                .withSynapseTableId("test-table-id").withHealthCode("test-health-code")
-                .withStartDate(LocalDate.parse("2015-03-09")).withEndDate(LocalDate.parse("2015-09-16"))
-                .withTempDir(tmpDir).withSchema(DEFAULT_TEST_SCHEMA).build();
-
-        task = new SynapseDownloadFromTableTask(params);
-        task.setDynamoHelper(mockDynamoHelper);
-        task.setFileHelper(inMemoryFileHelper);
-        task.setSynapseHelper(mockSynapseHelper);
-
-        // Execute (throws exception).
-        try {
-            task.call();
-            fail("expected exception");
-        } catch (AsyncTaskExecutionException ex) {
-            assertEquals(ex.getMessage(), "Synapse table test-table-id for schema " +
-                    TEST_SCHEMA_KEY.toString() + " no longer exists");
-        }
-
-        // Verify we delete the schema from the table mapping.
-        verify(mockDynamoHelper).deleteSynapseTableIdMapping(TEST_SCHEMA_KEY);
-
-        // Since we never download the CSV, we don't create any files other than the temp dir. Delete the temp dir and
-        // then verify that the filehelper is empty.
-        inMemoryFileHelper.deleteDir(tmpDir);
-        assertTrue(inMemoryFileHelper.isEmpty());
-    }
-
     private void setupTestWithArgs(UploadSchema schema, String csvContent, SynapseException csvException,
             List<FileDownloadSummary> fileSummaryList) throws Exception {
         // mock file helper and temp dir
@@ -402,8 +424,8 @@ public class SynapseDownloadFromTableTaskTest {
         SynapseDownloadFromTableParameters params = new SynapseDownloadFromTableParameters.Builder()
                 .withSynapseTableId("test-table-id").withHealthCode("test-health-code")
                 .withStartDate(LocalDate.parse("2015-03-09")).withEndDate(LocalDate.parse("2015-09-16"))
-                .withTempDir(tmpDir).withSchema(schema).build();
-        task = new SynapseDownloadFromTableTask(params);
+                .withTempDir(tmpDir).withSchema(schema).withStudyId(TEST_STUDY_ID).build();
+        task = new SchemaBasedTableTask(params);
         task.setFileHelper(inMemoryFileHelper);
 
         // mock Synapse CSV content
