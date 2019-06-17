@@ -52,6 +52,7 @@ public class BridgeUddProcessorTest {
     public static final PresignedUrlInfo MOCK_PRESIGNED_URL_INFO = mock(PresignedUrlInfo.class);
 
     // simple strings for test
+    private static final String DEFAULT_TABLE_ID = "default-table";
     public static final String EMAIL = "test@example.com";
     public static final String HEALTH_CODE = "test-health-code";
     public static final String USER_ID = "test-user-id";
@@ -103,6 +104,7 @@ public class BridgeUddProcessorTest {
 
         // mock dynamo helper
         DynamoHelper mockDynamoHelper = mock(DynamoHelper.class);
+        when(mockDynamoHelper.getDefaultSynapseTableForStudy(STUDY_ID)).thenReturn(DEFAULT_TABLE_ID);
         when(mockDynamoHelper.getStudy(STUDY_ID)).thenReturn(MOCK_STUDY_INFO);
         when(mockDynamoHelper.getSynapseTableIdsForStudy(STUDY_ID)).thenReturn(MOCK_SYNAPSE_TO_SCHEMA);
         when(mockDynamoHelper.getSynapseSurveyTablesForStudy(STUDY_ID)).thenReturn(MOCK_SURVEY_TABLE_ID_SET);
@@ -251,7 +253,7 @@ public class BridgeUddProcessorTest {
     }
 
     private void mockPackagerWithResult(PresignedUrlInfo presignedUrlInfo) throws Exception {
-        when(mockPackager.packageSynapseData(eq(STUDY_ID), same(MOCK_SYNAPSE_TO_SCHEMA), eq(HEALTH_CODE),
+        when(mockPackager.packageSynapseData(eq(STUDY_ID), same(MOCK_SYNAPSE_TO_SCHEMA), eq(DEFAULT_TABLE_ID), eq(HEALTH_CODE),
                 any(BridgeUddRequest.class), same(MOCK_SURVEY_TABLE_ID_SET))).thenReturn(presignedUrlInfo);
     }
 

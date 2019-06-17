@@ -123,6 +123,8 @@ public class SynapsePackager {
      *         study to download data for
      * @param synapseToSchemaMap
      *         map from Synapse table IDs to schemas, used to enumerate Synapse tables and determine file names
+     * @param defaultSynapseTableId
+     *         Synapse table for the default schema (schemaless), null if no such table exists
      * @param healthCode
      *         user health code to filter on
      * @param request
@@ -131,15 +133,16 @@ public class SynapsePackager {
      *         set of survey table IDs, which need to be downloaded in their entirety
      * @return pre-signed URL and expiration time
      */
-    public PresignedUrlInfo packageSynapseData(String studyId, Map<String, UploadSchema> synapseToSchemaMap, String healthCode,
+    public PresignedUrlInfo packageSynapseData(String studyId, Map<String, UploadSchema> synapseToSchemaMap,
+            String defaultSynapseTableId, String healthCode,
             BridgeUddRequest request, Set<String> surveyTableIdSet) throws IOException, SynapseUnavailableException {
         List<File> allFileList = new ArrayList<>();
         File masterZipFile = null;
         File tmpDir = fileHelper.createTempDir();
         try {
             // create and execute Synapse downloads asynchronously
-            List<Future<SynapseDownloadFromTableResult>> queryFutureList = initAsyncQueryTasks(synapseToSchemaMap,
-                    healthCode, request, tmpDir);
+            List<Future<SynapseDownloadFromTableResult>> queryFutureList = initAsyncQueryTasks(studyId,
+                    synapseToSchemaMap, defaultSynapseTableId, healthCode, request, tmpDir);
             List<Future<File>> surveyFutureList = initAsyncSurveyTasks(studyId, surveyTableIdSet, tmpDir);
 
             // wait for async tasks - We need to wait for all tasks and gather up all files before we check whether we
@@ -179,8 +182,12 @@ public class SynapsePackager {
      * This is made package-scoped so unit tests can hook into it.
      * </p>
      *
+     * @param studyId
+     *         study to download data for
      * @param synapseToSchemaMap
      *         map of all Synapse table IDs in the current study and their corresponding schemas
+     * @param defaultSynapseTableId
+     *         Synapse table for the default schema (schemaless), null if no such table exists
      * @param healthCode
      *         user's health code, used for generating queries
      * @param request
@@ -189,8 +196,9 @@ public class SynapsePackager {
      *         temp directory that files should be downloaded to
      * @return list of Futures for the async tasks
      */
-    List<Future<SynapseDownloadFromTableResult>> initAsyncQueryTasks(Map<String, UploadSchema> synapseToSchemaMap,
-            String healthCode, BridgeUddRequest request, File tmpDir) {
+    List<Future<SynapseDownloadFromTableResult>> initAsyncQueryTasks(String studyId,
+            Map<String, UploadSchema> synapseToSchemaMap, String defaultSynapseTableId, String healthCode,
+            BridgeUddRequest request, File tmpDir) {
         List<Future<SynapseDownloadFromTableResult>> taskFutureList = new ArrayList<>();
         for (Map.Entry<String, UploadSchema> oneSynapseToSchemaEntry : synapseToSchemaMap.entrySet()) {
             // create params
@@ -199,10 +207,26 @@ public class SynapsePackager {
             SynapseDownloadFromTableParameters param = new SynapseDownloadFromTableParameters.Builder()
                     .withSynapseTableId(synapseTableId).withHealthCode(healthCode)
                     .withStartDate(request.getStartDate()) .withEndDate(request.getEndDate()).withTempDir(tmpDir)
-                    .withSchema(schema).build();
+                    .withSchema(schema).withStudyId(studyId).build();
 
             // kick off async task
-            SynapseDownloadFromTableTask task = new SynapseDownloadFromTableTask(param);
+            SynapseDownloadFromTableTask task = new SchemaBasedTableTask(param);
+            task.setDynamoHelper(dynamoHelper);
+            task.setFileHelper(fileHelper);
+            task.setSynapseHelper(synapseHelper);
+            Future<SynapseDownloadFromTableResult> taskFuture = auxiliaryExecutorService.submit(task);
+            taskFutureList.add(taskFuture);
+        }
+
+        if (defaultSynapseTableId != null) {
+            // create params
+            SynapseDownloadFromTableParameters param = new SynapseDownloadFromTableParameters.Builder()
+                    .withSynapseTableId(defaultSynapseTableId).withHealthCode(healthCode)
+                    .withStartDate(request.getStartDate()).withEndDate(request.getEndDate()).withTempDir(tmpDir)
+                    .withStudyId(studyId).build();
+
+            // kick off async task
+            SynapseDownloadFromTableTask task = new DefaultTableTask(param);
             task.setDynamoHelper(dynamoHelper);
             task.setFileHelper(fileHelper);
             task.setSynapseHelper(synapseHelper);

@@ -28,10 +28,14 @@ import org.sagebionetworks.bridge.schema.UploadSchemaKey;
 public class DynamoHelper {
     // Package-scoped for unit tests.
     static final String ATTR_STUDY_ID = "studyId";
+    static final String ATTR_TABLE_ID = "tableId";
     static final String ATTR_TABLE_ID_SET = "tableIdSet";
+    static final String ATTR_TABLE_NAME = "tableName";
+    static final String SUFFIX_DEFAULT = "-default";
 
     private Table ddbStudyTable;
     private Table ddbSynapseMapTable;
+    private Table ddbSynapseMetaTable;
     private Table ddbSynapseSurveyTablesTable;
     private Table ddbUploadSchemaTable;
     private Index ddbUploadSchemaStudyIndex;
@@ -47,6 +51,12 @@ public class DynamoHelper {
     @Resource(name = "ddbSynapseMapTable")
     public final void setDdbSynapseMapTable(Table ddbSynapseMapTable) {
         this.ddbSynapseMapTable = ddbSynapseMapTable;
+    }
+
+    /** DDB table with Synapse meta tables (appVersion, default (schemaless)). */
+    @Resource(name = "ddbSynapseMetaTable")
+    public final void setDdbSynapseMetaTable(Table ddbSynapseMetaTable) {
+        this.ddbSynapseMetaTable = ddbSynapseMetaTable;
     }
 
     /** Wrapper around the DynamoDB query API, which makes it easier to mock. */
@@ -75,6 +85,26 @@ public class DynamoHelper {
     @Resource(name = "ddbUploadSchemaStudyIndex")
     public final void setDdbUploadSchemaStudyIndex(Index ddbUploadSchemaStudyIndex) {
         this.ddbUploadSchemaStudyIndex = ddbUploadSchemaStudyIndex;
+    }
+
+    /**
+     * Gets the ID for the default (schemaless) record table for the study. If the table doesn't exist, returns null.
+     */
+    public String getDefaultSynapseTableForStudy(String studyId) {
+        Item item = ddbSynapseMetaTable.getItem(ATTR_TABLE_NAME, studyId + SUFFIX_DEFAULT);
+        if (item == null) {
+            // Schemaless table hasn't been created yet. Skip.
+            return null;
+        }
+        return item.getString(ATTR_TABLE_ID);
+    }
+
+    /**
+     * Deletes the ID for the default (schemaless) record table from the meta table. This is generally used for when
+     * the table is already deleted and we want to clean up.
+     */
+    public void deleteDefaultSynapseTableForStudy(String studyId) {
+        ddbSynapseMetaTable.deleteItem(ATTR_TABLE_NAME, studyId + SUFFIX_DEFAULT);
     }
 
     /**
@@ -185,7 +215,7 @@ public class DynamoHelper {
                 continue;
             }
 
-            String synapseTableId = synapseMapRecord.getString("tableId");
+            String synapseTableId = synapseMapRecord.getString(ATTR_TABLE_ID);
             synapseToSchemaMultimap.put(synapseTableId, oneSchema);
         }
 
