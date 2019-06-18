@@ -17,16 +17,21 @@ import org.testng.annotations.Test;
 import retrofit2.Call;
 import retrofit2.Response;
 
+import org.sagebionetworks.bridge.fitbit.worker.Constants;
 import org.sagebionetworks.bridge.rest.ClientManager;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
 import org.sagebionetworks.bridge.rest.api.StudiesApi;
 import org.sagebionetworks.bridge.rest.model.ForwardCursorStringList;
+import org.sagebionetworks.bridge.rest.model.OAuthAccessToken;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyList;
 
 @SuppressWarnings("unchecked")
 public class BridgeHelperTest {
+    private static final String ACCESS_TOKEN = "test-token";
+    private static final String HEALTH_CODE = "test-health-code";
     private static final String STUDY_ID = "test-study";
+    private static final String USER_ID = "test-user";
 
     private ClientManager mockClientManager;
     private BridgeHelper bridgeHelper;
@@ -37,6 +42,25 @@ public class BridgeHelperTest {
 
         bridgeHelper = new BridgeHelper();
         bridgeHelper.setClientManager(mockClientManager);
+    }
+
+    @Test
+    public void getFitBitUserForStudyAndHealthCode() throws Exception {
+        // Mock client manager.
+        ForWorkersApi mockApi = mock(ForWorkersApi.class);
+        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockApi);
+
+        OAuthAccessToken mockToken = mock(OAuthAccessToken.class);
+        when(mockToken.getAccessToken()).thenReturn(ACCESS_TOKEN);
+        when(mockToken.getProviderUserId()).thenReturn(USER_ID);
+        Call<OAuthAccessToken> mockCall = mockCallForValue(mockToken);
+        when(mockApi.getOAuthAccessToken(STUDY_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE)).thenReturn(mockCall);
+
+        // Execute and validate.
+        FitBitUser fitBitUser = bridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, HEALTH_CODE);
+        assertEquals(fitBitUser.getAccessToken(), ACCESS_TOKEN);
+        assertEquals(fitBitUser.getHealthCode(), HEALTH_CODE);
+        assertEquals(fitBitUser.getUserId(), USER_ID);
     }
 
     @Test

@@ -7,9 +7,11 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import org.sagebionetworks.bridge.fitbit.worker.Constants;
 import org.sagebionetworks.bridge.rest.ClientManager;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
 import org.sagebionetworks.bridge.rest.api.StudiesApi;
+import org.sagebionetworks.bridge.rest.model.OAuthAccessToken;
 import org.sagebionetworks.bridge.rest.model.Study;
 
 /** Encapsulates calls to Bridge server. */
@@ -21,6 +23,14 @@ public class BridgeHelper {
     @Autowired
     public final void setClientManager(ClientManager clientManager) {
         this.clientManager = clientManager;
+    }
+
+    /** Returns the FitBitUser for a single user. */
+    public FitBitUser getFitBitUserForStudyAndHealthCode(String studyId, String healthCode) throws IOException {
+        OAuthAccessToken token = clientManager.getClient(ForWorkersApi.class).getOAuthAccessToken(studyId,
+                Constants.FITBIT_VENDOR_ID, healthCode).execute().body();
+        return new FitBitUser.Builder().withAccessToken(token.getAccessToken()).withHealthCode(healthCode)
+                .withUserId(token.getProviderUserId()).build();
     }
 
     /** Gets an iterator for all FitBit users in the given study. */
