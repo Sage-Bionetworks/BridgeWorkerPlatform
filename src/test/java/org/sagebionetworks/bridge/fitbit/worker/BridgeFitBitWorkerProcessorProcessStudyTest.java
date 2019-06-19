@@ -3,6 +3,7 @@ package org.sagebionetworks.bridge.fitbit.worker;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -13,6 +14,7 @@ import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -66,7 +68,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
     }
 
     @Test
-    public void multipleUsers() throws Exception {
+    public void multipleUsersFromBridge() throws Exception {
         // Test cases: First user throws. Second and third users succeed.
 
         // Mock BridgeHelper to return users.
@@ -100,7 +102,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         }).when(mockUserProcessor).processEndpointForUser(any(), any(), any());
 
         // Execute
-        processor.processStudy(DATE_STRING, STUDY);
+        processor.processStudy(DATE_STRING, STUDY, null);
 
         // Verify User Processor
         ArgumentCaptor<RequestContext> contextCaptor = ArgumentCaptor.forClass(RequestContext.class);
@@ -131,6 +133,74 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         verify(mockTableProcessor, times(1)).processTable(same(context0),
                 tableCaptor.capture());
         assertEquals(tableCaptor.getValue().getTableId(), "endpoint-0-table");
+
+        // Validate we cleaned up the file helper
+        assertTrue(fileHelper.isEmpty());
+    }
+
+    @Test
+    public void multipleUsersFromWhitelist() throws Exception {
+        // Test cases: First user throws on getting the FitBitUser. Second and third users succeed.
+
+        // Mock BridgeHelper to return users.
+        when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-0"))
+                .thenThrow(IOException.class);
+
+        FitBitUser user1 = makeUser(1);
+        when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-1"))
+                .thenReturn(user1);
+
+        FitBitUser user2 = makeUser(2);
+        when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-2"))
+                .thenReturn(user2);
+
+        // Mock endpoint schema, so we don't have to construct the whole thing.
+        EndpointSchema mockEndpointSchema0 = mockEndpointSchema(0);
+        processor.setEndpointSchemas(ImmutableList.of(mockEndpointSchema0));
+
+        // Mock user processor to do nothing. This is thoroughly tested in other tests.
+        doNothing().when(mockUserProcessor).processEndpointForUser(any(), any(), any());
+
+        // Execute.
+        processor.processStudy(DATE_STRING, STUDY, ImmutableList.of("health-code-0", "health-code-1",
+                "health-code-2"));
+
+        // Verify User Processor. Because user-0 throws while trying to get a FitBitUser, we never call the
+        // User Processor.
+        ArgumentCaptor<FitBitUser> userCaptor = ArgumentCaptor.forClass(FitBitUser.class);
+        verify(mockUserProcessor, times(2)).processEndpointForUser(any(),
+                userCaptor.capture(), same(mockEndpointSchema0));
+
+        List<FitBitUser> userList = userCaptor.getAllValues();
+        assertEquals(userList.size(), 2);
+        assertSame(userList.get(0), user1);
+        assertSame(userList.get(1), user2);
+
+        // Validate we cleaned up the file helper
+        assertTrue(fileHelper.isEmpty());
+    }
+
+    // branch coverage
+    @Test
+    public void emptyHealthCodeWhitelist() throws Exception {
+        // Mock BridgeHelper to return users.
+        FitBitUser user3 = makeUser(3);
+        when(mockBridgeHelper.getFitBitUsersForStudy(STUDY_ID)).thenReturn(Iterators.forArray(user3));
+
+        // Mock endpoint schema, so we don't have to construct the whole thing.
+        EndpointSchema mockEndpointSchema0 = mockEndpointSchema(0);
+        processor.setEndpointSchemas(ImmutableList.of(mockEndpointSchema0));
+
+        // Mock user processor to do nothing. This is thoroughly tested in other tests.
+        doNothing().when(mockUserProcessor).processEndpointForUser(any(), any(), any());
+
+        // Execute.
+        processor.processStudy(DATE_STRING, STUDY, ImmutableList.of());
+
+        // Verify User Processor.
+        ArgumentCaptor<FitBitUser> userCaptor = ArgumentCaptor.forClass(FitBitUser.class);
+        verify(mockUserProcessor).processEndpointForUser(any(), userCaptor.capture(), same(mockEndpointSchema0));
+        assertSame(userCaptor.getValue(), user3);
 
         // Validate we cleaned up the file helper
         assertTrue(fileHelper.isEmpty());
@@ -195,7 +265,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         }).when(mockTableProcessor).processTable(any(), any());
 
         // Execute
-        processor.processStudy(DATE_STRING, STUDY);
+        processor.processStudy(DATE_STRING, STUDY, null);
 
         // Verify User Processor
         ArgumentCaptor<RequestContext> contextCaptor = ArgumentCaptor.forClass(RequestContext.class);
@@ -257,7 +327,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
 
         // Execute (throws exception).
         try {
-            processor.processStudy(DATE_STRING, STUDY);
+            processor.processStudy(DATE_STRING, STUDY, null);
             fail("expected exception");
         } catch (WorkerException ex) {
             assertEquals(ex.getMessage(), "User error limit reached, aborting for study " + STUDY_ID);
