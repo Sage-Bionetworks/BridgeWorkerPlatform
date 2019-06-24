@@ -13,7 +13,7 @@ import java.util.Set;
 
 import org.joda.time.LocalDate;
 import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
-import org.sagebionetworks.client.exceptions.SynapseServerException;
+import org.sagebionetworks.client.exceptions.UnknownSynapseServerException;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -94,7 +94,7 @@ public class DefaultTableTaskTest {
     @Test
     public void errorVerifyingTable() throws Exception {
         // Mock getTable()
-        when(mockSynapseHelper.getTable(TABLE_ID)).thenThrow(SynapseServerException.class);
+        when(mockSynapseHelper.getTable(TABLE_ID)).thenThrow(UnknownSynapseServerException.class);
 
         // Execute (throws exception).
         try {
