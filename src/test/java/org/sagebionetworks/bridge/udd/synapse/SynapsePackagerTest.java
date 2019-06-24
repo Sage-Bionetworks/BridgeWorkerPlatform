@@ -39,7 +39,8 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.joda.time.LocalDate;
 import org.mockito.ArgumentCaptor;
-import org.sagebionetworks.client.exceptions.SynapseServerException;
+import org.sagebionetworks.client.exceptions.SynapseBadRequestException;
+import org.sagebionetworks.client.exceptions.SynapseServiceUnavailable;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -355,7 +356,7 @@ public class SynapsePackagerTest {
         Map<String, String> surveyTableToResultContent = ImmutableMap.of();
 
         Map<String, ExecutionException> synapseTableToException = ImmutableMap.of("test-table-id",
-                new ExecutionException(new SynapseServerException(503)));
+                new ExecutionException(new SynapseServiceUnavailable("Service Unavailable")));
 
         setupPackager(synapseTableToSchema, synapseTableToResult, synapseTableToException, surveyTableToResultContent,
                 null);
@@ -386,7 +387,7 @@ public class SynapsePackagerTest {
 
         Map<String, String> surveyTableToResultContent = ImmutableMap.of();
         Map<String, ExecutionException> surveyTableToException = ImmutableMap.of("test-survey",
-                new ExecutionException(new SynapseServerException(503)));
+                new ExecutionException(new SynapseServiceUnavailable("Service Unavailable")));
 
         setupPackager(synapseTableToSchema, synapseTableToResult, null,
                 surveyTableToResultContent, surveyTableToException);
@@ -409,7 +410,7 @@ public class SynapsePackagerTest {
         return new Object[][] {
                 { new ExecutionException("no cause", null) },
                 { new ExecutionException("not Synapse exception", new RuntimeException()) },
-                { new ExecutionException("Synapse 400 Bad Request", new SynapseServerException(400)) },
+                { new ExecutionException("Synapse 400 Bad Request", new SynapseBadRequestException()) },
         };
     }
 
@@ -422,7 +423,7 @@ public class SynapsePackagerTest {
     @Test(expectedExceptions = SynapseUnavailableException.class,
             expectedExceptionsMessageRegExp = "Synapse not in writable state")
     public void throwSynapseReadOnlyException() throws Exception {
-        ExecutionException ex = new ExecutionException("Synapse 503 Unavailable", new SynapseServerException(503));
+        ExecutionException ex = new ExecutionException("Synapse 503 Unavailable", new SynapseServiceUnavailable("Service Unavailable"));
         SynapsePackager.rethrowIfSynapseIsReadOnly(ex);
     }
 

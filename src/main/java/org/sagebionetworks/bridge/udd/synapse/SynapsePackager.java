@@ -22,6 +22,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import org.joda.time.DateTime;
 import org.sagebionetworks.client.exceptions.SynapseServerException;
+import org.sagebionetworks.client.exceptions.SynapseServiceUnavailable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -368,8 +369,7 @@ public class SynapsePackager {
         // The real exception is in the inner exception (if it's an ExecutionException).
         Throwable originalEx = ex.getCause();
 
-        if (originalEx instanceof SynapseServerException &&
-                ((SynapseServerException) originalEx).getStatusCode() == 503) {
+        if (originalEx instanceof SynapseServiceUnavailable) {
             throw new SynapseUnavailableException("Synapse not in writable state");
         }
     }

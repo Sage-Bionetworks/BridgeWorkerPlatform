@@ -21,7 +21,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 
-import org.sagebionetworks.client.exceptions.SynapseServerException;
+import org.sagebionetworks.client.exceptions.SynapseServiceUnavailable;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -191,7 +191,7 @@ public class BridgeUddProcessorTest {
     @Test
     public void synapseWritableThrows() throws Exception {
         // Mock Synapse helper to throw.
-        Exception originalEx = new SynapseServerException(503, "test exception");
+        Exception originalEx = new SynapseServiceUnavailable("test exception");
         when(mockSynapseHelper.isSynapseWritable()).thenThrow(originalEx);
 
         // Execute (throws exception).
