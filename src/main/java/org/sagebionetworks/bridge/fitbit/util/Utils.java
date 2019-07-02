@@ -24,7 +24,9 @@ public class Utils {
             new ColumnSchema.Builder().withColumnId(Constants.COLUMN_HEALTH_CODE).withColumnType(ColumnType.STRING)
                     .withMaxLength(36).build(),
             new ColumnSchema.Builder().withColumnId(Constants.COLUMN_CREATED_DATE).withColumnType(ColumnType.STRING)
-                    .withMaxLength(10).build());
+                    .withMaxLength(10).build(),
+            new ColumnSchema.Builder().withColumnId(Constants.COLUMN_RAW_DATA).withColumnType(ColumnType.FILEHANDLEID)
+                    .build());
 
     /**
      * Helper method which merges the common column list with the table-specific column schemas and returns the full
