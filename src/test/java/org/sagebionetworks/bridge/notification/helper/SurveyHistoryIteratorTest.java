@@ -6,6 +6,7 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import com.google.common.collect.ImmutableList;
 import org.joda.time.DateTime;
 import org.testng.annotations.Test;
 import retrofit2.Call;
@@ -30,13 +31,13 @@ public class SurveyHistoryIteratorTest {
     @Test
     public void testWith1User() throws Exception {
         // Mock activity list response.
-        ForwardCursorScheduledActivityList forwardCursorStringList = new ForwardCursorScheduledActivityList();
-        forwardCursorStringList.setHasNext(false);
-        forwardCursorStringList.setNextPageOffsetKey(null);
+        ForwardCursorScheduledActivityList forwardCursorStringList = mock(ForwardCursorScheduledActivityList.class);
+        when(forwardCursorStringList.isHasNext()).thenReturn(false);
+        when(forwardCursorStringList.getNextPageOffsetKey()).thenReturn(null);
 
         ScheduledActivity scheduledActivity = new ScheduledActivity();
         scheduledActivity.setGuid(ACTIVITY_GUID);
-        forwardCursorStringList.addItemsItem(scheduledActivity);
+        when(forwardCursorStringList.getItems()).thenReturn(ImmutableList.of(scheduledActivity));
 
         Response<ForwardCursorScheduledActivityList> pageResponse = Response.success(forwardCursorStringList);
 
@@ -45,7 +46,7 @@ public class SurveyHistoryIteratorTest {
         when(mockPageCall.execute()).thenReturn(pageResponse);
 
         ForWorkersApi mockApi = mock(ForWorkersApi.class);
-        when(mockApi.getParticipantSurveyHistory(STUDY_ID, USER_ID, SURVEY_GUID, SCHEDULED_ON_START, SCHEDULED_ON_END,
+        when(mockApi.getParticipantSurveyHistoryForStudy(STUDY_ID, USER_ID, SURVEY_GUID, SCHEDULED_ON_START, SCHEDULED_ON_END,
                 null, ActivityHistoryIterator.PAGE_SIZE)).thenReturn(mockPageCall);
 
         // Mock client manager.

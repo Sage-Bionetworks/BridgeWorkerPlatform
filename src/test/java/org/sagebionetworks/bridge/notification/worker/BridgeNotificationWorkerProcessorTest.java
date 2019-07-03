@@ -113,10 +113,10 @@ public class BridgeNotificationWorkerProcessorTest {
         // UserNotConfiguredException
 
         // Set up mocks
-        AccountSummary accountSummary1 = new AccountSummary().id("user-1");
-        AccountSummary accountSummary2 = new AccountSummary().id("user-2");
-        AccountSummary accountSummary3 = new AccountSummary().id("user-3");
-        AccountSummary accountSummary4 = new AccountSummary().id("user-4");
+        AccountSummary accountSummary1 = mockAccountSummary("user-1");
+        AccountSummary accountSummary2 = mockAccountSummary("user-2");
+        AccountSummary accountSummary3 = mockAccountSummary("user-3");
+        AccountSummary accountSummary4 = mockAccountSummary("user-4");
         when(mockBridgeHelper.getAllAccountSummaries(STUDY_ID)).thenReturn(ImmutableList.of(accountSummary1,
                 accountSummary2, accountSummary3, accountSummary4).iterator());
 
@@ -135,6 +135,12 @@ public class BridgeNotificationWorkerProcessorTest {
 
         // Verify call to dynamoHelper.writeWorkerLog()
         verify(mockDynamoHelper).writeWorkerLog(TAG);
+    }
+
+    private static AccountSummary mockAccountSummary(String id) {
+        AccountSummary summary = mock(AccountSummary.class);
+        when(summary.getId()).thenReturn(id);
+        return summary;
     }
 
     @Test

@@ -31,7 +31,7 @@ public class BridgeHelper {
 
     /** Get all activity events (e.g. enrollment) for the given user in the given study. */
     public List<ActivityEvent> getActivityEvents(String studyId, String userId) throws IOException {
-        return clientManager.getClient(ForWorkersApi.class).getActivityEventsForParticipant(studyId, userId).execute()
+        return clientManager.getClient(ForWorkersApi.class).getActivityEventsForParticipantAndStudy(studyId, userId).execute()
                 .body().getItems();
     }
 
@@ -45,7 +45,7 @@ public class BridgeHelper {
 
     /** Gets a participant for the given user in the given study. */
     public StudyParticipant getParticipant(String studyId, String userId) throws IOException {
-        return clientManager.getClient(ForWorkersApi.class).getParticipantById(studyId, userId, true)
+        return clientManager.getClient(ForWorkersApi.class).getParticipantByIdForStudy(studyId, userId, true)
                 .execute().body();
     }
 
@@ -77,7 +77,7 @@ public class BridgeHelper {
     /** Sends the given message as an SMS to the given user in the given study. */
     public void sendSmsToUser(String studyId, String userId, String message) throws IOException {
         SmsTemplate smsTemplate = new SmsTemplate().message(message);
-        clientManager.getClient(ForWorkersApi.class).sendSmsMessageToParticipant(studyId, userId, smsTemplate)
+        clientManager.getClient(ForWorkersApi.class).sendSmsMessageToParticipantForStudy(studyId, userId, smsTemplate)
                 .execute();
     }
 }

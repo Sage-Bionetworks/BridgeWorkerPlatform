@@ -260,18 +260,18 @@ public class FitBitUserIteratorTest {
     }
 
     private Response<ForwardCursorStringList> makePageResponse(int start, int end, String nextPageOffsetKey) {
-        ForwardCursorStringList forwardCursorStringList = new ForwardCursorStringList();
+        ForwardCursorStringList forwardCursorStringList = mock(ForwardCursorStringList.class);
 
         // Make page elements
         List<String> healthCodeList = new ArrayList<>();
         for (int i = start; i <= end; i++) {
             healthCodeList.add(HEALTH_CODE_PREFIX + i);
         }
-        forwardCursorStringList.setItems(healthCodeList);
+        when(forwardCursorStringList.getItems()).thenReturn(healthCodeList);
 
         // hasNext and nextPageOffsetKey
-        forwardCursorStringList.setHasNext(nextPageOffsetKey != null);
-        forwardCursorStringList.setNextPageOffsetKey(nextPageOffsetKey);
+        when(forwardCursorStringList.isHasNext()).thenReturn(nextPageOffsetKey != null);
+        when(forwardCursorStringList.getNextPageOffsetKey()).thenReturn(nextPageOffsetKey);
 
         // Mock Response and Call to return this.
         Response<ForwardCursorStringList> pageResponse = Response.success(forwardCursorStringList);

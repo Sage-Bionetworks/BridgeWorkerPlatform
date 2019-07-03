@@ -12,6 +12,7 @@ import static org.testng.Assert.assertSame;
 import java.util.Iterator;
 import java.util.List;
 
+import com.google.common.collect.ImmutableList;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.mockito.ArgumentCaptor;
@@ -64,41 +65,46 @@ public class BridgeHelperTest {
     public void getActivityEvents() throws Exception {
         // Set up mocks
         ActivityEvent activityEvent = new ActivityEvent().eventId("test-id");
-        ActivityEventList activityEventList = new ActivityEventList().addItemsItem(activityEvent);
+        ActivityEventList activityEventList = mock(ActivityEventList.class);
+        when(activityEventList.getItems()).thenReturn(ImmutableList.of(activityEvent));
         Response<ActivityEventList> response = Response.success(activityEventList);
 
         Call<ActivityEventList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        when(mockWorkerApi.getActivityEventsForParticipant(STUDY_ID, USER_ID)).thenReturn(mockCall);
+        when(mockWorkerApi.getActivityEventsForParticipantAndStudy(STUDY_ID, USER_ID)).thenReturn(mockCall);
 
         // Execute and validate
         List<ActivityEvent> outputList = bridgeHelper.getActivityEvents(STUDY_ID, USER_ID);
         assertEquals(outputList.size(), 1);
         assertEquals(outputList.get(0), activityEvent);
 
-        verify(mockWorkerApi).getActivityEventsForParticipant(STUDY_ID, USER_ID);
+        verify(mockWorkerApi).getActivityEventsForParticipantAndStudy(STUDY_ID, USER_ID);
     }
 
     @Test
     public void getAllAccountSummaries() throws Exception {
         // AccountSummaryIterator calls Bridge during construction. This is tested elsewhere. For this test, just test
         // that the args to BridgeHelper as passed through to Bridge.
-        AccountSummary accountSummary = new AccountSummary().id(USER_ID);
-        AccountSummaryList accountSummaryList = new AccountSummaryList().addItemsItem(accountSummary);
+        AccountSummary accountSummary = mock(AccountSummary.class);
+        when(accountSummary.getId()).thenReturn(USER_ID);
+
+        AccountSummaryList accountSummaryList = mock(AccountSummaryList.class);
+        when(accountSummaryList.getItems()).thenReturn(ImmutableList.of(accountSummary));
+
         Response<AccountSummaryList> response = Response.success(accountSummaryList);
 
         Call<AccountSummaryList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        when(mockWorkerApi.getParticipants(eq(STUDY_ID), any(), any(), any(), any(), any(), any())).thenReturn(
+        when(mockWorkerApi.getParticipantsForStudy(eq(STUDY_ID), any(), any(), any(), any(), any(), any())).thenReturn(
                 mockCall);
 
         // Execute and validate
         Iterator<AccountSummary> accountSummaryIterator = bridgeHelper.getAllAccountSummaries(STUDY_ID);
         assertNotNull(accountSummaryIterator);
 
-        verify(mockWorkerApi).getParticipants(eq(STUDY_ID), any(), any(), any(), any(), any(), any());
+        verify(mockWorkerApi).getParticipantsForStudy(eq(STUDY_ID), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -112,20 +118,21 @@ public class BridgeHelperTest {
         Call<StudyParticipant> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        when(mockWorkerApi.getParticipantById(STUDY_ID, USER_ID, true)).thenReturn(mockCall);
+        when(mockWorkerApi.getParticipantByIdForStudy(STUDY_ID, USER_ID, true)).thenReturn(mockCall);
 
         // Execute and validate
         StudyParticipant output = bridgeHelper.getParticipant(STUDY_ID, USER_ID);
         assertEquals(output.getId(), USER_ID);
 
-        verify(mockWorkerApi).getParticipantById(STUDY_ID, USER_ID, true);
+        verify(mockWorkerApi).getParticipantByIdForStudy(STUDY_ID, USER_ID, true);
     }
 
     @Test
     public void getParticipantReports() throws Exception {
         // Set up mocks.
         ReportData dummyReport = new ReportData();
-        ReportDataList reportDataList = new ReportDataList().addItemsItem(dummyReport);
+        ReportDataList reportDataList = mock(ReportDataList.class);
+        when(reportDataList.getItems()).thenReturn(ImmutableList.of(dummyReport));
         Response<ReportDataList> response = Response.success(reportDataList);
 
         Call<ReportDataList> mockCall = mock(Call.class);
@@ -147,14 +154,14 @@ public class BridgeHelperTest {
     public void getSurveyHistory() throws Exception {
         // Similarly for SurveyHistoryIterator.
         ScheduledActivity activity = new ScheduledActivity().guid("test-guid");
-        ForwardCursorScheduledActivityList activityList = new ForwardCursorScheduledActivityList().addItemsItem(
-                activity);
+        ForwardCursorScheduledActivityList activityList = mock(ForwardCursorScheduledActivityList.class);
+        when(activityList.getItems()).thenReturn(ImmutableList.of(activity));
         Response<ForwardCursorScheduledActivityList> response = Response.success(activityList);
 
         Call<ForwardCursorScheduledActivityList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        when(mockWorkerApi.getParticipantSurveyHistory(eq(STUDY_ID), eq(USER_ID), eq(SURVEY_GUID),
+        when(mockWorkerApi.getParticipantSurveyHistoryForStudy(eq(STUDY_ID), eq(USER_ID), eq(SURVEY_GUID),
                 eq(SCHEDULED_ON_START), eq(SCHEDULED_ON_END), any(), any())).thenReturn(mockCall);
 
         // Execute and validate
@@ -162,7 +169,7 @@ public class BridgeHelperTest {
                 SURVEY_GUID, SCHEDULED_ON_START, SCHEDULED_ON_END);
         assertNotNull(surveyHistoryIterator);
 
-        verify(mockWorkerApi).getParticipantSurveyHistory(eq(STUDY_ID), eq(USER_ID), eq(SURVEY_GUID),
+        verify(mockWorkerApi).getParticipantSurveyHistoryForStudy(eq(STUDY_ID), eq(USER_ID), eq(SURVEY_GUID),
                 eq(SCHEDULED_ON_START), eq(SCHEDULED_ON_END), any(), any());
     }
 
@@ -170,14 +177,14 @@ public class BridgeHelperTest {
     public void getTaskHistory() throws Exception {
         // Similarly for TaskHistoryIterator.
         ScheduledActivity activity = new ScheduledActivity().guid("test-guid");
-        ForwardCursorScheduledActivityList activityList = new ForwardCursorScheduledActivityList().addItemsItem(
-                activity);
+        ForwardCursorScheduledActivityList activityList = mock(ForwardCursorScheduledActivityList.class);
+        when(activityList.getItems()).thenReturn(ImmutableList.of(activity));
         Response<ForwardCursorScheduledActivityList> response = Response.success(activityList);
 
         Call<ForwardCursorScheduledActivityList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        when(mockWorkerApi.getParticipantTaskHistory(eq(STUDY_ID), eq(USER_ID), eq(TASK_ID), eq(SCHEDULED_ON_START),
+        when(mockWorkerApi.getParticipantTaskHistoryForStudy(eq(STUDY_ID), eq(USER_ID), eq(TASK_ID), eq(SCHEDULED_ON_START),
                 eq(SCHEDULED_ON_END), any(), any())).thenReturn(mockCall);
 
         // Execute and validate
@@ -185,7 +192,7 @@ public class BridgeHelperTest {
                 SCHEDULED_ON_START, SCHEDULED_ON_END);
         assertNotNull(taskHistoryIterator);
 
-        verify(mockWorkerApi).getParticipantTaskHistory(eq(STUDY_ID), eq(USER_ID), eq(TASK_ID), eq(SCHEDULED_ON_START),
+        verify(mockWorkerApi).getParticipantTaskHistoryForStudy(eq(STUDY_ID), eq(USER_ID), eq(TASK_ID), eq(SCHEDULED_ON_START),
                 eq(SCHEDULED_ON_END), any(), any());
     }
 
@@ -193,13 +200,13 @@ public class BridgeHelperTest {
     public void sendSmsToUser() throws Exception {
         // Set up mocks
         Call<Message> mockCall = mock(Call.class);
-        when(mockWorkerApi.sendSmsMessageToParticipant(eq(STUDY_ID), eq(USER_ID), any())).thenReturn(mockCall);
+        when(mockWorkerApi.sendSmsMessageToParticipantForStudy(eq(STUDY_ID), eq(USER_ID), any())).thenReturn(mockCall);
 
         // Execute and validate
         bridgeHelper.sendSmsToUser(STUDY_ID, USER_ID, "dummy message");
 
         ArgumentCaptor<SmsTemplate> smsTemplateCaptor = ArgumentCaptor.forClass(SmsTemplate.class);
-        verify(mockWorkerApi).sendSmsMessageToParticipant(eq(STUDY_ID), eq(USER_ID), smsTemplateCaptor.capture());
+        verify(mockWorkerApi).sendSmsMessageToParticipantForStudy(eq(STUDY_ID), eq(USER_ID), smsTemplateCaptor.capture());
         SmsTemplate smsTemplate = smsTemplateCaptor.getValue();
         assertEquals(smsTemplate.getMessage(), "dummy message");
 

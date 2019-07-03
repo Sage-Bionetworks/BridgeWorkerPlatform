@@ -64,7 +64,7 @@ public class BridgeHelper {
             
             final String temOffsetKey = offsetKey;
             UploadList retBody = workersApi
-                    .getUploads(studyId, startDateTime, endDateTime, MAX_PAGE_SIZE, temOffsetKey).execute()
+                    .getUploadsForStudy(studyId, startDateTime, endDateTime, MAX_PAGE_SIZE, temOffsetKey).execute()
                     .body();
             retList.addAll(retBody.getItems());
             offsetKey = retBody.getNextPageOffsetKey();
@@ -84,10 +84,10 @@ public class BridgeHelper {
         int total;
         do {
             AccountSummaryList summaries = workersApi
-                    .getParticipants(studyId, offset, PARTICIPANT_PAGE_SIZE, null, null, startDateTime, endDateTime)
+                    .getParticipantsForStudy(studyId, offset, PARTICIPANT_PAGE_SIZE, null, null, startDateTime, endDateTime)
                     .execute().body();
             for (AccountSummary summary : summaries.getItems()) {
-                StudyParticipant participant = workersApi.getParticipantById(studyId, summary.getId(), false).execute().body();
+                StudyParticipant participant = workersApi.getParticipantByIdForStudy(studyId, summary.getId(), false).execute().body();
                 retList.add(participant);
                 doSleep();
             }

@@ -54,8 +54,7 @@ public class BridgeHelperTest {
     @Test
     public void redriveUpload_completeImmediately() throws Exception {
         // Mock Upload Complete.
-        UploadValidationStatus status = new UploadValidationStatus().id(UPLOAD_ID).messageList(DUMMY_MESSAGE_LIST)
-                .status(UploadStatus.SUCCEEDED);
+        UploadValidationStatus status = mockUploadValidationStatus(true, UploadStatus.SUCCEEDED);
         mockUploadComplete(status);
 
         // Execute and verify.
@@ -69,13 +68,12 @@ public class BridgeHelperTest {
     @Test
     public void redriveUpload_1Poll() throws Exception {
         // Mock Upload Complete.
-        UploadValidationStatus status = new UploadValidationStatus().id(UPLOAD_ID).status(
+        UploadValidationStatus status = mockUploadValidationStatus(false,
                 UploadStatus.VALIDATION_IN_PROGRESS);
         mockUploadComplete(status);
 
         // Mock polling for upload.
-        Upload upload = new Upload().uploadId(UPLOAD_ID).validationMessageList(DUMMY_MESSAGE_LIST).status(
-                UploadStatus.SUCCEEDED);
+        Upload upload = mockUpload(true, UploadStatus.SUCCEEDED);
         Call<Upload> call = makeGetUploadByIdCall(upload);
         when(mockWorkerApi.getUploadById(UPLOAD_ID)).thenReturn(call);
 
@@ -90,16 +88,15 @@ public class BridgeHelperTest {
     @Test
     public void redriveUpload_multiplePolls() throws Exception {
         // Mock Upload Complete.
-        UploadValidationStatus status = new UploadValidationStatus().id(UPLOAD_ID).status(
+        UploadValidationStatus status = mockUploadValidationStatus(false,
                 UploadStatus.VALIDATION_IN_PROGRESS);
         mockUploadComplete(status);
 
         // Mock polling for upload.
-        Upload uploadInProgress = new Upload().uploadId(UPLOAD_ID).status(UploadStatus.VALIDATION_IN_PROGRESS);
+        Upload uploadInProgress = mockUpload(false, UploadStatus.VALIDATION_IN_PROGRESS);
         Call<Upload> callInProgress = makeGetUploadByIdCall(uploadInProgress);
 
-        Upload uploadSuccess = new Upload().uploadId(UPLOAD_ID).validationMessageList(DUMMY_MESSAGE_LIST).status(
-                UploadStatus.SUCCEEDED);
+        Upload uploadSuccess = mockUpload(true, UploadStatus.SUCCEEDED);
         Call<Upload> callSuccess = makeGetUploadByIdCall(uploadSuccess);
 
         when(mockWorkerApi.getUploadById(UPLOAD_ID)).thenReturn(callInProgress, callInProgress, callSuccess);
@@ -115,12 +112,12 @@ public class BridgeHelperTest {
     @Test
     public void redriveUpload_timeout() throws Exception {
         // Mock Upload Complete.
-        UploadValidationStatus status = new UploadValidationStatus().id(UPLOAD_ID).status(
+        UploadValidationStatus status = mockUploadValidationStatus(false,
                 UploadStatus.VALIDATION_IN_PROGRESS);
         mockUploadComplete(status);
 
         // Mock polling for upload.
-        Upload uploadInProgress = new Upload().uploadId(UPLOAD_ID).status(UploadStatus.VALIDATION_IN_PROGRESS);
+        Upload uploadInProgress = mockUpload(false, UploadStatus.VALIDATION_IN_PROGRESS);
         Call<Upload> callInProgress = makeGetUploadByIdCall(uploadInProgress);
         when(mockWorkerApi.getUploadById(UPLOAD_ID)).thenReturn(callInProgress);
 
@@ -143,6 +140,27 @@ public class BridgeHelperTest {
         when(call.execute()).thenReturn(response);
 
         when(mockWorkerApi.completeUploadSession(any(), any(), any())).thenReturn(call);
+    }
+
+    private static UploadValidationStatus mockUploadValidationStatus(boolean hasValidationMessageList,
+            UploadStatus uploadStatus) {
+        UploadValidationStatus mockStatus = mock(UploadValidationStatus.class);
+        when(mockStatus.getId()).thenReturn(UPLOAD_ID);
+        if (hasValidationMessageList) {
+            when(mockStatus.getMessageList()).thenReturn(DUMMY_MESSAGE_LIST);
+        }
+        when(mockStatus.getStatus()).thenReturn(uploadStatus);
+        return mockStatus;
+    }
+
+    private static Upload mockUpload(boolean hasValidationMessageList, UploadStatus uploadStatus) {
+        Upload mockUpload = mock(Upload.class);
+        when(mockUpload.getUploadId()).thenReturn(UPLOAD_ID);
+        if (hasValidationMessageList) {
+            when(mockUpload.getValidationMessageList()).thenReturn(DUMMY_MESSAGE_LIST);
+        }
+        when(mockUpload.getStatus()).thenReturn(uploadStatus);
+        return mockUpload;
     }
 
     private static Call<Upload> makeGetUploadByIdCall(Upload upload) throws Exception {

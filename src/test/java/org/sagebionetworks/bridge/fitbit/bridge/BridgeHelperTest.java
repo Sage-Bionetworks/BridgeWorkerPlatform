@@ -89,7 +89,8 @@ public class BridgeHelperTest {
 
         List<Study> studyListCol = ImmutableList.of(new Study().identifier("foo-study"), new Study().identifier(
                 "bar-study"));
-        StudyList studyListObj = new StudyList().items(studyListCol);
+        StudyList studyListObj = mock(StudyList.class);
+        when(studyListObj.getItems()).thenReturn(studyListCol);
         Call<StudyList> mockCall = mockCallForValue(studyListObj);
         when(mockApi.getStudies(true)).thenReturn(mockCall);
 
