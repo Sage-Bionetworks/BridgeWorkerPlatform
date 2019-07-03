@@ -43,6 +43,7 @@ public class TableProcessorTest {
     private static final int COLUMN_MAX_LENGTH = 48;
     private static final String DATE_STRING = "2017-12-11";
     private static final String HEALTH_CODE = "my-health-code";
+    private static final String RAW_DATA_FILEHANDLE_ID = "raw-data-filehandle";
     private static final String STUDY_ID = "test-study";
     private static final long SYNAPSE_DATA_ACCESS_TEAM_ID = 7777L;
     private static final long SYNAPSE_PRINCIPAL_ID = 1234567890L;
@@ -187,8 +188,11 @@ public class TableProcessorTest {
     }
 
     private void addRow(String value) {
-        Map<String, String> row = ImmutableMap.<String, String>builder().put(Constants.COLUMN_HEALTH_CODE, HEALTH_CODE)
-                .put(Constants.COLUMN_CREATED_DATE, DATE_STRING).put(COLUMN_ID, value).build();
+        Map<String, String> row = ImmutableMap.<String, String>builder()
+                .put(Constants.COLUMN_HEALTH_CODE, HEALTH_CODE)
+                .put(Constants.COLUMN_CREATED_DATE, DATE_STRING)
+                .put(Constants.COLUMN_RAW_DATA, RAW_DATA_FILEHANDLE_ID + value)
+                .put(COLUMN_ID, value).build();
         populatedTable.getRowList().add(row);
     }
 
@@ -204,10 +208,13 @@ public class TableProcessorTest {
         String tsvText = new String(tsvBytes);
         String[] tsvLines = tsvText.split("\n");
         assertEquals(tsvLines[0], Constants.COLUMN_HEALTH_CODE + '\t' + Constants.COLUMN_CREATED_DATE + '\t' +
-                COLUMN_ID);
-        assertEquals(tsvLines[1], HEALTH_CODE + '\t' + DATE_STRING + '\t' + "foo");
-        assertEquals(tsvLines[2], HEALTH_CODE + '\t' + DATE_STRING + '\t' + "bar");
-        assertEquals(tsvLines[3], HEALTH_CODE + '\t' + DATE_STRING + '\t' + "baz");
+                Constants.COLUMN_RAW_DATA + '\t' + COLUMN_ID);
+        assertEquals(tsvLines[1], HEALTH_CODE + '\t' + DATE_STRING + '\t' + RAW_DATA_FILEHANDLE_ID + "foo" +
+                '\t' + "foo");
+        assertEquals(tsvLines[2], HEALTH_CODE + '\t' + DATE_STRING + '\t' + RAW_DATA_FILEHANDLE_ID + "bar" +
+                '\t' + "bar");
+        assertEquals(tsvLines[3], HEALTH_CODE + '\t' + DATE_STRING + '\t' + RAW_DATA_FILEHANDLE_ID + "baz" +
+                '\t' + "baz");
     }
 
     private void validateCleanFileSystem() {
@@ -218,7 +225,7 @@ public class TableProcessorTest {
     }
 
     private static void validateColumnModelList(List<ColumnModel> columnModelList) {
-        assertEquals(columnModelList.size(), 3);
+        assertEquals(columnModelList.size(), 4);
 
         assertEquals(columnModelList.get(0).getName(), Constants.COLUMN_HEALTH_CODE);
         assertEquals(columnModelList.get(0).getColumnType(), ColumnType.STRING);
@@ -228,8 +235,11 @@ public class TableProcessorTest {
         assertEquals(columnModelList.get(1).getColumnType(), ColumnType.STRING);
         assertEquals(columnModelList.get(1).getMaximumSize().intValue(), 10);
 
-        assertEquals(columnModelList.get(2).getName(), COLUMN_ID);
-        assertEquals(columnModelList.get(2).getColumnType(), ColumnType.STRING);
-        assertEquals(columnModelList.get(2).getMaximumSize().intValue(), COLUMN_MAX_LENGTH);
+        assertEquals(columnModelList.get(2).getName(), Constants.COLUMN_RAW_DATA);
+        assertEquals(columnModelList.get(2).getColumnType(), ColumnType.FILEHANDLEID);
+
+        assertEquals(columnModelList.get(3).getName(), COLUMN_ID);
+        assertEquals(columnModelList.get(3).getColumnType(), ColumnType.STRING);
+        assertEquals(columnModelList.get(3).getMaximumSize().intValue(), COLUMN_MAX_LENGTH);
     }
 }

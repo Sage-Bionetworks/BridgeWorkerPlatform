@@ -14,6 +14,7 @@ import static org.testng.Assert.assertTrue;
 
 import java.io.File;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -99,23 +100,37 @@ public class UserProcessorTest {
 
     private RequestContext ctx;
     private InMemoryFileHelper inMemoryFileHelper;
-    private byte[] uploadedFileBytes;
+    private List<byte[]> uploadedFileBytesList;
     private String mockHttpResponse;
     private SynapseHelper mockSynapseHelper;
+    int numFilesUploaded;
     private UserProcessor processor;
 
     @BeforeMethod
     public void setup() throws Exception {
         // Reset test params, because sometimes TestNG doesn't.
         mockHttpResponse = null;
-        uploadedFileBytes = null;
+        numFilesUploaded = 0;
+        uploadedFileBytesList = new ArrayList<>();
 
         // Create in-memory file helper with temp dir.
         inMemoryFileHelper = new InMemoryFileHelper();
         File tempDir = inMemoryFileHelper.createTempDir();
 
-        // Mock Synapse Helper.
+        // Mock Synapse Helper. We need to capture the file bytes while it's being uploaded, because we delete the file
+        // immediately afterwards.
         mockSynapseHelper = mock(SynapseHelper.class);
+        when(mockSynapseHelper.createFileHandleWithRetry(any())).thenAnswer(invocation -> {
+            // Save file bytes
+            File uploadedFile = invocation.getArgumentAt(0, File.class);
+            uploadedFileBytesList.add(inMemoryFileHelper.getBytes(uploadedFile));
+
+            // Mock and return file handle
+            FileHandle mockFileHandle = mock(FileHandle.class);
+            when(mockFileHandle.getId()).thenReturn(FILEHANDLE_ID + numFilesUploaded);
+            numFilesUploaded++;
+            return mockFileHandle;
+        });
 
         // Spy processor so we can mock out the rest call.
         processor = spy(new UserProcessor());
@@ -144,7 +159,8 @@ public class UserProcessorTest {
 
         List<Map<String, String>> rowList = validatePopulatedTablesById();
         assertEquals(rowList.size(), 1);
-        validateRow(rowList.get(0), "Just one value");
+        validateRow(rowList.get(0), "Just one value", 0);
+        verifyFileHelperClean();
 
         verify(processor).makeHttpRequest(URL, ACCESS_TOKEN);
         verify(processor, never()).warnWrapper(any());
@@ -166,9 +182,10 @@ public class UserProcessorTest {
 
         List<Map<String, String>> rowList = validatePopulatedTablesById();
         assertEquals(rowList.size(), 3);
-        validateRow(rowList.get(0), "foo");
-        validateRow(rowList.get(1), "bar");
-        validateRow(rowList.get(2), "baz");
+        validateRow(rowList.get(0), "foo", 0);
+        validateRow(rowList.get(1), "bar", 1);
+        validateRow(rowList.get(2), "baz", 2);
+        verifyFileHelperClean();
 
         verify(processor).makeHttpRequest(URL, ACCESS_TOKEN);
         verify(processor, never()).warnWrapper(any());
@@ -201,7 +218,8 @@ public class UserProcessorTest {
         List<Map<String, String>> rowList = validatePopulatedTablesById();
         assertEquals(rowList.size(), 2);
         assertEquals(rowList.get(0), previousUsersRowMap);
-        validateRow(rowList.get(1), "current user's data");
+        validateRow(rowList.get(1), "current user's data", 0);
+        verifyFileHelperClean();
 
         verify(processor).makeHttpRequest(URL, ACCESS_TOKEN);
         verify(processor, never()).warnWrapper(any());
@@ -270,9 +288,22 @@ public class UserProcessorTest {
         // Execute and validate
         processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
 
+        // Row value map only has common fields and raw data.
         List<Map<String, String>> rowList = validatePopulatedTablesById();
-        assertTrue(rowList.isEmpty());
+        assertEquals(rowList.size(), 1);
+        Map<String, String> rowValueMap = rowList.get(0);
+        assertEquals(rowValueMap.size(), 3);
+        assertEquals(rowValueMap.get(Constants.COLUMN_HEALTH_CODE), HEALTH_CODE);
+        assertEquals(rowValueMap.get(Constants.COLUMN_CREATED_DATE), DATE_STRING);
+        assertEquals(rowValueMap.get(Constants.COLUMN_RAW_DATA), FILEHANDLE_ID + 0);
 
+        // Validate raw data.
+        JsonNode rawDataNode = DefaultObjectMapper.INSTANCE.readTree(uploadedFileBytesList.get(0));
+        assertEquals(rawDataNode.size(), 1);
+        assertEquals(rawDataNode.get("wrong-column").textValue(), "value is ignored");
+        verifyFileHelperClean();
+
+        // Verify spied calls.
         verify(processor).makeHttpRequest(URL, ACCESS_TOKEN);
         verify(processor).warnWrapper("Unexpected column wrong-column in table " + TABLE_ID + " for user " +
                 HEALTH_CODE);
@@ -307,9 +338,22 @@ public class UserProcessorTest {
         // Execute and validate
         processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
 
+        // Row value map only has common fields and raw data.
         List<Map<String, String>> rowList = validatePopulatedTablesById();
-        assertTrue(rowList.isEmpty());
+        assertEquals(rowList.size(), 1);
+        Map<String, String> rowValueMap = rowList.get(0);
+        assertEquals(rowValueMap.size(), 3);
+        assertEquals(rowValueMap.get(Constants.COLUMN_HEALTH_CODE), HEALTH_CODE);
+        assertEquals(rowValueMap.get(Constants.COLUMN_CREATED_DATE), DATE_STRING);
+        assertEquals(rowValueMap.get(Constants.COLUMN_RAW_DATA), FILEHANDLE_ID + 0);
 
+        // Validate raw data.
+        JsonNode rawDataNode = DefaultObjectMapper.INSTANCE.readTree(uploadedFileBytesList.get(0));
+        assertEquals(rawDataNode.size(), 1);
+        assertTrue(rawDataNode.get(COLUMN_ID).isNull());
+        verifyFileHelperClean();
+
+        // Verify spied calls.
         verify(processor).makeHttpRequest(URL, ACCESS_TOKEN);
         verify(processor, never()).warnWrapper(any());
     }
@@ -341,11 +385,25 @@ public class UserProcessorTest {
         return populatedTable.getRowList();
     }
 
-    private static void validateRow(Map<String, String> rowValueMap, String expected) {
-        assertEquals(rowValueMap.size(), 3);
+    private void validateRow(Map<String, String> rowValueMap, String expected, int expectedFileIndex)
+            throws Exception {
+        // Validate row map.
+        assertEquals(rowValueMap.size(), 4);
         assertEquals(rowValueMap.get(Constants.COLUMN_HEALTH_CODE), HEALTH_CODE);
         assertEquals(rowValueMap.get(Constants.COLUMN_CREATED_DATE), DATE_STRING);
+        assertEquals(rowValueMap.get(Constants.COLUMN_RAW_DATA), FILEHANDLE_ID + expectedFileIndex);
         assertEquals(rowValueMap.get(COLUMN_ID), expected);
+
+        // Validate raw data. For this test, raw data is always an object with a single key COLUMN_ID with String value
+        // expected.
+        JsonNode rawDataNode = DefaultObjectMapper.INSTANCE.readTree(uploadedFileBytesList.get(expectedFileIndex));
+        assertEquals(rawDataNode.size(), 1);
+        assertEquals(rawDataNode.get(COLUMN_ID).textValue(), expected);
+    }
+
+    private void verifyFileHelperClean() {
+        inMemoryFileHelper.deleteDir(ctx.getTmpDir());
+        assertTrue(inMemoryFileHelper.isEmpty());
     }
 
     @DataProvider(name = "serializeDataProvider")
@@ -389,19 +447,6 @@ public class UserProcessorTest {
 
     @Test
     public void serializeFileHandler() throws Exception {
-        // Mock Synapse Helper. We need to capture the file bytes while it's being uploaded, because we delete the file
-        // immediately afterwards.
-        when(mockSynapseHelper.createFileHandleWithRetry(any())).thenAnswer(invocation -> {
-            // Save file bytes
-            File uploadedFile = invocation.getArgumentAt(0, File.class);
-            uploadedFileBytes = inMemoryFileHelper.getBytes(uploadedFile);
-
-            // Mock and return file handle
-            FileHandle mockFileHandle = mock(FileHandle.class);
-            when(mockFileHandle.getId()).thenReturn(FILEHANDLE_ID);
-            return mockFileHandle;
-        });
-
         // Set up JSON value
         ObjectNode node = DefaultObjectMapper.INSTANCE.createObjectNode();
         node.put("foo", "foo-value");
@@ -409,10 +454,10 @@ public class UserProcessorTest {
 
         // Execute and validate
         String result = processor.serializeJsonForColumn(ctx, node, FILEHANDLE_COLUMN);
-        assertEquals(result, FILEHANDLE_ID);
+        assertEquals(result, FILEHANDLE_ID + 0);
 
         // Validate uploaded file contents
-        JsonNode uploadedNode = DefaultObjectMapper.INSTANCE.readTree(uploadedFileBytes);
+        JsonNode uploadedNode = DefaultObjectMapper.INSTANCE.readTree(uploadedFileBytesList.get(0));
         assertEquals(uploadedNode, node);
 
         // Make sure we deleted the file when we are done

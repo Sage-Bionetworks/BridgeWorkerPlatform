@@ -39,10 +39,11 @@ public class UtilsTest {
 
         // Execute and validate.
         List<ColumnSchema> allColumnList = Utils.getAllColumnsForTable(populatedTable);
-        assertEquals(allColumnList.size(), 3);
+        assertEquals(allColumnList.size(), 4);
         assertEquals(allColumnList.get(0), Utils.COMMON_COLUMN_LIST.get(0));
         assertEquals(allColumnList.get(1), Utils.COMMON_COLUMN_LIST.get(1));
-        assertEquals(allColumnList.get(2), myColumnSchema);
+        assertEquals(allColumnList.get(2), Utils.COMMON_COLUMN_LIST.get(2));
+        assertEquals(allColumnList.get(3), myColumnSchema);
     }
 
     @Test
