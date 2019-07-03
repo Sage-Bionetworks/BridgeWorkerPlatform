@@ -252,7 +252,7 @@ public class UserProcessor {
     private String uploadJsonAsFileHandle(RequestContext ctx, JsonNode node, String filename) throws IOException,
             SynapseException {
         // Append a random string to the filename to make it probabilistically unique.
-        String uniqueFilename = filename + RandomStringUtils.randomAlphabetic(4);
+        String uniqueFilename = filename + RandomStringUtils.randomAlphabetic(4) + ".json";
 
         // Write value to temp file on disk.
         File fileToUpload = fileHelper.newFile(ctx.getTmpDir(), uniqueFilename);
