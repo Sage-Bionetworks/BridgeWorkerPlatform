@@ -52,7 +52,8 @@ public class UploadRedriveWorkerProcessorProcessIdTest {
     @Test
     public void byRecordId() throws Exception {
         // Mock Bridge Helper.
-        Upload upload = new Upload().uploadId(UPLOAD_ID);
+        Upload upload = mock(Upload.class);
+        when(upload.getUploadId()).thenReturn(UPLOAD_ID);
         when(mockBridgeHelper.getUploadByRecordId(RECORD_ID)).thenReturn(upload);
 
         UploadStatusAndMessages status = new UploadStatusAndMessages(UPLOAD_ID, null,

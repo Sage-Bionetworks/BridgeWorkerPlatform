@@ -21,7 +21,7 @@ public class SurveyHistoryIterator extends ActivityHistoryIterator {
 
     @Override
     protected ForwardCursorScheduledActivityList callServerForNextPage(String offsetKey) throws IOException {
-        return clientManager.getClient(ForWorkersApi.class).getParticipantSurveyHistory(studyId, userId, activityKey,
+        return clientManager.getClient(ForWorkersApi.class).getParticipantSurveyHistoryForStudy(studyId, userId, activityKey,
                 scheduledOnStart, scheduledOnEnd, offsetKey, PAGE_SIZE).execute().body();
     }
 }

@@ -42,7 +42,7 @@ public class AccountSummaryIterator implements Iterator<AccountSummary> {
             // HACK: We use "1" for the phone filter. This is because we want to filter out any accounts that don't
             // have phone numbers. Right now, all phone accounts are in the US, so we can simply use the country code
             // ("1") in the filter.
-            accountSummaryList = clientManager.getClient(ForWorkersApi.class).getParticipants(studyId, numAccounts,
+            accountSummaryList = clientManager.getClient(ForWorkersApi.class).getParticipantsForStudy(studyId, numAccounts,
                     PAGE_SIZE, null, "1", null, null).execute().body();
         } catch (IOException ex) {
             // Iterator can't throw exceptions. Wrap in a RuntimeException.

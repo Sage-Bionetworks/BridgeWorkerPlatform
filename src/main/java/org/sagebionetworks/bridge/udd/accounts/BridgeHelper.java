@@ -24,7 +24,7 @@ public class BridgeHelper {
     /** Gets account information (email address, healthcode) for the given account ID. */
     public AccountInfo getAccountInfo(String studyId, String userId)
             throws IOException, PollSqsWorkerBadRequestException {
-        StudyParticipant participant = bridgeClientManager.getClient(ForWorkersApi.class).getParticipantById(
+        StudyParticipant participant = bridgeClientManager.getClient(ForWorkersApi.class).getParticipantByIdForStudy(
                 studyId, userId, false).execute().body();
         AccountInfo.Builder builder = new AccountInfo.Builder().withHealthCode(participant.getHealthCode())
                 .withUserId(userId);

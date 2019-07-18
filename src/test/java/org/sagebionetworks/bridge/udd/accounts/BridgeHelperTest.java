@@ -37,7 +37,7 @@ public class BridgeHelperTest {
         when(mockCall.execute()).thenReturn(response);
 
         ForWorkersApi mockWorkerApi = mock(ForWorkersApi.class);
-        when(mockWorkerApi.getParticipantById(STUDY_ID, USER_ID, false)).thenReturn(mockCall);
+        when(mockWorkerApi.getParticipantByIdForStudy(STUDY_ID, USER_ID, false)).thenReturn(mockCall);
 
         ClientManager mockClientManager = mock(ClientManager.class);
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
@@ -68,7 +68,7 @@ public class BridgeHelperTest {
         when(mockCall.execute()).thenReturn(response);
 
         ForWorkersApi mockWorkerApi = mock(ForWorkersApi.class);
-        when(mockWorkerApi.getParticipantById(STUDY_ID, USER_ID, false)).thenReturn(mockCall);
+        when(mockWorkerApi.getParticipantByIdForStudy(STUDY_ID, USER_ID, false)).thenReturn(mockCall);
 
         ClientManager mockClientManager = mock(ClientManager.class);
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
@@ -101,7 +101,7 @@ public class BridgeHelperTest {
         when(mockCall.execute()).thenReturn(response);
 
         ForWorkersApi mockWorkerApi = mock(ForWorkersApi.class);
-        when(mockWorkerApi.getParticipantById(STUDY_ID, USER_ID, false)).thenReturn(mockCall);
+        when(mockWorkerApi.getParticipantByIdForStudy(STUDY_ID, USER_ID, false)).thenReturn(mockCall);
 
         ClientManager mockClientManager = mock(ClientManager.class);
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);

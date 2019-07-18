@@ -79,7 +79,8 @@ public class BridgeHelperTest {
     @Test
     public void testGetAllStudiesSummary() throws Exception {
         // mock SDK get studies call
-        StudyList studySummaryList = new StudyList().addItemsItem(TEST_STUDY_SUMMARY);
+        StudyList studySummaryList = mock(StudyList.class);
+        when(studySummaryList.getItems()).thenReturn(ImmutableList.of(TEST_STUDY_SUMMARY));
         Response<StudyList> response = Response.success(studySummaryList);
 
         Call<StudyList> mockCall = mock(Call.class);
@@ -102,14 +103,15 @@ public class BridgeHelperTest {
     @Test
     public void testGetUploadsForStudy() throws Exception {
         // mock SDK get uploads call
-        UploadList uploadList = new UploadList().addItemsItem(testUpload);
+        UploadList uploadList = mock(UploadList.class);
+        when(uploadList.getItems()).thenReturn(ImmutableList.of(testUpload));
         Response<UploadList> response = Response.success(uploadList);
 
         Call<UploadList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
         ForWorkersApi mockWorkerClient = mock(ForWorkersApi.class);
-        when(mockWorkerClient.getUploads(TEST_STUDY_ID, TEST_START_DATETIME, TEST_END_DATETIME, MAX_PAGE_SIZE, null)).thenReturn(
+        when(mockWorkerClient.getUploadsForStudy(TEST_STUDY_ID, TEST_START_DATETIME, TEST_END_DATETIME, MAX_PAGE_SIZE, null)).thenReturn(
                 mockCall);
 
         ClientManager mockClientManager = mock(ClientManager.class);
@@ -127,10 +129,12 @@ public class BridgeHelperTest {
     @Test
     public void testGetUploadsForStudyPaginated() throws Exception {
         // mock SDK get uploads call
-        UploadList uploadList = new UploadList().addItemsItem(testUpload);
-        uploadList.setNextPageOffsetKey("offsetKey");
+        UploadList uploadList = mock(UploadList.class);
+        when(uploadList.getItems()).thenReturn(ImmutableList.of(testUpload));
+        when(uploadList.getNextPageOffsetKey()).thenReturn("offsetKey");
         Response<UploadList> response = Response.success(uploadList);
-        UploadList secondUploadList = new UploadList().addItemsItem(testUpload);
+        UploadList secondUploadList = mock(UploadList.class);
+        when(secondUploadList.getItems()).thenReturn(ImmutableList.of(testUpload));
         Response<UploadList> secondResponse = Response.success(secondUploadList);
 
         // return twice
@@ -140,9 +144,9 @@ public class BridgeHelperTest {
         when(secondMockCall.execute()).thenReturn(secondResponse);
 
         ForWorkersApi mockWorkerClient = mock(ForWorkersApi.class);
-        when(mockWorkerClient.getUploads(TEST_STUDY_ID, TEST_START_DATETIME, TEST_END_DATETIME, MAX_PAGE_SIZE, null)).thenReturn(
+        when(mockWorkerClient.getUploadsForStudy(TEST_STUDY_ID, TEST_START_DATETIME, TEST_END_DATETIME, MAX_PAGE_SIZE, null)).thenReturn(
                 mockCall);
-        when(mockWorkerClient.getUploads(TEST_STUDY_ID, TEST_START_DATETIME, TEST_END_DATETIME, MAX_PAGE_SIZE, "offsetKey")).thenReturn(
+        when(mockWorkerClient.getUploadsForStudy(TEST_STUDY_ID, TEST_START_DATETIME, TEST_END_DATETIME, MAX_PAGE_SIZE, "offsetKey")).thenReturn(
                 secondMockCall);
 
         ClientManager mockClientManager = mock(ClientManager.class);
@@ -158,7 +162,7 @@ public class BridgeHelperTest {
 
         // verify
         // called twice
-        verify(mockWorkerClient, times(2)).getUploads(any(), any(), any(), any(), any());
+        verify(mockWorkerClient, times(2)).getUploadsForStudy(any(), any(), any(), any(), any());
         // contain 2 test uploads
         assertEquals(retUploadsForStudy, ImmutableList.of(testUpload, testUpload));
     }
@@ -192,18 +196,18 @@ public class BridgeHelperTest {
         ClientManager mockClientManager = mock(ClientManager.class);
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerClient);
 
-        AccountSummary summary1 = new AccountSummary().id(USER_ID_1).email(USER_EMAIL_1);
-        AccountSummary summary2 = new AccountSummary().id(USER_ID_2).email(USER_EMAIL_2);
-        
+        AccountSummary summary1 = mockAccountSummary(USER_ID_1, USER_EMAIL_1);
+        AccountSummary summary2 = mockAccountSummary(USER_ID_2, USER_EMAIL_2);
+
         Call<AccountSummaryList> mockCall1 = createResponseForOffset(0, summary1, summary2);
-        when(mockWorkerClient.getParticipants(TEST_STUDY_ID, 0, 100, null, null, TEST_START_DATETIME,
+        when(mockWorkerClient.getParticipantsForStudy(TEST_STUDY_ID, 0, 100, null, null, TEST_START_DATETIME,
                 TEST_END_DATETIME)).thenReturn(mockCall1);
 
-        AccountSummary summary3 = new AccountSummary().id(USER_ID_3).email(USER_EMAIL_3);
-        AccountSummary summary4 = new AccountSummary().id(USER_ID_4).email(USER_EMAIL_4);
-        
+        AccountSummary summary3 = mockAccountSummary(USER_ID_3, USER_EMAIL_3);
+        AccountSummary summary4 = mockAccountSummary(USER_ID_4, USER_EMAIL_4);
+
         Call<AccountSummaryList> mockCall2 = createResponseForOffset(100, summary3, summary4);
-        when(mockWorkerClient.getParticipants(TEST_STUDY_ID, 100, 100, null, null, TEST_START_DATETIME,
+        when(mockWorkerClient.getParticipantsForStudy(TEST_STUDY_ID, 100, 100, null, null, TEST_START_DATETIME,
                 TEST_END_DATETIME)).thenReturn(mockCall2);
         
         List<StudyParticipant> stubParticipants = newArrayList();
@@ -223,20 +227,27 @@ public class BridgeHelperTest {
         assertEquals(participants.get(2), stubParticipants.get(2));
         assertEquals(participants.get(3), stubParticipants.get(3));
         
-        verify(mockWorkerClient).getParticipants(TEST_STUDY_ID, 0, 100, null, null, TEST_START_DATETIME,
+        verify(mockWorkerClient).getParticipantsForStudy(TEST_STUDY_ID, 0, 100, null, null, TEST_START_DATETIME,
                 TEST_END_DATETIME);
-        verify(mockWorkerClient).getParticipants(TEST_STUDY_ID, 100, 100, null, null, TEST_START_DATETIME,
+        verify(mockWorkerClient).getParticipantsForStudy(TEST_STUDY_ID, 100, 100, null, null, TEST_START_DATETIME,
                 TEST_END_DATETIME);
-        verify(mockWorkerClient).getParticipantById(TEST_STUDY_ID, USER_ID_1, false);
-        verify(mockWorkerClient).getParticipantById(TEST_STUDY_ID, USER_ID_2, false);
-        verify(mockWorkerClient).getParticipantById(TEST_STUDY_ID, USER_ID_3, false);
-        verify(mockWorkerClient).getParticipantById(TEST_STUDY_ID, USER_ID_4, false);
+        verify(mockWorkerClient).getParticipantByIdForStudy(TEST_STUDY_ID, USER_ID_1, false);
+        verify(mockWorkerClient).getParticipantByIdForStudy(TEST_STUDY_ID, USER_ID_2, false);
+        verify(mockWorkerClient).getParticipantByIdForStudy(TEST_STUDY_ID, USER_ID_3, false);
+        verify(mockWorkerClient).getParticipantByIdForStudy(TEST_STUDY_ID, USER_ID_4, false);
     }
-    
+
+    private static AccountSummary mockAccountSummary(String id, String email) {
+        AccountSummary mockSummary = mock(AccountSummary.class);
+        when(mockSummary.getId()).thenReturn(id);
+        when(mockSummary.getEmail()).thenReturn(email);
+        return mockSummary;
+    }
+
     private StudyParticipant mockCallForParticipant(ForWorkersApi client, String userId) throws Exception {
         StudyParticipant studyParticipant = new StudyParticipant();
         Call<StudyParticipant> spCall = makeCall(studyParticipant);
-        when(client.getParticipantById(TEST_STUDY_ID, userId, false)).thenReturn(spCall);
+        when(client.getParticipantByIdForStudy(TEST_STUDY_ID, userId, false)).thenReturn(spCall);
         return studyParticipant;
     }
     
@@ -256,14 +267,11 @@ public class BridgeHelperTest {
         when(mockRequestParams.getStartTime()).thenReturn(TEST_START_DATETIME);
         when(mockRequestParams.getEndTime()).thenReturn(TEST_END_DATETIME);
 
-        AccountSummaryList list = new AccountSummaryList();
-        list.setItems(page);
-        list.setRequestParams(mockRequestParams);
-        list.setTotal(120);
-
-        for (AccountSummary summary : summaries) {
-            list.addItemsItem(summary);
-        }
+        AccountSummaryList list = mock(AccountSummaryList.class);
+        when(list.getItems()).thenReturn(page);
+        when(list.getRequestParams()).thenReturn(mockRequestParams);
+        when(list.getTotal()).thenReturn(120);
+        when(list.getItems()).thenReturn(ImmutableList.copyOf(summaries));
         Response<AccountSummaryList> response = Response.success(list);
         
         Call<AccountSummaryList> mockCall = mock(Call.class);

@@ -89,7 +89,7 @@ public class TaskHistoryIteratorTest {
         // Create iterator. Verify initial call to server.
         TaskHistoryIterator iter = new TaskHistoryIterator(mockClientManager, STUDY_ID, USER_ID, TASK_ID,
                 SCHEDULED_ON_START, SCHEDULED_ON_END);
-        verify(mockApi).getParticipantTaskHistory(STUDY_ID, USER_ID, TASK_ID, SCHEDULED_ON_START, SCHEDULED_ON_END,
+        verify(mockApi).getParticipantTaskHistoryForStudy(STUDY_ID, USER_ID, TASK_ID, SCHEDULED_ON_START, SCHEDULED_ON_END,
                 null, TaskHistoryIterator.PAGE_SIZE);
 
         // Make a few extra calls to hasNext(). Verify that no server calls are made
@@ -108,7 +108,7 @@ public class TaskHistoryIteratorTest {
         // Mock page call to throw
         Call<ForwardCursorScheduledActivityList> mockPageCall = mock(Call.class);
         when(mockPageCall.execute()).thenThrow(IOException.class);
-        when(mockApi.getParticipantTaskHistory(STUDY_ID, USER_ID, TASK_ID, SCHEDULED_ON_START, SCHEDULED_ON_END,
+        when(mockApi.getParticipantTaskHistoryForStudy(STUDY_ID, USER_ID, TASK_ID, SCHEDULED_ON_START, SCHEDULED_ON_END,
                 null, TaskHistoryIterator.PAGE_SIZE)).thenReturn(mockPageCall);
 
         // Execute
@@ -125,7 +125,7 @@ public class TaskHistoryIteratorTest {
                 "page3");
         Call<ForwardCursorScheduledActivityList> mockSecondPageCall = mock(Call.class);
         when(mockSecondPageCall.execute()).thenThrow(IOException.class).thenReturn(secondPageResponse);
-        when(mockApi.getParticipantTaskHistory(STUDY_ID, USER_ID, TASK_ID, SCHEDULED_ON_START, SCHEDULED_ON_END,
+        when(mockApi.getParticipantTaskHistoryForStudy(STUDY_ID, USER_ID, TASK_ID, SCHEDULED_ON_START, SCHEDULED_ON_END,
                 "page2", TaskHistoryIterator.PAGE_SIZE)).thenReturn(mockSecondPageCall);
 
         mockApiWithPage("page3", 2, 2, null);
@@ -182,16 +182,16 @@ public class TaskHistoryIteratorTest {
         Response<ForwardCursorScheduledActivityList> pageResponse = makePageResponse(start, end, nextPageOffsetKey);
         Call<ForwardCursorScheduledActivityList> mockPageCall = mock(Call.class);
         when(mockPageCall.execute()).thenReturn(pageResponse);
-        when(mockApi.getParticipantTaskHistory(STUDY_ID, USER_ID, TASK_ID, SCHEDULED_ON_START, SCHEDULED_ON_END,
+        when(mockApi.getParticipantTaskHistoryForStudy(STUDY_ID, USER_ID, TASK_ID, SCHEDULED_ON_START, SCHEDULED_ON_END,
                 curOffsetKey, TaskHistoryIterator.PAGE_SIZE)).thenReturn(mockPageCall);
     }
 
     private Response<ForwardCursorScheduledActivityList> makePageResponse(int start, int end,
             String nextPageOffsetKey) {
         // Make list page
-        ForwardCursorScheduledActivityList forwardCursorStringList = new ForwardCursorScheduledActivityList();
-        forwardCursorStringList.setHasNext(nextPageOffsetKey != null);
-        forwardCursorStringList.setNextPageOffsetKey(nextPageOffsetKey);
+        ForwardCursorScheduledActivityList forwardCursorStringList = mock(ForwardCursorScheduledActivityList.class);
+        when(forwardCursorStringList.isHasNext()).thenReturn(nextPageOffsetKey != null);
+        when(forwardCursorStringList.getNextPageOffsetKey()).thenReturn(nextPageOffsetKey);
 
         // Make page elements
         List<ScheduledActivity> scheduledActivityList = new ArrayList<>();
@@ -200,7 +200,7 @@ public class TaskHistoryIteratorTest {
             scheduledActivity.setGuid(ACTIVITY_GUID_PREFIX + i);
             scheduledActivityList.add(scheduledActivity);
         }
-        forwardCursorStringList.setItems(scheduledActivityList);
+        when(forwardCursorStringList.getItems()).thenReturn(scheduledActivityList);
 
         // Mock Response and Call to return this.
         Response<ForwardCursorScheduledActivityList> pageResponse = Response.success(forwardCursorStringList);

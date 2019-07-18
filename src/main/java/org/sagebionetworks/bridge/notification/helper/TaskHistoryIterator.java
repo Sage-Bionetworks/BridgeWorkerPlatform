@@ -21,7 +21,7 @@ public class TaskHistoryIterator extends ActivityHistoryIterator {
 
     @Override
     protected ForwardCursorScheduledActivityList callServerForNextPage(String offsetKey) throws IOException {
-        return clientManager.getClient(ForWorkersApi.class).getParticipantTaskHistory(studyId, userId, activityKey,
+        return clientManager.getClient(ForWorkersApi.class).getParticipantTaskHistoryForStudy(studyId, userId, activityKey,
                 scheduledOnStart, scheduledOnEnd, offsetKey, PAGE_SIZE).execute().body();
     }
 }

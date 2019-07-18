@@ -80,7 +80,7 @@ public class AccountSummaryIteratorTest {
 
         // Create iterator. Verify initial call to server.
         AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, STUDY_ID);
-        verify(mockApi).getParticipants(STUDY_ID, 0, AccountSummaryIterator.PAGE_SIZE, null,
+        verify(mockApi).getParticipantsForStudy(STUDY_ID, 0, AccountSummaryIterator.PAGE_SIZE, null,
                 "1", null, null);
 
         // Make a few extra calls to hasNext(). Verify that no server calls are made
@@ -99,7 +99,7 @@ public class AccountSummaryIteratorTest {
         // Mock page call to throw
         Call<AccountSummaryList> mockPageCall = mock(Call.class);
         when(mockPageCall.execute()).thenThrow(IOException.class);
-        when(mockApi.getParticipants(STUDY_ID, 0, AccountSummaryIterator.PAGE_SIZE, null,
+        when(mockApi.getParticipantsForStudy(STUDY_ID, 0, AccountSummaryIterator.PAGE_SIZE, null,
                 "1", null, null)).thenReturn(mockPageCall);
 
         // Execute
@@ -115,7 +115,7 @@ public class AccountSummaryIteratorTest {
         Response<AccountSummaryList> secondPageResponse = makePageResponse(1, 1, 3);
         Call<AccountSummaryList> mockSecondPageCall = mock(Call.class);
         when(mockSecondPageCall.execute()).thenThrow(IOException.class).thenReturn(secondPageResponse);
-        when(mockApi.getParticipants(STUDY_ID, 1, AccountSummaryIterator.PAGE_SIZE, null,
+        when(mockApi.getParticipantsForStudy(STUDY_ID, 1, AccountSummaryIterator.PAGE_SIZE, null,
                 "1", null, null)).thenReturn(mockSecondPageCall);
 
         mockApiWithPage(2, 1, 3);
@@ -170,23 +170,23 @@ public class AccountSummaryIteratorTest {
         Response<AccountSummaryList> pageResponse = makePageResponse(offset, accountsInPage, total);
         Call<AccountSummaryList> mockPageCall = mock(Call.class);
         when(mockPageCall.execute()).thenReturn(pageResponse);
-        when(mockApi.getParticipants(STUDY_ID, offset, AccountSummaryIterator.PAGE_SIZE, null,
+        when(mockApi.getParticipantsForStudy(STUDY_ID, offset, AccountSummaryIterator.PAGE_SIZE, null,
                 "1", null, null)).thenReturn(mockPageCall);
     }
 
     private Response<AccountSummaryList> makePageResponse(int offset, int accountsInPage, int total) {
         // Make list page
-        AccountSummaryList accountSummaryList = new AccountSummaryList();
-        accountSummaryList.setTotal(total);
+        AccountSummaryList accountSummaryList = mock(AccountSummaryList.class);
+        when(accountSummaryList.getTotal()).thenReturn(total);
 
         // Make page elements
         List<AccountSummary> items = new ArrayList<>();
         for (int i = 0; i < accountsInPage; i++) {
-            AccountSummary accountSummary = new AccountSummary();
-            accountSummary.setId(USER_ID_PREFIX + (offset + i));
+            AccountSummary accountSummary = mock(AccountSummary.class);
+            when(accountSummary.getId()).thenReturn(USER_ID_PREFIX + (offset + i));
             items.add(accountSummary);
         }
-        accountSummaryList.setItems(items);
+        when(accountSummaryList.getItems()).thenReturn(items);
 
         // Mock Response and Call to return this.
         Response<AccountSummaryList> pageResponse = Response.success(accountSummaryList);
