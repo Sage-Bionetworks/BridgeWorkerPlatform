@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -13,6 +14,7 @@ import javax.annotation.Resource;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.RateLimiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -159,6 +161,10 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
     void processStudy(String dateString, Study study, List<String> healthCodeWhitelist) throws WorkerException {
         String studyId = study.getIdentifier();
 
+        // Swagger only supports lists, but we really want this to be a set. (Note that the check for configured
+        // studies ensures this is non-null and non-empty.)
+        Set<String> scopeSet = ImmutableSet.copyOf(study.getFitBitScopes());
+
         // Set up request context
         File tmpDir = fileHelper.createTempDir();
         try {
@@ -193,6 +199,11 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
 
                     // Call and process endpoints.
                     for (EndpointSchema oneEndpointSchema : endpointSchemas) {
+                        if (!scopeSet.contains(oneEndpointSchema.getEndpointId())) {
+                            // Not enabled for this study. Skip.
+                            continue;
+                        }
+
                         try {
                             userProcessor.processEndpointForUser(ctx, oneUser, oneEndpointSchema);
                         } catch (Exception ex) {

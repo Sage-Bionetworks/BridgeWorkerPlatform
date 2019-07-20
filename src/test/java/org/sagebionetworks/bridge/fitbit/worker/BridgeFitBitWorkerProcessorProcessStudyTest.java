@@ -40,7 +40,8 @@ import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 public class BridgeFitBitWorkerProcessorProcessStudyTest {
     private static final String DATE_STRING = "2017-12-11";
     private static final String STUDY_ID = "test-study";
-    private static final Study STUDY = new Study().identifier(STUDY_ID);
+    private static final Study STUDY = new Study().identifier(STUDY_ID).fitBitScopes(ImmutableList.of("endpoint-0",
+            "endpoint-1", "endpoint-2"));
 
     private InMemoryFileHelper fileHelper;
     private BridgeHelper mockBridgeHelper;
@@ -216,11 +217,14 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         FitBitUser user0 = makeUser(0);
         when(mockBridgeHelper.getFitBitUsersForStudy(STUDY_ID)).thenReturn(Iterators.forArray(user0));
 
-        // Mock endpoint schemas, so we don't have to construct the whole thing.
+        // Mock endpoint schemas, so we don't have to construct the whole thing. Note that we have 4 endpoints, but the
+        // study is configured with only endpoints 0-2.
         EndpointSchema mockEndpointSchema0 = mockEndpointSchema(0);
         EndpointSchema mockEndpointSchema1 = mockEndpointSchema(1);
         EndpointSchema mockEndpointSchema2 = mockEndpointSchema(2);
-        processor.setEndpointSchemas(ImmutableList.of(mockEndpointSchema0, mockEndpointSchema1, mockEndpointSchema2));
+        EndpointSchema mockEndpointSchema3 = mockEndpointSchema(3);
+        processor.setEndpointSchemas(ImmutableList.of(mockEndpointSchema0, mockEndpointSchema1, mockEndpointSchema2,
+                mockEndpointSchema3));
 
         // Mock user processor to set up one table in the context.
         doAnswer(invocation -> {
