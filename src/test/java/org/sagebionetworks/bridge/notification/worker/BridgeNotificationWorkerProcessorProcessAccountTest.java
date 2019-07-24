@@ -35,9 +35,11 @@ import org.sagebionetworks.bridge.rest.model.Phone;
 import org.sagebionetworks.bridge.rest.model.ScheduleStatus;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.rest.model.UserConsentHistory;
 
 @SuppressWarnings("JavaReflectionMemberAccess")
 public class BridgeNotificationWorkerProcessorProcessAccountTest {
+    private static final String CLINICAL_CONSENT_GROUP = "clinical_consent";
     private static final String EVENT_ID_ENROLLMENT = "enrollment";
     private static final String EVENT_ID_BURST_2_START = "custom:activityBurst2Start";
     private static final String EXCLUDED_DATA_GROUP_1 = "excluded-group-1";
@@ -54,6 +56,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     private static final String PREBURST_GROUP_2 = "preburst-group-2";
     private static final String STUDY_ID = "test-study";
     private static final String TASK_ID = "study-burst-task";
+    private static final String TEST_NO_CONSENT_GROUP = "test_no_consent";
     private static final String USER_ID = "test-user";
 
     private static final DateTime ENROLLMENT_TIME = DateTime.parse("2018-04-27T18:51:47.159-0700");
@@ -63,6 +66,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
 
     private List<ScheduledActivity> activityList;
     private BridgeHelper mockBridgeHelper;
+    private UserConsentHistory mockConsent;
     private DynamoHelper mockDynamoHelper;
     private StudyParticipant mockParticipant;
     private TemplateVariableHelper mockTemplateVariableHelper;
@@ -97,12 +101,16 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         // Participant needs to be mocked because we can't set ID
         mockParticipant = mock(StudyParticipant.class);
         when(mockParticipant.getId()).thenReturn(USER_ID);
-        when(mockParticipant.isConsented()).thenReturn(true);
         when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-data-group"));
         when(mockParticipant.getPhone()).thenReturn(PHONE);
         when(mockParticipant.isPhoneVerified()).thenReturn(true);
         when(mockParticipant.getTimeZone()).thenReturn("-07:00");
         when(mockBridgeHelper.getParticipant(STUDY_ID, USER_ID)).thenReturn(mockParticipant);
+
+        // Similarly, mock consent.
+        mockConsent = mock(UserConsentHistory.class);
+        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of(STUDY_ID,
+                ImmutableList.of(mockConsent)));
 
         // Mock getTaskHistory - We only ask for events between the burst start and the current date, but for the sake
         // of simpler tests, return all tasks for burst 1.
@@ -194,15 +202,22 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     }
 
     @Test
-    public void notConsented() throws Exception {
-        when(mockParticipant.isConsented()).thenReturn(false);
+    public void nullConsentList() throws Exception {
+        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of());
         processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
     @Test
-    public void nullConsent() throws Exception {
-        when(mockParticipant.isConsented()).thenReturn(null);
+    public void emptyConsentList() throws Exception {
+        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of(STUDY_ID, ImmutableList.of()));
+        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        verifyNoNotification();
+    }
+
+    @Test
+    public void withdrawnConsent() throws Exception {
+        when(mockConsent.getWithdrewOn()).thenReturn(DateTime.parse("2019-07-23T16:47:43.715-0700"));
         processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
@@ -322,6 +337,24 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     public void didNoActivities() throws Exception {
         // This is the "base case" for our tests. Since the majority of our tests do no send notifications, we wanted
         // the basic configuration to send a notification, to help ensure that our tests are working properly.
+        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
+    }
+
+    @Test
+    public void clinicalConsentDoesNotRequireConsent() throws Exception {
+        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of());
+        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group",
+                CLINICAL_CONSENT_GROUP));
+        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
+    }
+
+    @Test
+    public void testNoConsentGroupDoesNotRequireConsent() throws Exception {
+        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of());
+        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group",
+                TEST_NO_CONSENT_GROUP));
         processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
         verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
     }
