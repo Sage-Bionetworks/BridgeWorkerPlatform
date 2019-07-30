@@ -24,6 +24,7 @@ import org.sagebionetworks.bridge.rest.model.Study;
 
 public class UtilsTest {
     private static final long DATA_ACCESS_TEAM_ID = 1234L;
+    private static final String FITBIT_SCOPE = "dummy-scope";
     private static final String PROJECT_ID = "my-project";
     private static final String TABLE_KEY = "my-table-key";
     private static final String TABLE_ID = "my-table-id";
@@ -68,37 +69,49 @@ public class UtilsTest {
 
     @Test
     public void isConfigured() {
-        Study study = new Study().synapseProjectId(PROJECT_ID).synapseDataAccessTeamId(DATA_ACCESS_TEAM_ID)
-                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
-        assertTrue(Utils.isStudyConfigured(study));
+        assertTrue(Utils.isStudyConfigured(makeConfiguredStudy()));
     }
 
     @Test
     public void noSynapseProjectId() {
-        Study study = new Study().synapseProjectId(null).synapseDataAccessTeamId(DATA_ACCESS_TEAM_ID)
-                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
+        Study study = makeConfiguredStudy().synapseProjectId(null);
         assertFalse(Utils.isStudyConfigured(study));
     }
 
     @Test
     public void noDataAccessTeam() {
-        Study study = new Study().synapseProjectId(PROJECT_ID).synapseDataAccessTeamId(null)
-                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
+        Study study = makeConfiguredStudy().synapseDataAccessTeamId(null);
         assertFalse(Utils.isStudyConfigured(study));
     }
 
     @Test
     public void noOAuthProviders() {
-        Study study = new Study().synapseProjectId(PROJECT_ID).synapseDataAccessTeamId(DATA_ACCESS_TEAM_ID)
-                .oAuthProviders(null);
+        Study study = makeConfiguredStudy().oAuthProviders(null);
         assertFalse(Utils.isStudyConfigured(study));
     }
 
     @Test
     public void oAuthProvidersDontContainFitBit() {
-        Study study = new Study().synapseProjectId(PROJECT_ID).synapseDataAccessTeamId(DATA_ACCESS_TEAM_ID)
-                .oAuthProviders(ImmutableMap.of());
+        Study study = makeConfiguredStudy().oAuthProviders(ImmutableMap.of());
         assertFalse(Utils.isStudyConfigured(study));
+    }
+
+    @Test
+    public void nullFitBitScopes() {
+        Study study = makeConfiguredStudy().fitBitScopes(null);
+        assertFalse(Utils.isStudyConfigured(study));
+    }
+
+    @Test
+    public void emptyFitBitScopes() {
+        Study study = makeConfiguredStudy().fitBitScopes(ImmutableList.of());
+        assertFalse(Utils.isStudyConfigured(study));
+    }
+
+    private static Study makeConfiguredStudy() {
+        return new Study().synapseProjectId(PROJECT_ID).synapseDataAccessTeamId(DATA_ACCESS_TEAM_ID)
+                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider())
+                .addFitBitScopesItem(FITBIT_SCOPE);
     }
 
     @Test
