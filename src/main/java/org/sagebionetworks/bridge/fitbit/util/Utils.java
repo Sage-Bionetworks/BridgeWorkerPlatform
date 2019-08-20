@@ -61,9 +61,7 @@ public class Utils {
         return study.getSynapseProjectId() != null
                 && study.getSynapseDataAccessTeamId() != null
                 && study.getOAuthProviders() != null
-                && study.getOAuthProviders().containsKey(Constants.FITBIT_VENDOR_ID)
-                && study.getFitBitScopes() != null
-                && !study.getFitBitScopes().isEmpty();
+                && study.getOAuthProviders().containsKey(Constants.FITBIT_VENDOR_ID);
     }
 
     /** Helper method, which formats and writes a row of values (represented as a String List) to the given Writer. */

@@ -33,6 +33,7 @@ import org.apache.http.client.HttpResponseException;
 import org.mockito.ArgumentCaptor;
 import org.sagebionetworks.repo.model.file.FileHandle;
 import org.sagebionetworks.repo.model.table.ColumnType;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -44,6 +45,7 @@ import org.sagebionetworks.bridge.fitbit.schema.EndpointSchema;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
 import org.sagebionetworks.bridge.fitbit.schema.UrlParameterType;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.rest.model.OAuthAccessToken;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 
@@ -53,6 +55,7 @@ public class UserProcessorTest {
     private static final String ENDPOINT_ID = "my-endpoint";
     private static final String FILEHANDLE_ID = "my-file-handle";
     private static final String IGNORED_KEY = "ignored-key";
+    private static final String SCOPE_NAME = "SCOPE_NAME";
     private static final String TABLE_KEY = "table-key";
     private static final String URL = "http://example.com/users/my-user/date/2017-12-12";
     private static final String URL_PATTERN = "http://example.com/users/%s/date/%s";
@@ -82,8 +85,6 @@ public class UserProcessorTest {
     private static final String ACCESS_TOKEN = "my-access-token";
     private static final String HEALTH_CODE = "my-health-code";
     private static final String USER_ID = "my-user";
-    private static final FitBitUser USER = new FitBitUser.Builder().withAccessToken(ACCESS_TOKEN)
-            .withHealthCode(HEALTH_CODE).withUserId(USER_ID).build();
 
     private static final TableSchema TABLE_SCHEMA;
     private static final EndpointSchema ENDPOINT_SCHEMA;
@@ -93,10 +94,12 @@ public class UserProcessorTest {
         TABLE_SCHEMA = new TableSchema.Builder().withTableKey(TABLE_KEY)
                 .withColumns(ImmutableList.of(columnSchema)).build();
         ENDPOINT_SCHEMA = new EndpointSchema.Builder().withEndpointId(ENDPOINT_ID)
-                .withIgnoredKeys(ImmutableSet.of(IGNORED_KEY)).withUrl(URL_PATTERN)
+                .withIgnoredKeys(ImmutableSet.of(IGNORED_KEY)).withScopeName(SCOPE_NAME).withUrl(URL_PATTERN)
                 .withUrlParameters(ImmutableList.of(UrlParameterType.USER_ID, UrlParameterType.DATE))
                 .withTables(ImmutableList.of(TABLE_SCHEMA)).build();
     }
+
+    private static FitBitUser user;
 
     private RequestContext ctx;
     private InMemoryFileHelper inMemoryFileHelper;
@@ -105,6 +108,17 @@ public class UserProcessorTest {
     private SynapseHelper mockSynapseHelper;
     int numFilesUploaded;
     private UserProcessor processor;
+
+    @BeforeClass
+    public static void beforeClass() {
+        // Mock OAuth token. This is read-only, so it's easier to just mock it instead of using Reflection.
+        OAuthAccessToken oauthToken = mock(OAuthAccessToken.class);
+        when(oauthToken.getAccessToken()).thenReturn(ACCESS_TOKEN);
+        when(oauthToken.getProviderUserId()).thenReturn(USER_ID);
+        when(oauthToken.getScopes()).thenReturn(ImmutableList.of(SCOPE_NAME));
+
+        user = new FitBitUser.Builder().withHealthCode(HEALTH_CODE).withToken(oauthToken).build();
+    }
 
     @BeforeMethod
     public void setup() throws Exception {
@@ -155,7 +169,7 @@ public class UserProcessorTest {
                 "}";
 
         // Execute and validate
-        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        processor.processEndpointForUser(ctx, user, ENDPOINT_SCHEMA);
 
         List<Map<String, String>> rowList = validatePopulatedTablesById();
         assertEquals(rowList.size(), 1);
@@ -178,7 +192,7 @@ public class UserProcessorTest {
                 "}";
 
         // Execute and validate
-        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        processor.processEndpointForUser(ctx, user, ENDPOINT_SCHEMA);
 
         List<Map<String, String>> rowList = validatePopulatedTablesById();
         assertEquals(rowList.size(), 3);
@@ -213,7 +227,7 @@ public class UserProcessorTest {
                 "}";
 
         // Execute and validate
-        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        processor.processEndpointForUser(ctx, user, ENDPOINT_SCHEMA);
 
         List<Map<String, String>> rowList = validatePopulatedTablesById();
         assertEquals(rowList.size(), 2);
@@ -235,7 +249,7 @@ public class UserProcessorTest {
                 "}";
 
         // Execute and validate
-        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        processor.processEndpointForUser(ctx, user, ENDPOINT_SCHEMA);
         assertTrue(ctx.getPopulatedTablesById().isEmpty());
         verify(processor).makeHttpRequest(URL, ACCESS_TOKEN);
         verify(processor).warnWrapper("Unexpected table " + ENDPOINT_ID + ".wrong-table-key for user " +
@@ -252,7 +266,7 @@ public class UserProcessorTest {
                 "}";
 
         // Execute and validate
-        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        processor.processEndpointForUser(ctx, user, ENDPOINT_SCHEMA);
         assertTrue(ctx.getPopulatedTablesById().isEmpty());
         verify(processor).makeHttpRequest(URL, ACCESS_TOKEN);
         verify(processor, never()).warnWrapper(any());
@@ -266,7 +280,7 @@ public class UserProcessorTest {
                 "}";
 
         // Execute and validate
-        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        processor.processEndpointForUser(ctx, user, ENDPOINT_SCHEMA);
 
         List<Map<String, String>> rowList = validatePopulatedTablesById();
         assertTrue(rowList.isEmpty());
@@ -286,7 +300,7 @@ public class UserProcessorTest {
                 "}";
 
         // Execute and validate
-        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        processor.processEndpointForUser(ctx, user, ENDPOINT_SCHEMA);
 
         // Row value map only has common fields and raw data.
         List<Map<String, String>> rowList = validatePopulatedTablesById();
@@ -317,7 +331,7 @@ public class UserProcessorTest {
                 "}";
 
         // Execute and validate
-        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        processor.processEndpointForUser(ctx, user, ENDPOINT_SCHEMA);
 
         List<Map<String, String>> rowList = validatePopulatedTablesById();
         assertTrue(rowList.isEmpty());
@@ -336,7 +350,7 @@ public class UserProcessorTest {
                 "}";
 
         // Execute and validate
-        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        processor.processEndpointForUser(ctx, user, ENDPOINT_SCHEMA);
 
         // Row value map only has common fields and raw data.
         List<Map<String, String>> rowList = validatePopulatedTablesById();
@@ -361,7 +375,7 @@ public class UserProcessorTest {
     @Test
     public void http403Suppressed() throws Exception {
         doThrow(new HttpResponseException(403, "Forbidden")).when(processor).makeHttpRequest(URL, ACCESS_TOKEN);
-        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        processor.processEndpointForUser(ctx, user, ENDPOINT_SCHEMA);
         assertTrue(ctx.getPopulatedTablesById().isEmpty());
     }
 
@@ -369,7 +383,7 @@ public class UserProcessorTest {
     public void http500Suppressed() throws Exception {
         doThrow(new HttpResponseException(500, "Internal Server Error")).when(processor).makeHttpRequest(URL,
                 ACCESS_TOKEN);
-        processor.processEndpointForUser(ctx, USER, ENDPOINT_SCHEMA);
+        processor.processEndpointForUser(ctx, user, ENDPOINT_SCHEMA);
         assertTrue(ctx.getPopulatedTablesById().isEmpty());
     }
 
