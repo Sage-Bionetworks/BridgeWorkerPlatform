@@ -12,7 +12,10 @@ import static org.testng.Assert.fail;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 import retrofit2.Call;
@@ -31,6 +34,9 @@ public class FitBitUserIteratorTest {
     private static final String HEALTH_CODE_PREFIX = "dummy-health-code-";
     private static final String STUDY_ID = "test-study";
     private static final String USER_ID_PREFIX = "dummy-user-id-";
+
+    private static final List<String> SCOPE_LIST = ImmutableList.of("foo", "bar", "baz");
+    private static final Set<String> SCOPE_SET = ImmutableSet.copyOf(SCOPE_LIST);
 
     private ClientManager mockClientManager;
     private ForWorkersApi mockApi;
@@ -283,6 +289,7 @@ public class FitBitUserIteratorTest {
         OAuthAccessToken token = mock(OAuthAccessToken.class);
         when(token.getAccessToken()).thenReturn(ACCESS_TOKEN_PREFIX + idx);
         when(token.getProviderUserId()).thenReturn(USER_ID_PREFIX + idx);
+        when(token.getScopes()).thenReturn(SCOPE_LIST);
 
         // Mock Response and Call to return this
         Response<OAuthAccessToken> tokenResponse = Response.success(token);
@@ -305,6 +312,7 @@ public class FitBitUserIteratorTest {
     private void assertFitBitUserForIndex(int idx, FitBitUser user) {
         assertEquals(user.getAccessToken(), ACCESS_TOKEN_PREFIX + idx);
         assertEquals(user.getHealthCode(), HEALTH_CODE_PREFIX + idx);
+        assertEquals(user.getScopeSet(), SCOPE_SET);
         assertEquals(user.getUserId(), USER_ID_PREFIX + idx);
     }
 }

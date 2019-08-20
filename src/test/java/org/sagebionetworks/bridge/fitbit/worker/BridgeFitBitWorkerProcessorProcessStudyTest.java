@@ -33,15 +33,16 @@ import org.sagebionetworks.bridge.fitbit.bridge.FitBitUser;
 import org.sagebionetworks.bridge.fitbit.schema.EndpointSchema;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
+import org.sagebionetworks.bridge.rest.model.OAuthAccessToken;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 
 @SuppressWarnings({ "ResultOfMethodCallIgnored", "unchecked" })
 public class BridgeFitBitWorkerProcessorProcessStudyTest {
     private static final String DATE_STRING = "2017-12-11";
+    private static final List<String> SCOPE_LIST = ImmutableList.of("ENDPOINT_0", "ENDPOINT_1", "ENDPOINT_2");
     private static final String STUDY_ID = "test-study";
-    private static final Study STUDY = new Study().identifier(STUDY_ID).fitBitScopes(ImmutableList.of("endpoint-0",
-            "endpoint-1", "endpoint-2"));
+    private static final Study STUDY = new Study().identifier(STUDY_ID);
 
     private InMemoryFileHelper fileHelper;
     private BridgeHelper mockBridgeHelper;
@@ -218,7 +219,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         when(mockBridgeHelper.getFitBitUsersForStudy(STUDY_ID)).thenReturn(Iterators.forArray(user0));
 
         // Mock endpoint schemas, so we don't have to construct the whole thing. Note that we have 4 endpoints, but the
-        // study is configured with only endpoints 0-2.
+        // user is configured with only endpoints 0-2.
         EndpointSchema mockEndpointSchema0 = mockEndpointSchema(0);
         EndpointSchema mockEndpointSchema1 = mockEndpointSchema(1);
         EndpointSchema mockEndpointSchema2 = mockEndpointSchema(2);
@@ -349,13 +350,19 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
     }
 
     private static FitBitUser makeUser(int idx) {
-        return new FitBitUser.Builder().withAccessToken("access-token-" + idx).withHealthCode("health-code-" + idx)
-                .withUserId("user-" + idx).build();
+        // Mock OAuth token. This is read-only, so it's easier to just mock it instead of using Reflection.
+        OAuthAccessToken mockOauthToken = mock(OAuthAccessToken.class);
+        when(mockOauthToken.getAccessToken()).thenReturn("access-token-" + idx);
+        when(mockOauthToken.getProviderUserId()).thenReturn("user-" + idx);
+        when(mockOauthToken.getScopes()).thenReturn(SCOPE_LIST);
+
+        return new FitBitUser.Builder().withHealthCode("health-code-" + idx).withToken(mockOauthToken).build();
     }
 
     private static EndpointSchema mockEndpointSchema(int idx) {
         EndpointSchema mockEndpointSchema = mock(EndpointSchema.class);
         when(mockEndpointSchema.getEndpointId()).thenReturn("endpoint-" + idx);
+        when(mockEndpointSchema.getScopeName()).thenReturn("ENDPOINT_" + idx);
         return mockEndpointSchema;
     }
 }

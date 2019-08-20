@@ -10,8 +10,10 @@ import static org.testng.Assert.assertNotNull;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 import retrofit2.Call;
@@ -33,6 +35,9 @@ public class BridgeHelperTest {
     private static final String STUDY_ID = "test-study";
     private static final String USER_ID = "test-user";
 
+    private static final List<String> SCOPE_LIST = ImmutableList.of("foo", "bar", "baz");
+    private static final Set<String> SCOPE_SET = ImmutableSet.copyOf(SCOPE_LIST);
+
     private ClientManager mockClientManager;
     private BridgeHelper bridgeHelper;
 
@@ -53,6 +58,7 @@ public class BridgeHelperTest {
         OAuthAccessToken mockToken = mock(OAuthAccessToken.class);
         when(mockToken.getAccessToken()).thenReturn(ACCESS_TOKEN);
         when(mockToken.getProviderUserId()).thenReturn(USER_ID);
+        when(mockToken.getScopes()).thenReturn(SCOPE_LIST);
         Call<OAuthAccessToken> mockCall = mockCallForValue(mockToken);
         when(mockApi.getOAuthAccessToken(STUDY_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE)).thenReturn(mockCall);
 
@@ -60,6 +66,7 @@ public class BridgeHelperTest {
         FitBitUser fitBitUser = bridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, HEALTH_CODE);
         assertEquals(fitBitUser.getAccessToken(), ACCESS_TOKEN);
         assertEquals(fitBitUser.getHealthCode(), HEALTH_CODE);
+        assertEquals(fitBitUser.getScopeSet(), SCOPE_SET);
         assertEquals(fitBitUser.getUserId(), USER_ID);
     }
 

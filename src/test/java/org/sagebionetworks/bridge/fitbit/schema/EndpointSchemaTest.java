@@ -18,6 +18,7 @@ import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 public class EndpointSchemaTest {
     private static final String ENDPOINT_ID = "test-endpoint";
     private static final Set<String> IGNORED_KEYS = ImmutableSet.of("ignore-asdf", "ignore-jkl;");
+    private static final String SCOPE_NAME = "DUMMY_SCOPE";
     private static final String URL = "http://example.com/";
     private static final List<UrlParameterType> URL_PARAMETERS = ImmutableList.of(UrlParameterType.DATE,
             UrlParameterType.USER_ID);
@@ -36,10 +37,10 @@ public class EndpointSchemaTest {
 
     @Test
     public void success() {
-        EndpointSchema endpointSchema = new EndpointSchema.Builder().withEndpointId(ENDPOINT_ID).withUrl(URL)
-                .withTables(TABLE_SCHEMA_LIST).build();
+        EndpointSchema endpointSchema = makeValidBuilder().build();
         assertEquals(endpointSchema.getEndpointId(), ENDPOINT_ID);
         assertTrue(endpointSchema.getIgnoredKeys().isEmpty());
+        assertEquals(endpointSchema.getScopeName(), SCOPE_NAME);
         assertEquals(endpointSchema.getUrl(), URL);
         assertTrue(endpointSchema.getUrlParameters().isEmpty());
         assertEquals(endpointSchema.getTables(), TABLE_SCHEMA_LIST);
@@ -52,9 +53,8 @@ public class EndpointSchemaTest {
 
     @Test
     public void optionalParams() {
-        EndpointSchema endpointSchema = new EndpointSchema.Builder().withEndpointId(ENDPOINT_ID)
-                .withIgnoredKeys(IGNORED_KEYS).withUrl(URL).withUrlParameters(URL_PARAMETERS)
-                .withTables(TABLE_SCHEMA_LIST).build();
+        EndpointSchema endpointSchema = makeValidBuilder().withIgnoredKeys(IGNORED_KEYS)
+                .withUrlParameters(URL_PARAMETERS).build();
         assertEquals(endpointSchema.getEndpointId(), ENDPOINT_ID);
         assertEquals(endpointSchema.getIgnoredKeys(), IGNORED_KEYS);
         assertEquals(endpointSchema.getUrl(), URL);
@@ -67,49 +67,67 @@ public class EndpointSchemaTest {
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "endpointId must be specified")
     public void nullEndpointId() {
-        new EndpointSchema.Builder().withEndpointId(null).withUrl(URL).withTables(TABLE_SCHEMA_LIST).build();
+        makeValidBuilder().withEndpointId(null).build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "endpointId must be specified")
     public void emptyEndpointId() {
-        new EndpointSchema.Builder().withEndpointId("").withUrl(URL).withTables(TABLE_SCHEMA_LIST).build();
+        makeValidBuilder().withEndpointId("").build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "endpointId must be specified")
     public void blankEndpointId() {
-        new EndpointSchema.Builder().withEndpointId("   ").withUrl(URL).withTables(TABLE_SCHEMA_LIST).build();
+        makeValidBuilder().withEndpointId("   ").build();
+    }
+
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
+            "scopeName must be specified")
+    public void nullScopeName() {
+        makeValidBuilder().withScopeName(null).build();
+    }
+
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
+            "scopeName must be specified")
+    public void emptyScopeName() {
+        makeValidBuilder().withScopeName("").build();
+    }
+
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
+            "scopeName must be specified")
+    public void blankScopeName() {
+        makeValidBuilder().withScopeName("   ").build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "url must be specified")
     public void nullUrl() {
-        new EndpointSchema.Builder().withEndpointId(ENDPOINT_ID).withUrl(null).withTables(TABLE_SCHEMA_LIST).build();
+        makeValidBuilder().withUrl(null).build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "url must be specified")
     public void emptyUrl() {
-        new EndpointSchema.Builder().withEndpointId(ENDPOINT_ID).withUrl("").withTables(TABLE_SCHEMA_LIST).build();
+        makeValidBuilder().withUrl("").build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "url must be specified")
     public void blankUrl() {
-        new EndpointSchema.Builder().withEndpointId(ENDPOINT_ID).withUrl("   ").withTables(TABLE_SCHEMA_LIST).build();
+        makeValidBuilder().withUrl("   ").build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "tables must be non-null and non-empty")
     public void nullTables() {
-        new EndpointSchema.Builder().withEndpointId(ENDPOINT_ID).withUrl(URL).withTables(null).build();
+        makeValidBuilder().withTables(null).build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "tables must be non-null and non-empty")
     public void emptyTables() {
-        new EndpointSchema.Builder().withEndpointId(ENDPOINT_ID).withUrl(URL).withTables(ImmutableList.of()).build();
+        makeValidBuilder().withTables(ImmutableList.of()).build();
     }
 
     @Test
@@ -122,6 +140,7 @@ public class EndpointSchemaTest {
         String jsonText = "{\n" +
                 "   \"endpointId\":\"" + ENDPOINT_ID + "\",\n" +
                 "   \"ignoredKeys\":[\"ignore-asdf\", \"ignore-jkl;\"],\n" +
+                "   \"scopeName\":\"" + SCOPE_NAME + "\",\n" +
                 "   \"url\":\"" + URL + "\",\n" +
                 "   \"urlParameters\":[\"DATE\", \"USER_ID\"],\n" +
                 "   \"tables\":" + DefaultObjectMapper.INSTANCE.writeValueAsString(TABLE_SCHEMA_LIST) + "\n" +
@@ -131,10 +150,16 @@ public class EndpointSchemaTest {
         EndpointSchema endpointSchema = DefaultObjectMapper.INSTANCE.readValue(jsonText, EndpointSchema.class);
         assertEquals(endpointSchema.getEndpointId(), ENDPOINT_ID);
         assertEquals(endpointSchema.getIgnoredKeys(), IGNORED_KEYS);
+        assertEquals(endpointSchema.getScopeName(), SCOPE_NAME);
         assertEquals(endpointSchema.getUrl(), URL);
         assertEquals(endpointSchema.getUrlParameters(), URL_PARAMETERS);
         assertEquals(endpointSchema.getTables(), TABLE_SCHEMA_LIST);
         // tablesByKey is already tested above. Just test that it exists.
         assertNotNull(endpointSchema.getTablesByKey());
+    }
+
+    private static EndpointSchema.Builder makeValidBuilder() {
+        return new EndpointSchema.Builder().withEndpointId(ENDPOINT_ID).withUrl(URL).withScopeName(SCOPE_NAME)
+                .withTables(TABLE_SCHEMA_LIST);
     }
 }

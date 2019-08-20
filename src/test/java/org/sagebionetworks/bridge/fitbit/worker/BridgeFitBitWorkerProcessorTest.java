@@ -30,8 +30,6 @@ import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 
 @SuppressWarnings("unchecked")
 public class BridgeFitBitWorkerProcessorTest {
-    private static final String FITBIT_SCOPE = "dummy-scope";
-
     private BridgeFitBitWorkerProcessor processor;
     private BridgeHelper mockBridgeHelper;
 
@@ -78,14 +76,11 @@ public class BridgeFitBitWorkerProcessorTest {
         // Mock get study call. This returns a "full" study.
         Study study1 = new Study().identifier("study1");
         Study study2 = new Study().identifier("study2").synapseProjectId("project-2").synapseDataAccessTeamId(2222L)
-                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider())
-                .addFitBitScopesItem(FITBIT_SCOPE);
+                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
         Study study3 = new Study().identifier("study3").synapseProjectId("project-3").synapseDataAccessTeamId(3333L)
-                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider())
-                .addFitBitScopesItem(FITBIT_SCOPE);
+                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
         Study study4 = new Study().identifier("study4").synapseProjectId("project-4").synapseDataAccessTeamId(4444L)
-                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider())
-                .addFitBitScopesItem(FITBIT_SCOPE);
+                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
 
         when(mockBridgeHelper.getStudy("study1")).thenReturn(study1);
         when(mockBridgeHelper.getStudy("study2")).thenReturn(study2);
@@ -125,8 +120,7 @@ public class BridgeFitBitWorkerProcessorTest {
     public void healthCodeWhitelistAndStudyWhitelist() throws Exception {
         // Mock get study call. This returns a "full" study.
         Study study2 = new Study().identifier("study2").synapseProjectId("project-2").synapseDataAccessTeamId(2222L)
-                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider())
-                .addFitBitScopesItem(FITBIT_SCOPE);
+                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
         when(mockBridgeHelper.getStudy("study2")).thenReturn(study2);
 
         // Spy processStudy(). This is tested elsewhere.
@@ -163,8 +157,7 @@ public class BridgeFitBitWorkerProcessorTest {
 
         // Mock get study call. This returns a "full" study.
         Study study3 = new Study().identifier("study3").synapseProjectId("project-3").synapseDataAccessTeamId(3333L)
-                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider())
-                .addFitBitScopesItem(FITBIT_SCOPE);
+                .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
         when(mockBridgeHelper.getStudy("study3")).thenReturn(study3);
 
         // Spy processStudy(). This is tested elsewhere.
