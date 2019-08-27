@@ -2,40 +2,25 @@ package org.sagebionetworks.bridge.reporter.helper;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
-import org.joda.time.Days;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.google.common.collect.HashMultiset;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Multiset;
-
+import org.sagebionetworks.bridge.notification.helper.AccountSummaryIterator;
 import org.sagebionetworks.bridge.reporter.worker.Report;
 import org.sagebionetworks.bridge.rest.ClientManager;
-import org.sagebionetworks.bridge.rest.api.AuthenticationApi;
-import org.sagebionetworks.bridge.rest.api.ForAdminsApi;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
-import org.sagebionetworks.bridge.rest.api.HealthDataApi;
 import org.sagebionetworks.bridge.rest.api.StudiesApi;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.AccountSummaryList;
-import org.sagebionetworks.bridge.rest.model.ActivityEvent;
 import org.sagebionetworks.bridge.rest.model.ActivityEventList;
-import org.sagebionetworks.bridge.rest.model.HealthDataRecord;
-import org.sagebionetworks.bridge.rest.model.HealthDataSubmission;
 import org.sagebionetworks.bridge.rest.model.ReportData;
 import org.sagebionetworks.bridge.rest.model.RequestInfo;
-import org.sagebionetworks.bridge.rest.model.ResourceList;
-import org.sagebionetworks.bridge.rest.model.SignIn;
-import org.sagebionetworks.bridge.rest.model.SignUp;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.Upload;
@@ -117,58 +102,29 @@ public class BridgeHelper {
         return retList;
     }
     
-    public Map<StudyParticipant, RequestInfo> getRequestInfoForParticipant (String studyId, List<StudyParticipant> participants)
-            throws IOException {
-    	Map<StudyParticipant, RequestInfo> retMap = new HashMap<>();
-        
+    public StudyParticipant getStudyPartcipant (String studyId, String userId) throws IOException {
         ForWorkersApi workersApi = bridgeClientManager.getClient(ForWorkersApi.class);
-        for (StudyParticipant participant : participants) {
-        	RequestInfo requestInfo = workersApi.getRequestInfoForWorker(studyId, participant.getId()).execute().body();
-    		retMap.put(participant, requestInfo);
-    		doSleep();
-        }
-        return retMap;
+        return workersApi.getParticipantByIdForStudy(studyId, userId, false).execute().body();
     }
     
-    public Map<RequestInfo, ActivityEventList> getActivityEventForParticipant (String studyId, List<StudyParticipant> participants)
-            throws IOException {
-    	Map<RequestInfo, ActivityEventList> retMap = new HashMap<>();
-        
+    public RequestInfo getRequestInfoForParticipant (String studyId, String userId) throws IOException {
         ForWorkersApi workersApi = bridgeClientManager.getClient(ForWorkersApi.class);
-        for (StudyParticipant participant : participants) {
-        	RequestInfo requestInfo = workersApi.getRequestInfoForWorker(studyId, participant.getId()).execute().body();
-        	ActivityEventList activityEvents = workersApi.getActivityEventsForParticipantAndStudy(studyId, participant.getId()).execute().body();
-    		retMap.put(requestInfo, activityEvents);
-    		doSleep();
-        }
-        return retMap;
+        return workersApi.getRequestInfoForWorker(studyId, userId).execute().body();
     }
     
-    public void uploadHealthData() throws IOException {
-    	String APP_VERSION = "version 1.0.0, build 2";
-        DateTimeZone CREATED_ON_TIMEZONE = DateTimeZone.forOffsetHours(9);
-        String PHONE_INFO = "Integration Tests";
-        String SCHEMA_ID = "health-data-integ-test-schema";
-        long SCHEMA_REV = 1L;
-        Map<String, String> data = ImmutableMap.<String, String>builder().put("answer-me", "C").build();
-        DateTime createdOn = DateTime.now(CREATED_ON_TIMEZONE);
-//        DateTime createdOn = new DateTime(2019, 8, 25, 9, 30);
-        HealthDataApi healthDataApi = bridgeClientManager.getClient(HealthDataApi.class);
-        
-        HealthDataSubmission submission = new HealthDataSubmission().appVersion(APP_VERSION).createdOn(createdOn)
-                .data(data).phoneInfo(PHONE_INFO).schemaId(SCHEMA_ID).schemaRevision(SCHEMA_REV);
-        
-        healthDataApi.submitHealthData(submission).execute().body();        
+    public ActivityEventList getActivityEventForParticipant (String studyId, String userId) throws IOException {
+        ForWorkersApi workersApi = bridgeClientManager.getClient(ForWorkersApi.class);
+        return workersApi.getActivityEventsForParticipantAndStudy(studyId, userId).execute().body();
     }
     
-    public void signUpandSignIn(String study_id, String email) throws IOException {
-        AuthenticationApi authenticationApi = bridgeClientManager.getClient(AuthenticationApi.class);
-    	SignUp signUp = new SignUp().study(study_id).email(email).password("P@ssword`1");
-        SignIn signIn = new SignIn().study(study_id).email(email).password("P@ssword`1");
+    /**
+     * Get an iterator for all account summaries in the given study. Note that since getAllAccountSummaries is a
+     * paginated API, the iterator may continue to call the server.
+     */
+    public Iterator<AccountSummary> getAllAccountSummaries(String studyId) {
+        return new AccountSummaryIterator(bridgeClientManager, studyId);
+    }
 
-        authenticationApi.signUp(signUp).execute().body();
-        authenticationApi.signIn(signIn).execute().body();
-    }
     
     private void doSleep() {
         // sleep a second
