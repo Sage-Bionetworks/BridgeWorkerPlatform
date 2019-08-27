@@ -57,6 +57,7 @@ public class RetentionReportGenerator implements ReportGenerator {
             for (int i = 0; i < activityEventList.getItems().size(); i++) {
                 if (activityEventList.getItems().get(i).getEventId().equals("study_start_date")) {
                     studyStartDate = activityEventList.getItems().get(i).getTimestamp();
+                    break;
                 }
             }
             
