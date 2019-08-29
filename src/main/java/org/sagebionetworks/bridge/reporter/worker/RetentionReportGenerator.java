@@ -12,12 +12,18 @@ import org.joda.time.Days;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+
+import com.google.common.util.concurrent.RateLimiter;
+
 import org.sagebionetworks.bridge.reporter.helper.BridgeHelper;
 import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.ActivityEventList;
 import org.sagebionetworks.bridge.rest.model.RequestInfo;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.uploadredrive.UploadRedriveWorkerProcessor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Generate a report of sign ins and uploads by days in study.
@@ -25,7 +31,8 @@ import org.sagebionetworks.bridge.rest.model.StudyParticipant;
  */
 @Component
 public class RetentionReportGenerator implements ReportGenerator {
-
+    private static final Logger LOG = LoggerFactory.getLogger(RetentionReportGenerator.class);
+    private final RateLimiter perUserRateLimiter = RateLimiter.create(100.0);
     private BridgeHelper bridgeHelper;
     
     @Autowired
@@ -48,32 +55,41 @@ public class RetentionReportGenerator implements ReportGenerator {
         List<Integer> signInData = new ArrayList<>();
         List<Integer> uploadedOnData = new ArrayList<>();
         while (accountSummaryIter.hasNext()) {
+            // Rate limit
+            perUserRateLimiter.acquire();
+            
             AccountSummary accountSummary = accountSummaryIter.next();
-            StudyParticipant studyParticipant = bridgeHelper.getStudyPartcipant(studyId, accountSummary.getId());
-            RequestInfo requestInfo = bridgeHelper.getRequestInfoForParticipant(studyId, accountSummary.getId());
-            ActivityEventList activityEventList = bridgeHelper.getActivityEventForParticipant(studyId, accountSummary.getId());
-            DateTime studyStartDate = studyParticipant.getCreatedOn();
-            
-            for (int i = 0; i < activityEventList.getItems().size(); i++) {
-                if (activityEventList.getItems().get(i).getEventId().equals("study_start_date")) {
-                    studyStartDate = activityEventList.getItems().get(i).getTimestamp();
-                    break;
+            try {
+                ActivityEventList activityEventList = bridgeHelper.getActivityEventForParticipant(studyId, accountSummary.getId());
+                DateTime studyStartDate = null;
+                
+                for (int i = 0; i < activityEventList.getItems().size(); i++) {
+                    if (activityEventList.getItems().get(i).getEventId().equals("study_start_date")) {
+                        studyStartDate = activityEventList.getItems().get(i).getTimestamp();
+                        break;
+                    }
                 }
-            }
-            
-            if (requestInfo.getSignedInOn() != null) {
-                int sign_in_days = Days.daysBetween(studyStartDate.toLocalDate(), requestInfo.getSignedInOn().toLocalDate()).getDays();
-                while (signInData.size() < (sign_in_days + 1)) {
-                    signInData.add(0);
+                if (studyStartDate == null) {
+                    LOG.error("No study_state_date event for id=" + accountSummary.getId());
+                    continue;
                 }
-                signInData.set(sign_in_days, signInData.get(sign_in_days) + 1);
-            }
-            if (requestInfo.getUploadedOn() != null) {
-                int upload_on_days = Days.daysBetween(studyStartDate.toLocalDate(), requestInfo.getUploadedOn().toLocalDate()).getDays();
-                while (uploadedOnData.size() < (upload_on_days + 1)) {
-                    uploadedOnData.add(0);
+                RequestInfo requestInfo = bridgeHelper.getRequestInfoForParticipant(studyId, accountSummary.getId());
+                if (requestInfo.getSignedInOn() != null) {
+                    int sign_in_days = Days.daysBetween(studyStartDate.toLocalDate(), requestInfo.getSignedInOn().toLocalDate()).getDays();
+                    while (signInData.size() < (sign_in_days + 1)) {
+                        signInData.add(0);
+                    }
+                    signInData.set(sign_in_days, signInData.get(sign_in_days) + 1);
                 }
-                uploadedOnData.set(upload_on_days, uploadedOnData.get(upload_on_days) + 1);
+                if (requestInfo.getUploadedOn() != null) {
+                    int upload_on_days = Days.daysBetween(studyStartDate.toLocalDate(), requestInfo.getUploadedOn().toLocalDate()).getDays();
+                    while (uploadedOnData.size() < (upload_on_days + 1)) {
+                        uploadedOnData.add(0);
+                    }
+                    uploadedOnData.set(upload_on_days, uploadedOnData.get(upload_on_days) + 1);
+                }
+            } catch (Exception ex) {
+                LOG.error("Error getting data for id " + accountSummary.getId() + ": " + ex.getMessage(), ex);
             }
         }
 
