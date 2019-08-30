@@ -203,8 +203,7 @@ public class BridgeHelperTest {
         StudyParticipant mockStudyParticipant = mockCallForParticipant(mockWorkerClient, USER_ID_1);
         
         StudyParticipant studyParticipant = bridgeHelper.getStudyPartcipant(TEST_STUDY_ID, USER_ID_1);
-        System.out.println(studyParticipant.getId());
-        assertEquals(studyParticipant.getId(), mockStudyParticipant.getId());
+        assertSame(studyParticipant, mockStudyParticipant);
         verify(mockWorkerClient).getParticipantByIdForStudy(TEST_STUDY_ID, USER_ID_1, false);
     }
     
@@ -227,7 +226,7 @@ public class BridgeHelperTest {
         ActivityEventList activityEventList = bridgeHelper.getActivityEventForParticipant(TEST_STUDY_ID, USER_ID_1);
         
         assertNull(activityEventList.getItems());
-        assertSame(activityEventList.getItems(), mockActiviyEventList.getItems());
+        assertSame(activityEventList, mockActiviyEventList);
         verify(mockWorkerClient).getActivityEventsForParticipantAndStudy(TEST_STUDY_ID, USER_ID_1);
     }
     
