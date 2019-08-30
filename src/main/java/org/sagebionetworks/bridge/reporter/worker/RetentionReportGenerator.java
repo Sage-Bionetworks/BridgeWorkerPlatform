@@ -20,8 +20,6 @@ import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.ActivityEventList;
 import org.sagebionetworks.bridge.rest.model.RequestInfo;
-import org.sagebionetworks.bridge.rest.model.StudyParticipant;
-import org.sagebionetworks.bridge.uploadredrive.UploadRedriveWorkerProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,8 +43,6 @@ public class RetentionReportGenerator implements ReportGenerator {
     public Report generate(BridgeReporterRequest request, String studyId) throws IOException {
 
         DateTime startDate = request.getStartDateTime();
-        DateTime endDate = request.getEndDateTime();
-        String scheduler = request.getScheduler();
         ReportType scheduleType = request.getScheduleType();
         String reportId = scheduleType.getSuffix();
 
