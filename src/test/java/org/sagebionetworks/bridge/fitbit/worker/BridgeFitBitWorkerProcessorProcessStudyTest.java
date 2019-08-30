@@ -148,13 +148,16 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-0"))
                 .thenThrow(IOException.class);
 
-        FitBitUser user1 = makeUser(1);
         when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-1"))
-                .thenReturn(user1);
+                .thenThrow(RuntimeException.class);
 
         FitBitUser user2 = makeUser(2);
         when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-2"))
                 .thenReturn(user2);
+
+        FitBitUser user3 = makeUser(3);
+        when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-3"))
+                .thenReturn(user3);
 
         // Mock endpoint schema, so we don't have to construct the whole thing.
         EndpointSchema mockEndpointSchema0 = mockEndpointSchema(0);
@@ -165,18 +168,18 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
 
         // Execute.
         processor.processStudy(DATE_STRING, STUDY, ImmutableList.of("health-code-0", "health-code-1",
-                "health-code-2"));
+                "health-code-2", "health-code-3"));
 
-        // Verify User Processor. Because user-0 throws while trying to get a FitBitUser, we never call the
-        // User Processor.
+        // Verify User Processor. Because user-0 and user-2 throws while trying to get a FitBitUser, we never call the
+        // User Processor for those users.
         ArgumentCaptor<FitBitUser> userCaptor = ArgumentCaptor.forClass(FitBitUser.class);
         verify(mockUserProcessor, times(2)).processEndpointForUser(any(),
                 userCaptor.capture(), same(mockEndpointSchema0));
 
         List<FitBitUser> userList = userCaptor.getAllValues();
         assertEquals(userList.size(), 2);
-        assertSame(userList.get(0), user1);
-        assertSame(userList.get(1), user2);
+        assertSame(userList.get(0), user2);
+        assertSame(userList.get(1), user3);
 
         // Validate we cleaned up the file helper
         assertTrue(fileHelper.isEmpty());
