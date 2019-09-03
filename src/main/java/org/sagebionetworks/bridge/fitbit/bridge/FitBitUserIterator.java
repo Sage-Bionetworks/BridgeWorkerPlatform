@@ -112,7 +112,6 @@ public class FitBitUserIterator implements Iterator<FitBitUser> {
         nextIndex++;
 
         // Construct and return the FitBitUser.
-        return new FitBitUser.Builder().withAccessToken(token.getAccessToken()).withHealthCode(healthCode)
-                .withUserId(token.getProviderUserId()).build();
+        return new FitBitUser.Builder().withHealthCode(healthCode).withToken(token).build();
     }
 }

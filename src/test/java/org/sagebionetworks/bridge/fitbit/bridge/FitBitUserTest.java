@@ -1,74 +1,128 @@
 package org.sagebionetworks.bridge.fitbit.bridge;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
+import java.util.List;
+import java.util.Set;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
+
+import org.sagebionetworks.bridge.rest.model.OAuthAccessToken;
 
 public class FitBitUserTest {
     private static final String ACCESS_TOKEN = "dummy-access-token";
     private static final String HEALTH_CODE = "dummy-health-code";
     private static final String USER_ID = "dummy-user-id";
 
+    private static final List<String> SCOPE_LIST = ImmutableList.of("foo", "bar", "baz");
+    private static final Set<String> SCOPE_SET = ImmutableSet.copyOf(SCOPE_LIST);
+
+    private OAuthAccessToken oauthToken;
+
+    @BeforeMethod
+    public void beforeClass() {
+        // Mock OAuth token. This is read-only, so it's easier to just mock it instead of using Reflection.
+        oauthToken = mock(OAuthAccessToken.class);
+        when(oauthToken.getAccessToken()).thenReturn(ACCESS_TOKEN);
+        when(oauthToken.getProviderUserId()).thenReturn(USER_ID);
+        when(oauthToken.getScopes()).thenReturn(SCOPE_LIST);
+    }
+
     @Test
     public void success() {
-        FitBitUser user = new FitBitUser.Builder().withAccessToken(ACCESS_TOKEN).withHealthCode(HEALTH_CODE)
-                .withUserId(USER_ID).build();
+        FitBitUser user = makeBuilder().build();
         assertEquals(user.getAccessToken(), ACCESS_TOKEN);
         assertEquals(user.getHealthCode(), HEALTH_CODE);
+        assertEquals(user.getScopeSet(), SCOPE_SET);
         assertEquals(user.getUserId(), USER_ID);
+    }
+
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
+            "OAuthAccessToken must be specified")
+    public void nullOauthToken() {
+        makeBuilder().withToken(null).build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "accessToken must be specified")
     public void nullAccessToken() {
-        new FitBitUser.Builder().withAccessToken(null).withHealthCode(HEALTH_CODE).withUserId(USER_ID).build();
+        when(oauthToken.getAccessToken()).thenReturn(null);
+        makeBuilder().build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "accessToken must be specified")
     public void emptyAccessToken() {
-        new FitBitUser.Builder().withAccessToken("").withHealthCode(HEALTH_CODE).withUserId(USER_ID).build();
+        when(oauthToken.getAccessToken()).thenReturn("");
+        makeBuilder().build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "accessToken must be specified")
     public void blankAccessToken() {
-        new FitBitUser.Builder().withAccessToken("   ").withHealthCode(HEALTH_CODE).withUserId(USER_ID).build();
+        when(oauthToken.getAccessToken()).thenReturn("   ");
+        makeBuilder().build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "healthCode must be specified")
     public void nullHealthCode() {
-        new FitBitUser.Builder().withAccessToken(ACCESS_TOKEN).withHealthCode(null).withUserId(USER_ID).build();
+        makeBuilder().withHealthCode(null).build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "healthCode must be specified")
     public void emptyHealthCode() {
-        new FitBitUser.Builder().withAccessToken(ACCESS_TOKEN).withHealthCode("").withUserId(USER_ID).build();
+        makeBuilder().withHealthCode("").build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "healthCode must be specified")
     public void blankHealthCode() {
-        new FitBitUser.Builder().withAccessToken(ACCESS_TOKEN).withHealthCode("   ").withUserId(USER_ID).build();
+        makeBuilder().withHealthCode("   ").build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "userId must be specified")
     public void nullUserId() {
-        new FitBitUser.Builder().withAccessToken(ACCESS_TOKEN).withHealthCode(HEALTH_CODE).withUserId(null).build();
+        when(oauthToken.getProviderUserId()).thenReturn(null);
+        makeBuilder().build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "userId must be specified")
     public void emptyUserId() {
-        new FitBitUser.Builder().withAccessToken(ACCESS_TOKEN).withHealthCode(HEALTH_CODE).withUserId("").build();
+        when(oauthToken.getProviderUserId()).thenReturn("");
+        makeBuilder().build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
             "userId must be specified")
     public void blankUserId() {
-        new FitBitUser.Builder().withAccessToken(ACCESS_TOKEN).withHealthCode(HEALTH_CODE).withUserId("   ").build();
+        when(oauthToken.getProviderUserId()).thenReturn("   ");
+        makeBuilder().build();
+    }
+
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
+            "scopes must not be null or empty")
+    public void nullScopeList() {
+        when(oauthToken.getScopes()).thenReturn(null);
+        makeBuilder().build();
+    }
+
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
+            "scopes must not be null or empty")
+    public void emptyScopeList() {
+        when(oauthToken.getScopes()).thenReturn(ImmutableList.of());
+        makeBuilder().build();
+    }
+
+    private FitBitUser.Builder makeBuilder() {
+        return new FitBitUser.Builder().withHealthCode(HEALTH_CODE).withToken(oauthToken);
     }
 }

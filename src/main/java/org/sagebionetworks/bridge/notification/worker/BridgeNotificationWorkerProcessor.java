@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -13,7 +12,9 @@ import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterators;
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.RateLimiter;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -32,6 +33,7 @@ import org.sagebionetworks.bridge.rest.model.ActivityEvent;
 import org.sagebionetworks.bridge.rest.model.ScheduleStatus;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.rest.model.UserConsentHistory;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.time.DateUtils;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
@@ -44,6 +46,8 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     // If there are a lot of users, write log messages regularly so we know the worker is still running.
     private static final int REPORTING_INTERVAL = 250;
 
+    private static final Set<String> CONSENT_NOT_REQUIRED_DATA_GROUPS = ImmutableSet.of("clinical_consent",
+            "test_no_consent");
     private static final int MIN_TIMEZONE_OFFSET_MILLIS = -11 * 60 * 60 * 1000;
     private static final int MAX_TIMEZONE_OFFSET_MILLIS = -1 * 60 * 60 * 1000;
     static final String REQUEST_PARAM_DATE = "date";
@@ -244,7 +248,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         }
 
         // Unconsented users can't be notified
-        if (!Objects.equals(participant.isConsented(), Boolean.TRUE)) {
+        if (!isUserConsented(studyId, participant)) {
             return true;
         }
 
@@ -268,6 +272,30 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
         // We've checked all the exclude conditions. Do not exclude user.
         return false;
+    }
+
+    // Hardcode consent logic based on specific data groups. We do this because RequestInfo is volatile, so we need
+    // calculate consent status in the Worker.
+    private boolean isUserConsented(String studyId, StudyParticipant participant) {
+        // Some data groups put the user in a subpop that doesn't require e-consent. If the user is in one of these
+        // data groups, treat the user as consented.
+        Set<String> userDataGroupSet = ImmutableSet.copyOf(participant.getDataGroups());
+        if (!Sets.intersection(CONSENT_NOT_REQUIRED_DATA_GROUPS, userDataGroupSet).isEmpty()) {
+            return true;
+        }
+
+        // Otherwise, the user is in the default subpop (matches the study ID). Consents are already sorted in
+        // increasing signedOn. Last one is the active (latest) consent.
+        List<UserConsentHistory> consentList = participant.getConsentHistories().get(studyId);
+        if (consentList == null || consentList.isEmpty()) {
+            // No consents in a required subpop means not consented.
+            return false;
+        }
+
+        // Bridge only saves consents if they have been signed. However, we need to check that it hasn't been
+        // withdrawn.
+        UserConsentHistory consent = consentList.get(consentList.size() - 1);
+        return consent.getWithdrewOn() == null;
     }
 
     // Helper method to determine if there's an upcoming study burst coming up tomorrow.

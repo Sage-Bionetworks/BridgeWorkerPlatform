@@ -171,7 +171,7 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
                         .map(healthCode -> {
                             try {
                                 return bridgeHelper.getFitBitUserForStudyAndHealthCode(studyId, healthCode);
-                            } catch (IOException ex) {
+                            } catch (IOException | RuntimeException ex) {
                                 LOG.error("Error getting FitBit auth for health code " + healthCode);
                                 return null;
                             }
@@ -193,6 +193,11 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
 
                     // Call and process endpoints.
                     for (EndpointSchema oneEndpointSchema : endpointSchemas) {
+                        if (!oneUser.getScopeSet().contains(oneEndpointSchema.getScopeName())) {
+                            // This is normal, as not all studies have the same scopes. Skip silently.
+                            continue;
+                        }
+
                         try {
                             userProcessor.processEndpointForUser(ctx, oneUser, oneEndpointSchema);
                         } catch (Exception ex) {

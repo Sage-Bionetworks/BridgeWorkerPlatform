@@ -33,12 +33,14 @@ import org.sagebionetworks.bridge.fitbit.bridge.FitBitUser;
 import org.sagebionetworks.bridge.fitbit.schema.EndpointSchema;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
+import org.sagebionetworks.bridge.rest.model.OAuthAccessToken;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 
 @SuppressWarnings({ "ResultOfMethodCallIgnored", "unchecked" })
 public class BridgeFitBitWorkerProcessorProcessStudyTest {
     private static final String DATE_STRING = "2017-12-11";
+    private static final List<String> SCOPE_LIST = ImmutableList.of("ENDPOINT_0", "ENDPOINT_1", "ENDPOINT_2");
     private static final String STUDY_ID = "test-study";
     private static final Study STUDY = new Study().identifier(STUDY_ID);
 
@@ -146,13 +148,16 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-0"))
                 .thenThrow(IOException.class);
 
-        FitBitUser user1 = makeUser(1);
         when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-1"))
-                .thenReturn(user1);
+                .thenThrow(RuntimeException.class);
 
         FitBitUser user2 = makeUser(2);
         when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-2"))
                 .thenReturn(user2);
+
+        FitBitUser user3 = makeUser(3);
+        when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-3"))
+                .thenReturn(user3);
 
         // Mock endpoint schema, so we don't have to construct the whole thing.
         EndpointSchema mockEndpointSchema0 = mockEndpointSchema(0);
@@ -163,18 +168,18 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
 
         // Execute.
         processor.processStudy(DATE_STRING, STUDY, ImmutableList.of("health-code-0", "health-code-1",
-                "health-code-2"));
+                "health-code-2", "health-code-3"));
 
-        // Verify User Processor. Because user-0 throws while trying to get a FitBitUser, we never call the
-        // User Processor.
+        // Verify User Processor. Because user-0 and user-2 throws while trying to get a FitBitUser, we never call the
+        // User Processor for those users.
         ArgumentCaptor<FitBitUser> userCaptor = ArgumentCaptor.forClass(FitBitUser.class);
         verify(mockUserProcessor, times(2)).processEndpointForUser(any(),
                 userCaptor.capture(), same(mockEndpointSchema0));
 
         List<FitBitUser> userList = userCaptor.getAllValues();
         assertEquals(userList.size(), 2);
-        assertSame(userList.get(0), user1);
-        assertSame(userList.get(1), user2);
+        assertSame(userList.get(0), user2);
+        assertSame(userList.get(1), user3);
 
         // Validate we cleaned up the file helper
         assertTrue(fileHelper.isEmpty());
@@ -216,11 +221,14 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         FitBitUser user0 = makeUser(0);
         when(mockBridgeHelper.getFitBitUsersForStudy(STUDY_ID)).thenReturn(Iterators.forArray(user0));
 
-        // Mock endpoint schemas, so we don't have to construct the whole thing.
+        // Mock endpoint schemas, so we don't have to construct the whole thing. Note that we have 4 endpoints, but the
+        // user is configured with only endpoints 0-2.
         EndpointSchema mockEndpointSchema0 = mockEndpointSchema(0);
         EndpointSchema mockEndpointSchema1 = mockEndpointSchema(1);
         EndpointSchema mockEndpointSchema2 = mockEndpointSchema(2);
-        processor.setEndpointSchemas(ImmutableList.of(mockEndpointSchema0, mockEndpointSchema1, mockEndpointSchema2));
+        EndpointSchema mockEndpointSchema3 = mockEndpointSchema(3);
+        processor.setEndpointSchemas(ImmutableList.of(mockEndpointSchema0, mockEndpointSchema1, mockEndpointSchema2,
+                mockEndpointSchema3));
 
         // Mock user processor to set up one table in the context.
         doAnswer(invocation -> {
@@ -345,13 +353,19 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
     }
 
     private static FitBitUser makeUser(int idx) {
-        return new FitBitUser.Builder().withAccessToken("access-token-" + idx).withHealthCode("health-code-" + idx)
-                .withUserId("user-" + idx).build();
+        // Mock OAuth token. This is read-only, so it's easier to just mock it instead of using Reflection.
+        OAuthAccessToken mockOauthToken = mock(OAuthAccessToken.class);
+        when(mockOauthToken.getAccessToken()).thenReturn("access-token-" + idx);
+        when(mockOauthToken.getProviderUserId()).thenReturn("user-" + idx);
+        when(mockOauthToken.getScopes()).thenReturn(SCOPE_LIST);
+
+        return new FitBitUser.Builder().withHealthCode("health-code-" + idx).withToken(mockOauthToken).build();
     }
 
     private static EndpointSchema mockEndpointSchema(int idx) {
         EndpointSchema mockEndpointSchema = mock(EndpointSchema.class);
         when(mockEndpointSchema.getEndpointId()).thenReturn("endpoint-" + idx);
+        when(mockEndpointSchema.getScopeName()).thenReturn("ENDPOINT_" + idx);
         return mockEndpointSchema;
     }
 }
