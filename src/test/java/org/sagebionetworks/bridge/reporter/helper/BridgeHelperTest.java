@@ -1,16 +1,21 @@
 package org.sagebionetworks.bridge.reporter.helper;
 
 import static com.google.common.collect.Lists.newArrayList;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.sagebionetworks.bridge.reporter.helper.BridgeHelper.MAX_PAGE_SIZE;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -19,7 +24,11 @@ import com.google.common.collect.ImmutableMap;
 
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.Spy;
 import org.testng.annotations.BeforeClass;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 import retrofit2.Call;
 import retrofit2.Response;
@@ -32,8 +41,10 @@ import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
 import org.sagebionetworks.bridge.rest.api.StudiesApi;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.AccountSummaryList;
+import org.sagebionetworks.bridge.rest.model.ActivityEventList;
 import org.sagebionetworks.bridge.rest.model.Message;
 import org.sagebionetworks.bridge.rest.model.ReportData;
+import org.sagebionetworks.bridge.rest.model.RequestInfo;
 import org.sagebionetworks.bridge.rest.model.RequestParams;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyList;
@@ -70,12 +81,32 @@ public class BridgeHelperTest {
     private static final Study TEST_STUDY_SUMMARY = new Study().identifier(TEST_STUDY_ID).name(TEST_STUDY_ID);
 
     private Upload testUpload;
-
+    
+    @Spy
+    private BridgeHelper bridgeHelper;
+    
+    @Mock
+    private StudiesApi mockStudyClient;
+    
+    @Mock
+    private ForWorkersApi mockWorkerClient;
+    
+    @Mock
+    private ClientManager mockClientManager;
+    
     @BeforeClass
     public void setup() {
         testUpload = RestUtils.GSON.fromJson(json, Upload.class);
     }
-
+    
+    @BeforeMethod
+    public void before() {
+        MockitoAnnotations.initMocks(this);
+        
+        bridgeHelper = new BridgeHelper();
+        bridgeHelper.setBridgeClientManager(mockClientManager);
+    }
+    
     @Test
     public void testGetAllStudiesSummary() throws Exception {
         // mock SDK get studies call
@@ -86,15 +117,9 @@ public class BridgeHelperTest {
         Call<StudyList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        StudiesApi mockStudyClient = mock(StudiesApi.class);
         when(mockStudyClient.getStudies(true)).thenReturn(mockCall);
 
-        ClientManager mockClientManager = mock(ClientManager.class);
         when(mockClientManager.getClient(StudiesApi.class)).thenReturn(mockStudyClient);
-
-        // set up BridgeHelper
-        BridgeHelper bridgeHelper = new BridgeHelper();
-        bridgeHelper.setBridgeClientManager(mockClientManager);
 
         List<Study> retSummaryList = bridgeHelper.getAllStudiesSummary();
         assertEquals(retSummaryList, ImmutableList.of(TEST_STUDY_SUMMARY));
@@ -110,16 +135,10 @@ public class BridgeHelperTest {
         Call<UploadList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        ForWorkersApi mockWorkerClient = mock(ForWorkersApi.class);
         when(mockWorkerClient.getUploadsForStudy(TEST_STUDY_ID, TEST_START_DATETIME, TEST_END_DATETIME, MAX_PAGE_SIZE, null)).thenReturn(
                 mockCall);
 
-        ClientManager mockClientManager = mock(ClientManager.class);
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerClient);
-
-        // set up BridgeHelper
-        BridgeHelper bridgeHelper = new BridgeHelper();
-        bridgeHelper.setBridgeClientManager(mockClientManager);
 
         List<Upload> retUploadsForStudy = bridgeHelper.getUploadsForStudy(TEST_STUDY_ID, TEST_START_DATETIME,
                 TEST_END_DATETIME);
@@ -143,18 +162,12 @@ public class BridgeHelperTest {
         Call<UploadList> secondMockCall = mock(Call.class);
         when(secondMockCall.execute()).thenReturn(secondResponse);
 
-        ForWorkersApi mockWorkerClient = mock(ForWorkersApi.class);
         when(mockWorkerClient.getUploadsForStudy(TEST_STUDY_ID, TEST_START_DATETIME, TEST_END_DATETIME, MAX_PAGE_SIZE, null)).thenReturn(
                 mockCall);
         when(mockWorkerClient.getUploadsForStudy(TEST_STUDY_ID, TEST_START_DATETIME, TEST_END_DATETIME, MAX_PAGE_SIZE, "offsetKey")).thenReturn(
                 secondMockCall);
 
-        ClientManager mockClientManager = mock(ClientManager.class);
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerClient);
-
-        // set up BridgeHelper
-        BridgeHelper bridgeHelper = new BridgeHelper();
-        bridgeHelper.setBridgeClientManager(mockClientManager);
 
         // execute
         List<Upload> retUploadsForStudy = bridgeHelper.getUploadsForStudy(TEST_STUDY_ID, TEST_START_DATETIME,
@@ -166,21 +179,15 @@ public class BridgeHelperTest {
         // contain 2 test uploads
         assertEquals(retUploadsForStudy, ImmutableList.of(testUpload, testUpload));
     }
-
+    
     @Test
     public void testSaveReportForStudy() throws Exception {
         // mock SDK save report call
         Call<Message> mockCall = mock(Call.class);
-        ForWorkersApi mockWorkerClient = mock(ForWorkersApi.class);
         when(mockWorkerClient.saveReport(TEST_STUDY_ID, TEST_REPORT_ID, TEST_REPORT)).thenReturn(mockCall);
 
-        ClientManager mockClientManager = mock(ClientManager.class);
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerClient);
 
-        // set up BridgeHelper
-        BridgeHelper bridgeHelper = new BridgeHelper();
-        bridgeHelper.setBridgeClientManager(mockClientManager);
-        
         Report report = new Report.Builder().withStudyId(TEST_STUDY_ID)
                 .withReportId(TEST_REPORT_ID).withDate(LocalDate.parse(TEST_REPORT.getDate()))
                 .withReportData(TEST_REPORT.getData()).build();
@@ -190,10 +197,66 @@ public class BridgeHelperTest {
     }
     
     @Test
-    public void testGetParticipantsForStudy() throws Exception {
-        ForWorkersApi mockWorkerClient = mock(ForWorkersApi.class);
+    public void testGetStudyPartcipant() throws Exception {
+        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerClient);
         
-        ClientManager mockClientManager = mock(ClientManager.class);
+        StudyParticipant mockStudyParticipant = mockCallForParticipant(mockWorkerClient, USER_ID_1);
+        
+        StudyParticipant studyParticipant = bridgeHelper.getStudyPartcipant(TEST_STUDY_ID, USER_ID_1);
+        assertSame(studyParticipant, mockStudyParticipant);
+        verify(mockWorkerClient).getParticipantByIdForStudy(TEST_STUDY_ID, USER_ID_1, false);
+    }
+    
+    @Test
+    public void testGetRequestInfoForParticipant() throws Exception {
+        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerClient);
+        RequestInfo mockRequestInfo = mockCallForRequestInfo(mockWorkerClient, USER_ID_1);
+        
+        RequestInfo requestInfo = bridgeHelper.getRequestInfoForParticipant(TEST_STUDY_ID, USER_ID_1);
+        
+        assertSame(requestInfo.getUserId(), mockRequestInfo.getUserId());
+        verify(mockWorkerClient).getRequestInfoForWorker(TEST_STUDY_ID, USER_ID_1);
+    }
+    
+    @Test
+    public void testGetActivityEventForParticipant() throws Exception {
+        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerClient);
+        ActivityEventList mockActiviyEventList = mockCallForActivityEventList(mockWorkerClient, USER_ID_1);
+        
+        ActivityEventList activityEventList = bridgeHelper.getActivityEventForParticipant(TEST_STUDY_ID, USER_ID_1);
+        
+        assertNull(activityEventList.getItems());
+        assertSame(activityEventList, mockActiviyEventList);
+        verify(mockWorkerClient).getActivityEventsForParticipantAndStudy(TEST_STUDY_ID, USER_ID_1);
+    }
+    
+    @Test
+    public void testGetAllAccountSummaries() throws Exception {
+        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerClient);
+        
+        AccountSummary accountSummary = mock(AccountSummary.class);
+        when(accountSummary.getId()).thenReturn(USER_ID_1);
+        
+        AccountSummaryList accountSummaryList = mock(AccountSummaryList.class);
+        when(accountSummaryList.getItems()).thenReturn(ImmutableList.of(accountSummary));
+        
+        Response<AccountSummaryList> response = Response.success(accountSummaryList);
+        
+        Call<AccountSummaryList> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenReturn(response);
+        
+        when(mockWorkerClient.getParticipantsForStudy(eq(TEST_STUDY_ID), any(), any(), any(), any(), any(), any())).thenReturn(
+                mockCall);
+        
+        // Execute and validate
+        Iterator<AccountSummary> accountSummaryIterator = bridgeHelper.getAllAccountSummaries(TEST_STUDY_ID);
+        assertNotNull(accountSummaryIterator);
+        
+        verify(mockWorkerClient).getParticipantsForStudy(eq(TEST_STUDY_ID), any(), any(), any(), any(), any(), any());
+    }
+    
+    @Test
+    public void testGetParticipantsForStudy() throws Exception {
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerClient);
 
         AccountSummary summary1 = mockAccountSummary(USER_ID_1, USER_EMAIL_1);
@@ -216,9 +279,6 @@ public class BridgeHelperTest {
         stubParticipants.add(mockCallForParticipant(mockWorkerClient, USER_ID_3));
         stubParticipants.add(mockCallForParticipant(mockWorkerClient, USER_ID_4));
         
-        BridgeHelper bridgeHelper = new BridgeHelper();
-        bridgeHelper.setBridgeClientManager(mockClientManager);
-        
         List<StudyParticipant> participants = bridgeHelper.getParticipantsForStudy(TEST_STUDY_ID, TEST_START_DATETIME,
                 TEST_END_DATETIME);
         // All four participants are returned from two pages of records
@@ -236,19 +296,33 @@ public class BridgeHelperTest {
         verify(mockWorkerClient).getParticipantByIdForStudy(TEST_STUDY_ID, USER_ID_3, false);
         verify(mockWorkerClient).getParticipantByIdForStudy(TEST_STUDY_ID, USER_ID_4, false);
     }
-
+    
     private static AccountSummary mockAccountSummary(String id, String email) {
         AccountSummary mockSummary = mock(AccountSummary.class);
         when(mockSummary.getId()).thenReturn(id);
         when(mockSummary.getEmail()).thenReturn(email);
         return mockSummary;
     }
-
+    
     private StudyParticipant mockCallForParticipant(ForWorkersApi client, String userId) throws Exception {
         StudyParticipant studyParticipant = new StudyParticipant();
         Call<StudyParticipant> spCall = makeCall(studyParticipant);
         when(client.getParticipantByIdForStudy(TEST_STUDY_ID, userId, false)).thenReturn(spCall);
         return studyParticipant;
+    }
+    
+    private RequestInfo mockCallForRequestInfo(ForWorkersApi client, String userId) throws Exception {
+        RequestInfo requestInfo = new RequestInfo();
+        Call<RequestInfo> requestInfoCall = makeCall(requestInfo);
+        when(client.getRequestInfoForWorker(TEST_STUDY_ID, userId)).thenReturn(requestInfoCall);
+        return requestInfo;
+    }
+    
+    private ActivityEventList mockCallForActivityEventList(ForWorkersApi client, String userId) throws Exception {
+        ActivityEventList activityEventList = new ActivityEventList();
+        Call<ActivityEventList> activityEventListCall = makeCall(activityEventList);
+        when(client.getActivityEventsForParticipantAndStudy(TEST_STUDY_ID, userId)).thenReturn(activityEventListCall);
+        return activityEventList;
     }
     
     private <T> Call<T> makeCall(T object) throws IOException {

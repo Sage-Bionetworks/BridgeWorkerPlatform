@@ -2,6 +2,7 @@ package org.sagebionetworks.bridge.reporter.helper;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import org.joda.time.DateTime;
@@ -16,7 +17,9 @@ import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
 import org.sagebionetworks.bridge.rest.api.StudiesApi;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.AccountSummaryList;
+import org.sagebionetworks.bridge.rest.model.ActivityEventList;
 import org.sagebionetworks.bridge.rest.model.ReportData;
+import org.sagebionetworks.bridge.rest.model.RequestInfo;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.Upload;
@@ -97,6 +100,30 @@ public class BridgeHelper {
         
         return retList;
     }
+    
+    public StudyParticipant getStudyPartcipant (String studyId, String userId) throws IOException {
+        ForWorkersApi workersApi = bridgeClientManager.getClient(ForWorkersApi.class);
+        return workersApi.getParticipantByIdForStudy(studyId, userId, false).execute().body();
+    }
+    
+    public RequestInfo getRequestInfoForParticipant (String studyId, String userId) throws IOException {
+        ForWorkersApi workersApi = bridgeClientManager.getClient(ForWorkersApi.class);
+        return workersApi.getRequestInfoForWorker(studyId, userId).execute().body();
+    }
+    
+    public ActivityEventList getActivityEventForParticipant (String studyId, String userId) throws IOException {
+        ForWorkersApi workersApi = bridgeClientManager.getClient(ForWorkersApi.class);
+        return workersApi.getActivityEventsForParticipantAndStudy(studyId, userId).execute().body();
+    }
+    
+    /**
+     * Get an iterator for all account summaries in the given study. Note that since getAllAccountSummaries is a
+     * paginated API, the iterator may continue to call the server.
+     */
+    public Iterator<AccountSummary> getAllAccountSummaries(String studyId) {
+        return new AccountSummaryIterator(bridgeClientManager, studyId);
+    }
+
     
     private void doSleep() {
         // sleep a second
