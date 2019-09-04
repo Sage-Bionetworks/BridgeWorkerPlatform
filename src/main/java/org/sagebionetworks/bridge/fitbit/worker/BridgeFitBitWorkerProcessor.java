@@ -172,7 +172,8 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
                             try {
                                 return bridgeHelper.getFitBitUserForStudyAndHealthCode(studyId, healthCode);
                             } catch (IOException | RuntimeException ex) {
-                                LOG.error("Error getting FitBit auth for health code " + healthCode);
+                                LOG.error("Error getting FitBit auth for health code " + healthCode + ": " +
+                                        ex.getMessage(), ex);
                                 return null;
                             }
                         })
