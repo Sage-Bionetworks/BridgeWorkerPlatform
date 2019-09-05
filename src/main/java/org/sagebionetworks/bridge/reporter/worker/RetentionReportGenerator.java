@@ -50,7 +50,7 @@ public class RetentionReportGenerator implements ReportGenerator {
 
         Iterator<AccountSummary> accountSummaryIter = bridgeHelper.getAllAccountSummaries(studyId);
 
-        List<Integer> signInData = new ArrayList<>(1);
+        List<Integer> signInData = new ArrayList<>();
         List<Integer> uploadedOnData = new ArrayList<>();
         
         while (accountSummaryIter.hasNext()) {
