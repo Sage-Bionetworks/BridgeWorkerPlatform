@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.joda.time.Days;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -20,6 +21,7 @@ import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.ActivityEventList;
 import org.sagebionetworks.bridge.rest.model.RequestInfo;
+import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,15 +50,22 @@ public class RetentionReportGenerator implements ReportGenerator {
 
         Iterator<AccountSummary> accountSummaryIter = bridgeHelper.getAllAccountSummaries(studyId);
 
-        List<Integer> signInData = new ArrayList<>();
+        List<Integer> signInData = new ArrayList<>(1);
         List<Integer> uploadedOnData = new ArrayList<>();
+        
         while (accountSummaryIter.hasNext()) {
             // Rate limit
             perUserRateLimiter.acquire();
             
             AccountSummary accountSummary = accountSummaryIter.next();
             try {
-                ActivityEventList activityEventList = bridgeHelper.getActivityEventForParticipant(studyId, accountSummary.getId());
+                StudyParticipant studyParticipant = bridgeHelper.getStudyPartcipant(studyId, accountSummary.getId());
+                if (!studyParticipant.getRoles().isEmpty()) {
+                    continue;
+                }
+                
+                ActivityEventList activityEventList = bridgeHelper.getActivityEventForParticipant(
+                        studyId, accountSummary.getId());
                 DateTime studyStartDate = null;
                 
                 for (int i = 0; i < activityEventList.getItems().size(); i++) {
@@ -65,20 +74,27 @@ public class RetentionReportGenerator implements ReportGenerator {
                         break;
                     }
                 }
+                
                 if (studyStartDate == null) {
                     LOG.error("No study_state_date event for id=" + accountSummary.getId());
                     continue;
                 }
-                RequestInfo requestInfo = bridgeHelper.getRequestInfoForParticipant(studyId, accountSummary.getId());
+                
+                RequestInfo requestInfo = bridgeHelper.getRequestInfoForParticipant(
+                        studyId, accountSummary.getId());
                 if (requestInfo.getSignedInOn() != null) {
-                    int sign_in_days = Days.daysBetween(studyStartDate.toLocalDate(), requestInfo.getSignedInOn().toLocalDate()).getDays();
+                    int sign_in_days = Days.daysBetween(studyStartDate, 
+                            requestInfo.getSignedInOn().withZone(DateTimeZone.UTC)).getDays();
+                    
                     while (signInData.size() < (sign_in_days + 1)) {
                         signInData.add(0);
                     }
                     signInData.set(sign_in_days, signInData.get(sign_in_days) + 1);
                 }
                 if (requestInfo.getUploadedOn() != null) {
-                    int upload_on_days = Days.daysBetween(studyStartDate.toLocalDate(), requestInfo.getUploadedOn().toLocalDate()).getDays();
+                    int upload_on_days = Days.daysBetween(studyStartDate, 
+                            requestInfo.getUploadedOn().withZone(DateTimeZone.UTC)).getDays();
+                    
                     while (uploadedOnData.size() < (upload_on_days + 1)) {
                         uploadedOnData.add(0);
                     }
@@ -88,7 +104,14 @@ public class RetentionReportGenerator implements ReportGenerator {
                 LOG.error("Error getting data for id " + accountSummary.getId() + ": " + ex.getMessage(), ex);
             }
         }
-
+        
+        for (int i = signInData.size() - 2; i >= 0; i--) {
+            signInData.set(i, signInData.get(i) + signInData.get(i + 1));
+        }
+        for (int i = uploadedOnData.size() - 2; i >= 0; i--) {
+            uploadedOnData.set(i, uploadedOnData.get(i) + uploadedOnData.get(i + 1));
+        }
+        
         Map<String, List<Integer>> reportData = new HashMap<>();
         reportData.put("bySignIn", signInData);
         reportData.put("byUploadedOn", uploadedOnData);
