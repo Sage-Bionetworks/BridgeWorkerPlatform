@@ -83,8 +83,12 @@ public class RetentionReportGenerator implements ReportGenerator {
                 RequestInfo requestInfo = bridgeHelper.getRequestInfoForParticipant(
                         studyId, accountSummary.getId());
                 if (requestInfo.getSignedInOn() != null) {
-                    int sign_in_days = Days.daysBetween(studyStartDate, 
+                    int sign_in_days = Days.daysBetween(studyStartDate.withZone(DateTimeZone.UTC), 
                             requestInfo.getSignedInOn().withZone(DateTimeZone.UTC)).getDays();
+                    if (sign_in_days < 0) {
+                        LOG.error("study_state_date is negative for id=" + accountSummary.getId());
+                        continue;
+                    }
                     
                     while (signInData.size() < (sign_in_days + 1)) {
                         signInData.add(0);
@@ -92,8 +96,12 @@ public class RetentionReportGenerator implements ReportGenerator {
                     signInData.set(sign_in_days, signInData.get(sign_in_days) + 1);
                 }
                 if (requestInfo.getUploadedOn() != null) {
-                    int upload_on_days = Days.daysBetween(studyStartDate, 
+                    int upload_on_days = Days.daysBetween(studyStartDate.withZone(DateTimeZone.UTC), 
                             requestInfo.getUploadedOn().withZone(DateTimeZone.UTC)).getDays();
+                    if (upload_on_days < 0) {
+                        LOG.error("upload_on_days is negative for id=" + accountSummary.getId());
+                        continue;
+                    }
                     
                     while (uploadedOnData.size() < (upload_on_days + 1)) {
                         uploadedOnData.add(0);
