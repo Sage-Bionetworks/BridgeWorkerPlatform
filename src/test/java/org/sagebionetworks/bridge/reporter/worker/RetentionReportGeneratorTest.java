@@ -43,7 +43,7 @@ public class RetentionReportGeneratorTest {
     
     private static final DateTime SIGN_IN_ON = DateTime.parse("2017-06-09T00:00:00.000Z");
     private static final DateTime SIGN_IN_ON_INVALID = DateTime.parse("2016-06-09T00:00:00.000Z");
-    private static final DateTime SIGN_IN_ON_TIMEZONE = DateTime.parse("2017-06-04T06:50:21.650-07:00");
+    private static final DateTime SIGN_IN_ON_TIMEZONE = DateTime.parse("2017-06-03T20:50:21.650-08:00");
     
     private static final DateTime UPLOADED_ON = DateTime.parse("2017-06-08T00:00:00.000Z");
     private static final DateTime UPLOADED_ON_INVALID = DateTime.parse("2016-06-09T00:00:00.000Z");
