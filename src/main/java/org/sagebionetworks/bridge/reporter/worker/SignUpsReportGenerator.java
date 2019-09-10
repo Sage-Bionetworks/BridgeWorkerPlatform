@@ -48,11 +48,13 @@ public class SignUpsReportGenerator implements ReportGenerator {
 
         List<StudyParticipant> participants = bridgeHelper.getParticipantsForStudy(studyId, startDate, endDate);
         for (StudyParticipant participant : participants) {
-            statuses.add(participant.getStatus());
-            // Accounts that aren't enabled do not have interesting sharing statuses. We'd like to count these
-            // for consented accounts, but this isn't easy to do.
-            if (participant.getStatus() == AccountStatus.ENABLED) {
-                sharingScopes.add(participant.getSharingScope());    
+            if (participant.getRoles().isEmpty()) {
+                statuses.add(participant.getStatus());
+                // Accounts that aren't enabled do not have interesting sharing statuses. 
+                // We'd like to count these for consented accounts, but this isn't easy to do.
+                if (participant.getStatus() == AccountStatus.ENABLED) {
+                    sharingScopes.add(participant.getSharingScope());    
+                }
             }
         }
         
