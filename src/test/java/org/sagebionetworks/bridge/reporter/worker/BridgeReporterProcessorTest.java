@@ -172,13 +172,9 @@ public class BridgeReporterProcessorTest {
         SignUpsReportGenerator signUpsGenerator = new SignUpsReportGenerator();
         signUpsGenerator.setBridgeHelper(mockBridgeHelper);
         
-        RetentionReportGenerator retentionGenerator = new RetentionReportGenerator();
-        retentionGenerator.setBridgeHelper(mockBridgeHelper);
-        
         Map<ReportType, ReportGenerator> generators = new ImmutableMap.Builder<ReportType, ReportGenerator>()
                 .put(ReportType.DAILY, uploadsGenerator).put(ReportType.WEEKLY, uploadsGenerator)
-                .put(ReportType.DAILY_SIGNUPS, signUpsGenerator)
-                .put(ReportType.DAILY_RETENTION, retentionGenerator).build();
+                .put(ReportType.DAILY_SIGNUPS, signUpsGenerator).build();
         
         // set up callback
         processor = new BridgeReporterProcessor();
