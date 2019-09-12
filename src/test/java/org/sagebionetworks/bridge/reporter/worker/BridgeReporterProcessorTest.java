@@ -86,18 +86,21 @@ public class BridgeReporterProcessorTest {
     private static final String PARTICIPANT_1 = Tests.unescapeJson("{" +
             "'id':'user1'," +
             "'sharingScope':'no_sharing'," +
+            "'roles': []," +
             "'status':'enabled'" +
             "}");
 
     private static final String PARTICIPANT_2 = Tests.unescapeJson("{" +
             "'id':'user2'," +
             "'sharingScope':'all_qualified_researchers'," +
+            "'roles': []," +
             "'status':'enabled'" +
             "}");
 
     private static final String PARTICIPANT_3 = Tests.unescapeJson("{" +
             "'id':'user3'," +
             "'sharingScope':'no_sharing'," +
+            "'roles': []," +
             "'status':'unverified'" +
             "}");
 
@@ -171,7 +174,7 @@ public class BridgeReporterProcessorTest {
         
         Map<ReportType, ReportGenerator> generators = new ImmutableMap.Builder<ReportType, ReportGenerator>()
                 .put(ReportType.DAILY, uploadsGenerator).put(ReportType.WEEKLY, uploadsGenerator)
-                .put(ReportType.DAILY_SIGNUPS, signUpsGenerator).build();        
+                .put(ReportType.DAILY_SIGNUPS, signUpsGenerator).build();
         
         // set up callback
         processor = new BridgeReporterProcessor();
@@ -301,5 +304,4 @@ public class BridgeReporterProcessorTest {
         assertTrue(map.containsKey("byStatus"));
         assertTrue(map.containsKey("bySharing"));
     }
-    
 }
