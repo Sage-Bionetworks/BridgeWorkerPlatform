@@ -18,8 +18,8 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
-import org.sagebionetworks.bridge.udd.dynamodb.DynamoHelper;
-import org.sagebionetworks.bridge.udd.exceptions.AsyncTaskExecutionException;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionException;
 
 @SuppressWarnings("unchecked")
 public class DefaultTableTaskTest {

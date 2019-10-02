@@ -12,9 +12,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.sagebionetworks.bridge.file.FileHelper;
-import org.sagebionetworks.bridge.udd.dynamodb.DynamoHelper;
-import org.sagebionetworks.bridge.udd.exceptions.AsyncTaskExecutionException;
-import org.sagebionetworks.bridge.udd.exceptions.AsyncTimeoutException;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionException;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTimeoutException;
 
 /**
  * This one-shot asynchronous task downloads a survey metadata table from Synapse. The survey metadata is downloaded in

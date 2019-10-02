@@ -25,7 +25,7 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
-import org.sagebionetworks.bridge.workerPlatform.helper.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
 
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class UploadRedriveWorkerProcessorTest {

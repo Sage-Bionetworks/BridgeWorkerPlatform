@@ -11,9 +11,9 @@ import java.net.URL;
 import org.joda.time.DateTime;
 import org.mockito.ArgumentCaptor;
 import org.sagebionetworks.bridge.rest.model.Phone;
-import org.sagebionetworks.bridge.udd.accounts.AccountInfo;
-import org.sagebionetworks.bridge.udd.dynamodb.StudyInfo;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
+import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.StudyInfo;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 

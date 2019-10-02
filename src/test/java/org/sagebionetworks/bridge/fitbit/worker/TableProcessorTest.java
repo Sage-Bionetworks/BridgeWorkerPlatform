@@ -34,6 +34,7 @@ import org.sagebionetworks.bridge.fitbit.schema.ColumnSchema;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
+import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class TableProcessorTest {

@@ -10,9 +10,9 @@ import org.sagebionetworks.repo.model.table.ColumnModel;
 import org.sagebionetworks.repo.model.table.ColumnType;
 
 import org.sagebionetworks.bridge.fitbit.schema.ColumnSchema;
-import org.sagebionetworks.bridge.fitbit.worker.Constants;
 import org.sagebionetworks.bridge.fitbit.worker.PopulatedTable;
 import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 /** Utility functions */
 public class Utils {

@@ -9,7 +9,7 @@ import org.sagebionetworks.client.exceptions.SynapseException;
 import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 
 import org.sagebionetworks.bridge.schema.UploadSchemaKey;
-import org.sagebionetworks.bridge.udd.exceptions.AsyncTaskExecutionException;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionException;
 
 public class SchemaBasedTableTask extends SynapseDownloadFromTableTask {
     private static final Set<String> ATTACHMENT_TYPE_SET = ImmutableSet.of("attachment_blob", "attachment_csv",

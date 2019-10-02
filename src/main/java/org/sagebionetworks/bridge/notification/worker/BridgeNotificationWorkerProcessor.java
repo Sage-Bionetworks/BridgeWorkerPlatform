@@ -24,9 +24,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import org.sagebionetworks.bridge.notification.exceptions.UserNotConfiguredException;
-import org.sagebionetworks.bridge.notification.helper.BridgeHelper;
-import org.sagebionetworks.bridge.notification.helper.DynamoHelper;
 import org.sagebionetworks.bridge.notification.helper.TemplateVariableHelper;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.ActivityEvent;
@@ -37,6 +34,9 @@ import org.sagebionetworks.bridge.rest.model.UserConsentHistory;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.time.DateUtils;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.UserNotConfiguredException;
 
 /** Worker that sends notifications when users do not engage with the study burst. */
 @Component("ActivityNotificationWorker")
@@ -54,6 +54,9 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     static final String REQUEST_PARAM_STUDY_ID = "studyId";
     static final String REQUEST_PARAM_USER_LIST = "userList";
     static final String REQUEST_PARAM_TAG = "tag";
+
+    // Worker ID for the Worker Log
+    static final String VALUE_WORKER_ID = "ActivityNotificationWorker";
 
     private final RateLimiter perUserRateLimiter = RateLimiter.create(1.0);
 
@@ -137,7 +140,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
             userIdIterator = Iterators.transform(userListNode.elements(), JsonNode::textValue);
             LOG.info("Custom user list received, " + userListNode.size() + " users");
         } else {
-            userIdIterator = Iterators.transform(bridgeHelper.getAllAccountSummaries(studyId), AccountSummary::getId);
+            userIdIterator = Iterators.transform(bridgeHelper.getAllAccountSummaries(studyId, true), AccountSummary::getId);
         }
 
         int numUsers = 0;
@@ -172,7 +175,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         }
 
         // Write to Worker Log in DDB so we can signal end of processing.
-        dynamoHelper.writeWorkerLog(tag);
+        dynamoHelper.writeWorkerLog(VALUE_WORKER_ID, tag);
 
         LOG.info("Finished processing users: " + numUsers + " users in " + stopwatch.elapsed(TimeUnit.SECONDS) +
                 " seconds");
@@ -183,7 +186,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     void processAccountForDate(String studyId, LocalDate date, String userId)
             throws IOException, UserNotConfiguredException {
         // Get participant. We'll need some attributes.
-        StudyParticipant participant = bridgeHelper.getParticipant(studyId, userId);
+        StudyParticipant participant = bridgeHelper.getParticipant(studyId, userId, true);
 
         // Exclude users who are not eligible for notifications.
         if (shouldExcludeUser(studyId, participant)) {

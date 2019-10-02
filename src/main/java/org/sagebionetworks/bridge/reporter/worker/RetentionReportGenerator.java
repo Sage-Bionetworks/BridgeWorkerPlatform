@@ -1,6 +1,5 @@
 package org.sagebionetworks.bridge.reporter.worker;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -16,12 +15,13 @@ import org.springframework.stereotype.Component;
 
 import com.google.common.util.concurrent.RateLimiter;
 
-import org.sagebionetworks.bridge.reporter.helper.BridgeHelper;
 import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
-import org.sagebionetworks.bridge.rest.model.ActivityEventList;
+import org.sagebionetworks.bridge.rest.model.ActivityEvent;
 import org.sagebionetworks.bridge.rest.model.RequestInfo;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,19 +36,18 @@ public class RetentionReportGenerator implements ReportGenerator {
     private BridgeHelper bridgeHelper;
     
     @Autowired
-    @Qualifier("ReporterHelper")
     public final void setBridgeHelper(BridgeHelper bridgeHelper) {
         this.bridgeHelper = bridgeHelper;
     }
 
     @Override
-    public Report generate(BridgeReporterRequest request, String studyId) throws IOException {
+    public Report generate(BridgeReporterRequest request, String studyId) {
 
         DateTime startDate = request.getStartDateTime();
         ReportType scheduleType = request.getScheduleType();
         String reportId = scheduleType.getSuffix();
 
-        Iterator<AccountSummary> accountSummaryIter = bridgeHelper.getAllAccountSummaries(studyId);
+        Iterator<AccountSummary> accountSummaryIter = bridgeHelper.getAllAccountSummaries(studyId, false);
 
         List<Integer> signInData = new ArrayList<>();
         List<Integer> uploadedOnData = new ArrayList<>();
@@ -59,18 +58,17 @@ public class RetentionReportGenerator implements ReportGenerator {
             
             AccountSummary accountSummary = accountSummaryIter.next();
             try {
-                StudyParticipant studyParticipant = bridgeHelper.getStudyPartcipant(studyId, accountSummary.getId());
+                StudyParticipant studyParticipant = bridgeHelper.getParticipant(studyId, accountSummary.getId(), false);
                 if (!studyParticipant.getRoles().isEmpty()) {
                     continue;
                 }
                 
-                ActivityEventList activityEventList = bridgeHelper.getActivityEventForParticipant(
-                        studyId, accountSummary.getId());
+                List<ActivityEvent> activityEventList = bridgeHelper.getActivityEvents(studyId, accountSummary.getId());
                 DateTime studyStartDate = null;
-                
-                for (int i = 0; i < activityEventList.getItems().size(); i++) {
-                    if (activityEventList.getItems().get(i).getEventId().equals("study_start_date")) {
-                        studyStartDate = activityEventList.getItems().get(i).getTimestamp();
+
+                for (ActivityEvent activityEvent : activityEventList) {
+                    if (activityEvent.getEventId().equals("study_start_date")) {
+                        studyStartDate = activityEvent.getTimestamp();
                         break;
                     }
                 }

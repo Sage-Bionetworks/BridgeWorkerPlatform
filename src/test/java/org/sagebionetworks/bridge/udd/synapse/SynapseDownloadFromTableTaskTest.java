@@ -36,7 +36,7 @@ import org.testng.annotations.Test;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.schema.UploadSchema;
 import org.sagebionetworks.bridge.schema.UploadSchemaKey;
-import org.sagebionetworks.bridge.udd.exceptions.AsyncTaskExecutionException;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionException;
 
 // This test had tests for SynapseDownloadFromTableTask before that class was split into DefaultTableTask and
 // SchemaBasedTableTask. Now, a lot of the tests use SchemaBasedTableTask.

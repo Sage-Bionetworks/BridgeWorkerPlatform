@@ -12,10 +12,10 @@ import java.util.Map;
 import org.joda.time.DateTime;
 import org.testng.annotations.Test;
 
-import org.sagebionetworks.bridge.reporter.helper.BridgeHelper;
 import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.rest.model.UploadStatus;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
 public class UploadsReportGeneratorTest {
     
