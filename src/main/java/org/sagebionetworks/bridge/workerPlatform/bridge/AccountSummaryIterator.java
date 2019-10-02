@@ -40,9 +40,9 @@ public class AccountSummaryIterator implements Iterator<AccountSummary> {
     private void loadNextPage() {
         // Call server for the next page.
         try {
-            // HACK: We use "1" for the phone filter. This is because we want to filter out any accounts that don't
-            // have phone numbers. Right now, all phone accounts are in the US, so we can simply use the country code
-            // ("1") in the filter.
+            // HACK: We use "1" for the phone filter. The phone filter is used only to send SMS for the Notification
+            // Worker, and currently, the Notification Worker only supports US numbers. For now, simply use the
+            // country code ("1") as the prefix for the filter.
             String phoneFilter = phoneOnly ? "1" : null;
 
             // The offset into the next page is equal to the number of accounts that we have seen.
