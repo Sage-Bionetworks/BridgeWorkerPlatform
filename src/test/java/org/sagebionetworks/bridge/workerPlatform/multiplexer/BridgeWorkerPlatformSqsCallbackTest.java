@@ -20,6 +20,7 @@ import org.sagebionetworks.bridge.reporter.worker.BridgeReporterProcessor;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.udd.worker.BridgeUddProcessor;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
+import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 public class BridgeWorkerPlatformSqsCallbackTest {
     // simple strings for test

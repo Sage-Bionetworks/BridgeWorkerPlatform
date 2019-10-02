@@ -26,9 +26,9 @@ import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTimeoutException;
-import org.sagebionetworks.bridge.workerPlatform.helper.BridgeHelper;
-import org.sagebionetworks.bridge.workerPlatform.helper.DynamoHelper;
-import org.sagebionetworks.bridge.workerPlatform.helper.UploadStatusAndMessages;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.bridge.UploadStatusAndMessages;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.workerPlatform.util.JsonUtils;
 
 /** Worker used to redrive uploads. Takes in a list of upload IDs or a list of record IDs. */

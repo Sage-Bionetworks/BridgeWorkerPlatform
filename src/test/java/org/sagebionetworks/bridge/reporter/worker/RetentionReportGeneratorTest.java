@@ -20,12 +20,12 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.ActivityEvent;
-import org.sagebionetworks.bridge.rest.model.ActivityEventList;
 import org.sagebionetworks.bridge.rest.model.RequestInfo;
 import org.sagebionetworks.bridge.rest.model.Role;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
-import org.sagebionetworks.bridge.reporter.helper.BridgeHelper;
 import org.sagebionetworks.bridge.reporter.request.ReportType;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -76,7 +76,7 @@ public class RetentionReportGeneratorTest {
         List<AccountSummary> accountSummaries = new ArrayList<>();
         accountSummaries.add(accountSummary);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
         
         mockStudyParticipant(bridgeHelper, USER_ID_1, new ArrayList<>());
         
@@ -94,9 +94,9 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("bySignIn").get(4), new Integer(1));
         assertEquals(map.get("byUploadedOn").get(3), new Integer(1)); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID);
-        verify(bridgeHelper).getStudyPartcipant(STUDY_ID, USER_ID_1);
-        verify(bridgeHelper).getActivityEventForParticipant(STUDY_ID, accountSummary.getId());
+        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
+        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
+        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary.getId());
         verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary.getId());
     }
     
@@ -107,7 +107,7 @@ public class RetentionReportGeneratorTest {
         List<AccountSummary> accountSummaries = new ArrayList<>();
         accountSummaries.add(accountSummary);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
         
         mockStudyParticipant(bridgeHelper, USER_ID_1, new ArrayList<>());
         
@@ -125,9 +125,9 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("bySignIn").get(0), new Integer(1));
         assertEquals(map.get("byUploadedOn").get(4), new Integer(1)); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID);
-        verify(bridgeHelper).getStudyPartcipant(STUDY_ID, USER_ID_1);
-        verify(bridgeHelper).getActivityEventForParticipant(STUDY_ID, accountSummary.getId());
+        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
+        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
+        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary.getId());
         verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary.getId());
     }
     
@@ -142,7 +142,7 @@ public class RetentionReportGeneratorTest {
         accountSummaries.add(accountSummary2);
         accountSummaries.add(accountSummary3);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
         
         mockStudyParticipant(bridgeHelper, USER_ID_1, new ArrayList<>());
         mockStudyParticipant(bridgeHelper, USER_ID_2, new ArrayList<>());
@@ -168,14 +168,14 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("byUploadedOn").get(3), new Integer(3)); 
         assertEquals(map.get("byUploadedOn").get(4), new Integer(2)); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID);
-        verify(bridgeHelper).getStudyPartcipant(STUDY_ID, USER_ID_1);
-        verify(bridgeHelper).getStudyPartcipant(STUDY_ID, USER_ID_2);
-        verify(bridgeHelper).getStudyPartcipant(STUDY_ID, USER_ID_3);
+        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
+        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
+        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_2, false);
+        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_3, false);
         
-        verify(bridgeHelper).getActivityEventForParticipant(STUDY_ID, accountSummary.getId());
-        verify(bridgeHelper).getActivityEventForParticipant(STUDY_ID, accountSummary2.getId());
-        verify(bridgeHelper).getActivityEventForParticipant(STUDY_ID, accountSummary3.getId());
+        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary.getId());
+        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary2.getId());
+        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary3.getId());
         
         verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary.getId());
         verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary2.getId());
@@ -189,7 +189,7 @@ public class RetentionReportGeneratorTest {
         List<AccountSummary> accountSummaries = new ArrayList<>();
         accountSummaries.add(accountSummary);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
         
         mockStudyParticipant(bridgeHelper, USER_ID_1, new ArrayList<>());
         
@@ -204,9 +204,9 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("bySignIn").size(), 0);
         assertEquals(map.get("byUploadedOn").size(), 0); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID);
-        verify(bridgeHelper).getStudyPartcipant(STUDY_ID, USER_ID_1);
-        verify(bridgeHelper).getActivityEventForParticipant(STUDY_ID, accountSummary.getId());
+        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
+        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
+        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary.getId());
         verify(bridgeHelper, never()).getRequestInfoForParticipant(anyString(), anyString());
     }
     
@@ -217,7 +217,7 @@ public class RetentionReportGeneratorTest {
         List<AccountSummary> accountSummaries = new ArrayList<>();
         accountSummaries.add(accountSummary);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
         
         List<Role> roles = new ArrayList<>();
         roles.add(Role.DEVELOPER);
@@ -232,9 +232,9 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("bySignIn").size(), 0);
         assertEquals(map.get("byUploadedOn").size(), 0); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID);
-        verify(bridgeHelper).getStudyPartcipant(STUDY_ID, USER_ID_1);
-        verify(bridgeHelper, never()).getActivityEventForParticipant(anyString(), anyString());
+        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
+        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
+        verify(bridgeHelper, never()).getActivityEvents(anyString(), anyString());
         verify(bridgeHelper, never()).getRequestInfoForParticipant(anyString(), anyString());
     }
     
@@ -245,7 +245,7 @@ public class RetentionReportGeneratorTest {
         List<AccountSummary> accountSummaries = new ArrayList<>();
         accountSummaries.add(accountSummary);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
         
         mockStudyParticipant(bridgeHelper, USER_ID_1, new ArrayList<>());
         
@@ -263,9 +263,9 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("bySignIn").size(), 0);
         assertEquals(map.get("byUploadedOn").size(), 0); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID);
-        verify(bridgeHelper).getStudyPartcipant(STUDY_ID, USER_ID_1);
-        verify(bridgeHelper).getActivityEventForParticipant(STUDY_ID, accountSummary.getId());
+        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
+        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
+        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary.getId());
         verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary.getId());
     }
     
@@ -276,7 +276,7 @@ public class RetentionReportGeneratorTest {
         List<AccountSummary> accountSummaries = new ArrayList<>();
         accountSummaries.add(accountSummary);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
         
         mockStudyParticipant(bridgeHelper, USER_ID_1, new ArrayList<>());
         
@@ -295,9 +295,9 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("bySignIn").get(4), new Integer(1));
         assertEquals(map.get("byUploadedOn").size(), 0); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID);
-        verify(bridgeHelper).getStudyPartcipant(STUDY_ID, USER_ID_1);
-        verify(bridgeHelper).getActivityEventForParticipant(STUDY_ID, accountSummary.getId());
+        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
+        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
+        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary.getId());
         verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary.getId());
     }
     
@@ -307,15 +307,14 @@ public class RetentionReportGeneratorTest {
         return mockAccountSummary;
     }
     
-    private static StudyParticipant mockStudyParticipant(BridgeHelper bridgeHelper,
+    private static void mockStudyParticipant(BridgeHelper bridgeHelper,
             String userId, List<Role> roles) throws IOException {
         StudyParticipant mockStudyParticipant = mock(StudyParticipant.class);
         when(mockStudyParticipant.getRoles()).thenReturn(roles);
-        when(bridgeHelper.getStudyPartcipant(STUDY_ID, userId)).thenReturn(mockStudyParticipant);
-        return mockStudyParticipant;
+        when(bridgeHelper.getParticipant(STUDY_ID, userId, false)).thenReturn(mockStudyParticipant);
     }
     
-    private static List<ActivityEvent> mockStudyStateDateEvent(DateTime studyStateDate) throws IOException {
+    private static List<ActivityEvent> mockStudyStateDateEvent(DateTime studyStateDate) {
         ActivityEvent studyStateDateEvent = new ActivityEvent().eventId("study_start_date").timestamp(studyStateDate);
         List<ActivityEvent> activityEvents = new ArrayList<>();
         activityEvents.add(studyStateDateEvent);
@@ -324,10 +323,8 @@ public class RetentionReportGeneratorTest {
     
     private static void mockActivityEventList(BridgeHelper bridgeHelper, AccountSummary accountSummary, 
             List<ActivityEvent> activityEvents) throws IOException {
-        ActivityEventList activityEventList = mock(ActivityEventList.class);
-        when(activityEventList.getItems()).thenReturn(activityEvents);
-        when(bridgeHelper.getActivityEventForParticipant(STUDY_ID,
-                accountSummary.getId())).thenReturn(activityEventList);
+        when(bridgeHelper.getActivityEvents(STUDY_ID,
+                accountSummary.getId())).thenReturn(activityEvents);
     }
     
     private static RequestInfo mockRequestInfo(DateTime signInOn, DateTime uploadedOn) {

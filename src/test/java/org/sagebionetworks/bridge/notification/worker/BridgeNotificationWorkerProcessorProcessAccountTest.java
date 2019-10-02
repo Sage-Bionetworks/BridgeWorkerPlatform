@@ -27,8 +27,6 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import org.sagebionetworks.bridge.notification.helper.BridgeHelper;
-import org.sagebionetworks.bridge.notification.helper.DynamoHelper;
 import org.sagebionetworks.bridge.notification.helper.TemplateVariableHelper;
 import org.sagebionetworks.bridge.rest.model.ActivityEvent;
 import org.sagebionetworks.bridge.rest.model.Phone;
@@ -36,6 +34,8 @@ import org.sagebionetworks.bridge.rest.model.ScheduleStatus;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.UserConsentHistory;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
 
 @SuppressWarnings("JavaReflectionMemberAccess")
 public class BridgeNotificationWorkerProcessorProcessAccountTest {
@@ -105,7 +105,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         when(mockParticipant.getPhone()).thenReturn(PHONE);
         when(mockParticipant.isPhoneVerified()).thenReturn(true);
         when(mockParticipant.getTimeZone()).thenReturn("-07:00");
-        when(mockBridgeHelper.getParticipant(STUDY_ID, USER_ID)).thenReturn(mockParticipant);
+        when(mockBridgeHelper.getParticipant(STUDY_ID, USER_ID, true)).thenReturn(mockParticipant);
 
         // Similarly, mock consent.
         mockConsent = mock(UserConsentHistory.class);

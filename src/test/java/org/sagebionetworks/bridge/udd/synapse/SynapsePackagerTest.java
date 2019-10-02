@@ -49,11 +49,11 @@ import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.schema.UploadSchema;
-import org.sagebionetworks.bridge.udd.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelperTest;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.udd.worker.BridgeUddRequest;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.SynapseUnavailableException;
 
 @SuppressWarnings({ "unchecked", "rawtypes" })

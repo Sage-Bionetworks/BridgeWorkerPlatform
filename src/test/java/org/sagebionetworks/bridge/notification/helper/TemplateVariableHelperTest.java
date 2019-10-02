@@ -11,11 +11,13 @@ import com.google.common.collect.ImmutableList;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import org.sagebionetworks.bridge.notification.exceptions.UserNotConfiguredException;
 import org.sagebionetworks.bridge.notification.worker.WorkerConfig;
 import org.sagebionetworks.bridge.rest.RestUtils;
 import org.sagebionetworks.bridge.rest.model.ReportData;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.UserNotConfiguredException;
 
 public class TemplateVariableHelperTest {
     private static final String APP_URL = "http://example.com/app-url";

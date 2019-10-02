@@ -21,7 +21,6 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import org.joda.time.DateTime;
-import org.sagebionetworks.client.exceptions.SynapseServerException;
 import org.sagebionetworks.client.exceptions.SynapseServiceUnavailable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,10 +31,10 @@ import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.schema.UploadSchema;
-import org.sagebionetworks.bridge.udd.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.udd.worker.BridgeUddRequest;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.SynapseUnavailableException;
 
 /**

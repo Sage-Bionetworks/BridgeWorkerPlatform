@@ -56,7 +56,7 @@ import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.udd.worker.BridgeUddProcessor;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.multiplexer.BridgeWorkerPlatformSqsCallback;
-import org.sagebionetworks.bridge.workerPlatform.multiplexer.Constants;
+import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 // These configs get credentials from the default credential chain. For developer desktops, this is ~/.aws/credentials.
 // For EC2 instances, this happens transparently.

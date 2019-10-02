@@ -17,10 +17,10 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.fitbit.schema.ColumnSchema;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
-import org.sagebionetworks.bridge.fitbit.worker.Constants;
 import org.sagebionetworks.bridge.fitbit.worker.PopulatedTable;
 import org.sagebionetworks.bridge.rest.model.OAuthProvider;
 import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 public class UtilsTest {
     private static final long DATA_ACCESS_TEAM_ID = 1234L;

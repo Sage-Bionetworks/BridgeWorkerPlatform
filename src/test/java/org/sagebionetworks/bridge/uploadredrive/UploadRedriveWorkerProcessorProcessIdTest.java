@@ -12,8 +12,8 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.rest.model.UploadStatus;
-import org.sagebionetworks.bridge.workerPlatform.helper.BridgeHelper;
-import org.sagebionetworks.bridge.workerPlatform.helper.UploadStatusAndMessages;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.bridge.UploadStatusAndMessages;
 
 public class UploadRedriveWorkerProcessorProcessIdTest {
     private static final String RECORD_ID = "my-record";

@@ -243,12 +243,9 @@
                         <exclude>org/sagebionetworks/bridge/workerPlatform/config/*</exclude>
 
                         <!-- constants are also not testable -->
-                        <exclude>org/sagebionetworks/bridge/fitbit/worker/Constants.class</exclude>
-                        <exclude>org/sagebionetworks/bridge/workerPlatform/multiplexer/Constants.class</exclude>
+                        <exclude>org/sagebionetworks/bridge/workerPlatform/util/Constants.class</exclude>
 
                         <!-- no point in testing exceptions, since they are entirely boilerplate code -->
-                        <exclude>org/sagebionetworks/bridge/notification/exceptions/*</exclude>
-                        <exclude>org/sagebionetworks/bridge/udd/exceptions/*</exclude>
                         <exclude>org/sagebionetworks/bridge/workerPlatform/exceptions/*</exclude>
                     </excludes>
                     <rules>

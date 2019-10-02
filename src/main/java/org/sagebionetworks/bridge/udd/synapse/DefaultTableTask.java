@@ -6,7 +6,7 @@ import com.google.common.collect.ImmutableSet;
 import org.sagebionetworks.client.exceptions.SynapseException;
 import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 
-import org.sagebionetworks.bridge.udd.exceptions.AsyncTaskExecutionException;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionException;
 
 public class DefaultTableTask extends SynapseDownloadFromTableTask {
     /** Constructs this task with the specified task parameters. */
