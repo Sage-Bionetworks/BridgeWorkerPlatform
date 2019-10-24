@@ -8,6 +8,7 @@ import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.ForwardCursorStringList;
 import org.sagebionetworks.bridge.rest.model.OAuthAccessToken;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.FitBitUserNotConfiguredException;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 /** Helper class to abstract away Bridge's paginated API for OAuth tokens. */
@@ -101,11 +102,16 @@ public class FitBitUserIterator implements Iterator<FitBitUser> {
                 int statusCode = ((BridgeSDKException) ex).getStatusCode();
                 if (statusCode >= 400 && statusCode <= 499) {
                     nextIndex++;
+
+                    // This is a user configuration error, not an unexpected error. Throw a special exception so
+                    // callers can handle this correctly.
+                    throw new FitBitUserNotConfiguredException("User not configured for FitBit, health code " +
+                            healthCode + ": " + ex.getMessage(), ex);
                 }
             }
 
             // Iterator can't throw exceptions. Wrap in a RuntimeException.
-            throw new RuntimeException("Error token for user " + healthCode + ": " + ex.getMessage(), ex);
+            throw new RuntimeException("Error token for health code " + healthCode + ": " + ex.getMessage(), ex);
         }
 
         // Increment the nextIndex counter.
