@@ -26,6 +26,7 @@ import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.ForwardCursorStringList;
 import org.sagebionetworks.bridge.rest.model.OAuthAccessToken;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.FitBitUserNotConfiguredException;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 @SuppressWarnings("unchecked")
@@ -217,7 +218,11 @@ public class FitBitUserIteratorTest {
             iter.next();
             fail("expected exception");
         } catch (RuntimeException ex) {
-            // expected exception
+            if (skipsErrorUser) {
+                assertTrue(ex instanceof FitBitUserNotConfiguredException);
+            } else {
+                assertFalse(ex instanceof FitBitUserNotConfiguredException);
+            }
         }
         if (!skipsErrorUser) {
             FitBitUser user1 = iter.next();

@@ -27,6 +27,7 @@ import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.FitBitUser;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.FitBitUserNotConfiguredException;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 import org.sagebionetworks.bridge.workerPlatform.util.JsonUtils;
 
@@ -207,7 +208,11 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
                         }
                     }
                 } catch (Exception ex) {
-                    LOG.error("Error getting next user: " + ex.getMessage(), ex);
+                    if (ex instanceof FitBitUserNotConfiguredException) {
+                        LOG.info("User not configured for FitBit: " + ex.getMessage(), ex);
+                    } else {
+                        LOG.error("Error getting next user: " + ex.getMessage(), ex);
+                    }
 
                     // The Iterator is a paginated iterator that calls Bridge for each user. If for some reason, it
                     // keeps throwing exceptions (for example, Bridge is down), this could retry infinitely. Cap the
