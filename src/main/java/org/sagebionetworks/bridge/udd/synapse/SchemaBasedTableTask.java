@@ -52,7 +52,7 @@ public class SchemaBasedTableTask extends SynapseDownloadFromTableTask {
                     schemaKey.toString() + " no longer exists");
         } catch (SynapseException ex) {
             throw new AsyncTaskExecutionException("Error verifying synapse table " + synapseTableId + " for schema " +
-                    schemaKey.toString());
+                    schemaKey.toString() + ": " + ex.getMessage(), ex);
         }
     }
 }

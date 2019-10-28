@@ -5,6 +5,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -13,7 +14,6 @@ import java.util.Set;
 
 import org.joda.time.LocalDate;
 import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
-import org.sagebionetworks.client.exceptions.UnknownSynapseServerException;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -94,7 +94,8 @@ public class DefaultTableTaskTest {
     @Test
     public void errorVerifyingTable() throws Exception {
         // Mock getTable()
-        when(mockSynapseHelper.getTable(TABLE_ID)).thenThrow(UnknownSynapseServerException.class);
+        TestSynapseException originalEx = new TestSynapseException("test exception");
+        when(mockSynapseHelper.getTable(TABLE_ID)).thenThrow(originalEx);
 
         // Execute (throws exception).
         try {
@@ -102,7 +103,8 @@ public class DefaultTableTaskTest {
             fail("expected exception");
         } catch (AsyncTaskExecutionException ex) {
             assertEquals(ex.getMessage(), "Error verifying synapse table " + TABLE_ID +
-                    " for default schema for study " + STUDY_ID);
+                    " for default schema for study " + STUDY_ID + ": test exception");
+            assertSame(ex.getCause(), originalEx);
         }
 
         // Verify we _didn't_ delete the table mapping.
