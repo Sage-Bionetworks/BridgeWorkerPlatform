@@ -39,7 +39,7 @@ public class DefaultTableTask extends SynapseDownloadFromTableTask {
                     studyId + " no longer exists");
         } catch (SynapseException ex) {
             throw new AsyncTaskExecutionException("Error verifying synapse table " + synapseTableId +
-                    " for default schema for study " + studyId);
+                    " for default schema for study " + studyId + ": " + ex.getMessage(), ex);
         }
     }
 }
