@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Sets;
@@ -442,7 +443,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
 
         // Get notification messages for type.
-        List<String> messageList = null;
+        List<String> messageList;
         switch (notificationType) {
             case CUMULATIVE:
                 messageList = workerConfig.getMissedCumulativeActivitiesMessagesList();
@@ -454,6 +455,16 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
                 messageList = workerConfig.getMissedLaterActivitiesMessagesList();
                 break;
             case PRE_BURST:
+                // Set the default message list, in case we can't generate a pre-burst message.
+                messageList = ImmutableList.of(workerConfig.getDefaultPreburstMessage());
+
+                // Pre-burst requires a study commitment.
+                String studyCommitment = templateVariableHelper.getStudyCommitment(studyId, userId);
+                if (studyCommitment == null) {
+                    // Break and fall back to the default.
+                    break;
+                }
+
                 // Narrow down notification messages for data group.
                 Map<String, List<String>> messagesByDataGroup = workerConfig.getPreburstMessagesByDataGroup();
                 for (String oneDataGroup : participant.getDataGroups()) {

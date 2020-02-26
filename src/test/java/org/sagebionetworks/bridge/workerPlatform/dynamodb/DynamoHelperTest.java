@@ -169,6 +169,7 @@ public class DynamoHelperTest {
                 .withInt(DynamoHelper.KEY_BURST_DURATION_DAYS, 19)
                 .withStringSet(DynamoHelper.KEY_BURST_EVENT_ID_SET, "enrollment", "custom:activityBurst2Start")
                 .withString(DynamoHelper.KEY_BURST_TASK_ID, "study-burst-task")
+                .withString(DynamoHelper.KEY_DEFAULT_PREBURST_MESSAGE, "default preburst message")
                 .withInt(DynamoHelper.KEY_EARLY_LATE_CUTOFF_DAYS, 7)
                 .withString(DynamoHelper.KEY_ENGAGEMENT_SURVEY_GUID, "dummy-survey-guid")
                 .withStringSet(DynamoHelper.KEY_EXCLUDED_DATA_GROUP_SET, "excluded-group-1", "excluded-group-2")
@@ -190,6 +191,7 @@ public class DynamoHelperTest {
         assertEquals(config.getBurstStartEventIdSet(), ImmutableSet.of("enrollment",
                 "custom:activityBurst2Start"));
         assertEquals(config.getBurstTaskId(), "study-burst-task");
+        assertEquals(config.getDefaultPreburstMessage(), "default preburst message");
         assertEquals(config.getEarlyLateCutoffDays(), 7);
         assertEquals(config.getEngagementSurveyGuid(), "dummy-survey-guid");
         assertEquals(config.getExcludedDataGroupSet(), ImmutableSet.of("excluded-group-1",

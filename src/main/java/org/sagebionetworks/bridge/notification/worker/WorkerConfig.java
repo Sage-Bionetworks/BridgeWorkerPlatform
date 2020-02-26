@@ -14,6 +14,7 @@ public class WorkerConfig {
     private int burstDurationDays;
     private Set<String> burstStartEventIdSet = ImmutableSet.of();
     private String burstTaskId;
+    private String defaultPreburstMessage;
     private int earlyLateCutoffDays;
     private String engagementSurveyGuid;
     private Set<String> excludedDataGroupSet = ImmutableSet.of();
@@ -69,6 +70,16 @@ public class WorkerConfig {
     /** @see #getBurstTaskId */
     public void setBurstTaskId(String burstTaskId) {
         this.burstTaskId = burstTaskId;
+    }
+
+    /** The default pre-burst notification if the participant lacks the data groups or has no study commitment. */
+    public String getDefaultPreburstMessage() {
+        return defaultPreburstMessage;
+    }
+
+    /** @see #getDefaultPreburstMessage */
+    public void setDefaultPreburstMessage(String defaultPreburstMessage) {
+        this.defaultPreburstMessage = defaultPreburstMessage;
     }
 
     /**
