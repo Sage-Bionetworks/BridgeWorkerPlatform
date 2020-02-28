@@ -44,6 +44,7 @@ public class DynamoHelper {
     static final String KEY_BURST_DURATION_DAYS = "burstDurationDays";
     static final String KEY_BURST_EVENT_ID_SET = "burstStartEventIdSet";
     static final String KEY_BURST_TASK_ID = "burstTaskId";
+    static final String KEY_DEFAULT_PREBURST_MESSAGE = "defaultPreburstMessage";
     static final String KEY_EARLY_LATE_CUTOFF_DAYS = "earlyLateCutoffDays";
     static final String KEY_ENGAGEMENT_SURVEY_GUID = "engagementSurveyGuid";
     static final String KEY_EXCLUDED_DATA_GROUP_SET = "excludedDataGroupSet";
@@ -174,6 +175,7 @@ public class DynamoHelper {
         workerConfig.setBurstDurationDays(item.getInt(KEY_BURST_DURATION_DAYS));
         workerConfig.setBurstStartEventIdSet(item.getStringSet(KEY_BURST_EVENT_ID_SET));
         workerConfig.setBurstTaskId(item.getString(KEY_BURST_TASK_ID));
+        workerConfig.setDefaultPreburstMessage(item.getString(KEY_DEFAULT_PREBURST_MESSAGE));
         workerConfig.setEarlyLateCutoffDays(item.getInt(KEY_EARLY_LATE_CUTOFF_DAYS));
         workerConfig.setEngagementSurveyGuid(item.getString(KEY_ENGAGEMENT_SURVEY_GUID));
         workerConfig.setExcludedDataGroupSet(item.getStringSet(KEY_EXCLUDED_DATA_GROUP_SET));

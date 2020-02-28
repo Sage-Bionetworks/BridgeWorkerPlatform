@@ -49,11 +49,13 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     private static final String MESSAGE_LATE = "message-late";
     private static final String MESSAGE_PRE_BURST_1 = "message-pre-burst-1";
     private static final String MESSAGE_PRE_BURST_2 = "message-pre-burst-2";
+    private static final String MESSAGE_PRE_BURST_DEFAULT = "default pre-burst message";
     private static final long MOCK_NOW_MILLIS = DateTime.parse("2018-04-30T16:41:15.831-0700").getMillis();
     private static final Phone PHONE = new Phone().regionCode("US").number("425-555-5555");
     private static final String RESOLVED_TEMPLATE_VAR_SUFFIX = " w/ resolved variables";
     private static final String PREBURST_GROUP_1 = "preburst-group-1";
     private static final String PREBURST_GROUP_2 = "preburst-group-2";
+    private static final String STUDY_COMMITMENT = "dummy study commitment";
     private static final String STUDY_ID = "test-study";
     private static final String TASK_ID = "study-burst-task";
     private static final String TEST_NO_CONSENT_GROUP = "test_no_consent";
@@ -144,6 +146,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         config.setBurstDurationDays(9);
         config.setBurstStartEventIdSet(ImmutableSet.of(EVENT_ID_ENROLLMENT, EVENT_ID_BURST_2_START));
         config.setBurstTaskId(TASK_ID);
+        config.setDefaultPreburstMessage(MESSAGE_PRE_BURST_DEFAULT);
         config.setEarlyLateCutoffDays(5);
         config.setExcludedDataGroupSet(ImmutableSet.of(EXCLUDED_DATA_GROUP_1, EXCLUDED_DATA_GROUP_2));
         config.setMissedCumulativeActivitiesMessagesList(missedCumulativeMessageList);
@@ -160,6 +163,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         // Mock template variable helper. For this test, just append a string. Actually template variable logic is
         // tested somewhere else.
         mockTemplateVariableHelper = mock(TemplateVariableHelper.class);
+        when(mockTemplateVariableHelper.getStudyCommitment(STUDY_ID, USER_ID)).thenReturn(STUDY_COMMITMENT);
         when(mockTemplateVariableHelper.resolveTemplateVariables(eq(STUDY_ID), any(), any()))
                 .thenAnswer(invocation -> {
                     String message = invocation.getArgumentAt(2, String.class);
@@ -392,13 +396,23 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     }
 
     @Test
+    public void preburstNotificationWithNoStudyCommitment() throws Exception {
+        // Mock template variable helper to not have a study commitment.
+        when(mockTemplateVariableHelper.getStudyCommitment(STUDY_ID, USER_ID)).thenReturn(null);
+
+        // Execute test.
+        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
+        verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_DEFAULT);
+    }
+
+    @Test
     public void preburstNotificationWithNoDataGroups() throws Exception {
         // Set up data group
         when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group"));
 
         // Execute test.
         processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
-        verifyNoNotification();
+        verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_DEFAULT);
     }
 
     @Test

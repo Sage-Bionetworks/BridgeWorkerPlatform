@@ -1,5 +1,7 @@
 package org.sagebionetworks.bridge.notification.helper;
 
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
@@ -8,6 +10,7 @@ import static org.testng.Assert.assertEquals;
 import java.util.Map;
 
 import com.google.common.collect.ImmutableList;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -22,20 +25,23 @@ import org.sagebionetworks.bridge.workerPlatform.exceptions.UserNotConfiguredExc
 public class TemplateVariableHelperTest {
     private static final String APP_URL = "http://example.com/app-url";
     private static final String STUDY_ID = "test-study";
-    private static final String USER_ID = "test-user";
 
     private ReportData engagementReport;
     private BridgeHelper mockBridgeHelper;
     private DynamoHelper mockDynamoHelper;
     private StudyParticipant mockParticipant;
     private TemplateVariableHelper templateVariableHelper;
+    private String userId;
 
     @BeforeMethod
     public void setup() throws Exception {
+        // Generate a new user ID for each test. This is needed to break the cache on getStudyCommitment;
+        userId = RandomStringUtils.randomAlphabetic(4);
+
         // Mock Engagement report. All we care about is Data, which is different for each test.
         engagementReport = new ReportData();
         mockBridgeHelper = mock(BridgeHelper.class);
-        when(mockBridgeHelper.getParticipantReports(STUDY_ID, USER_ID, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
+        when(mockBridgeHelper.getParticipantReports(STUDY_ID, userId, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
                 TemplateVariableHelper.GLOBAL_REPORT_DATE, TemplateVariableHelper.GLOBAL_REPORT_DATE))
                 .thenReturn(ImmutableList.of(engagementReport));
 
@@ -53,7 +59,7 @@ public class TemplateVariableHelperTest {
 
         // Participant needs to be mocked because we can't set ID
         mockParticipant = mock(StudyParticipant.class);
-        when(mockParticipant.getId()).thenReturn(USER_ID);
+        when(mockParticipant.getId()).thenReturn(userId);
     }
 
     @Test
@@ -84,17 +90,34 @@ public class TemplateVariableHelperTest {
                 "studyCommitment=dummy answer dummy answer");
     }
 
-    // branch coverage
-    @Test(expectedExceptions = UserNotConfiguredException.class)
-    public void studyCommitment_noEngagementReport() throws Exception {
+    @Test
+    public void resolve_noStudyCommitment() throws Exception {
         // Mock getParticipantReports to return no results.
-        when(mockBridgeHelper.getParticipantReports(STUDY_ID, USER_ID, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
+        when(mockBridgeHelper.getParticipantReports(STUDY_ID, userId, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
                 TemplateVariableHelper.GLOBAL_REPORT_DATE, TemplateVariableHelper.GLOBAL_REPORT_DATE))
                 .thenReturn(ImmutableList.of());
 
         // Execute test.
-        templateVariableHelper.resolveTemplateVariables(STUDY_ID, mockParticipant,
-                "studyCommitment=${studyCommitment}");
+        try {
+            templateVariableHelper.resolveTemplateVariables(STUDY_ID, mockParticipant,
+                    "studyCommitment=${studyCommitment}");
+            fail();
+        } catch (UserNotConfiguredException ex) {
+            assertEquals(ex.getMessage(), "User " + userId + " does not have a study commitment");
+        }
+    }
+
+    // branch coverage
+    @Test
+    public void studyCommitment_noEngagementReport() throws Exception {
+        // Mock getParticipantReports to return no results.
+        when(mockBridgeHelper.getParticipantReports(STUDY_ID, userId, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
+                TemplateVariableHelper.GLOBAL_REPORT_DATE, TemplateVariableHelper.GLOBAL_REPORT_DATE))
+                .thenReturn(ImmutableList.of());
+
+        // Execute test.
+        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        assertNull(result);
     }
 
     // branch coverage
@@ -113,28 +136,27 @@ public class TemplateVariableHelperTest {
         Object reportDataObj2 = RestUtils.GSON.fromJson(reportDataJson2, Map.class);
         ReportData report2 = new ReportData().data(reportDataObj2);
 
-        when(mockBridgeHelper.getParticipantReports(STUDY_ID, USER_ID, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
+        when(mockBridgeHelper.getParticipantReports(STUDY_ID, userId, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
                 TemplateVariableHelper.GLOBAL_REPORT_DATE, TemplateVariableHelper.GLOBAL_REPORT_DATE))
                 .thenReturn(ImmutableList.of(report1, report2));
 
         // Execute test.
-        String result = templateVariableHelper.resolveTemplateVariables(STUDY_ID, mockParticipant,
-                "studyCommitment=${studyCommitment}");
-        assertEquals(result, "studyCommitment=answer 1");
+        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        assertEquals(result, "answer 1");
     }
 
     // branch coverage
-    @Test(expectedExceptions = UserNotConfiguredException.class)
+    @Test
     public void studyCommitment_noClientData() throws Exception {
         // By default, engagement report contains no client data.
 
         // Execute test.
-        templateVariableHelper.resolveTemplateVariables(STUDY_ID, mockParticipant,
-                "studyCommitment=${studyCommitment}");
+        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        assertNull(result);
     }
 
     // branch coverage
-    @Test(expectedExceptions = UserNotConfiguredException.class)
+    @Test
     public void studyCommitment_emptyClientData() throws Exception {
         // Set Report Data.
         String reportDataJson = "{}";
@@ -142,12 +164,12 @@ public class TemplateVariableHelperTest {
         engagementReport.setData(reportDataObj);
 
         // Execute test.
-        templateVariableHelper.resolveTemplateVariables(STUDY_ID, mockParticipant,
-                "studyCommitment=${studyCommitment}");
+        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        assertNull(result);
     }
 
     // branch coverage
-    @Test(expectedExceptions = UserNotConfiguredException.class)
+    @Test
     public void studyCommitment_noStudyCommitment() throws Exception {
         // Set Report Data. Add a dummy key so that this test hits a different codepath than the empty case.
         String reportDataJson = "{\n" +
@@ -157,8 +179,22 @@ public class TemplateVariableHelperTest {
         engagementReport.setData(reportDataObj);
 
         // Execute test.
-        templateVariableHelper.resolveTemplateVariables(STUDY_ID, mockParticipant,
-                "studyCommitment=${studyCommitment}");
+        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        assertNull(result);
+    }
+
+    @Test
+    public void studyCommitment_normalCase() throws Exception {
+        // Set Report Data.
+        String reportDataJson = "{\n" +
+                "   \"benefits\":\"foobarbaz\"\n" +
+                "}";
+        Object reportDataObj = RestUtils.GSON.fromJson(reportDataJson, Map.class);
+        engagementReport.setData(reportDataObj);
+
+        // Execute test.
+        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        assertEquals(result, "foobarbaz");
     }
 
     // branch coverage
@@ -172,8 +208,7 @@ public class TemplateVariableHelperTest {
         engagementReport.setData(reportDataObj);
 
         // Execute test.
-        String result = templateVariableHelper.resolveTemplateVariables(STUDY_ID, mockParticipant,
-                "studyCommitment=${studyCommitment}");
-        assertEquals(result, "studyCommitment=true");
+        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        assertEquals(result, "true");
     }
 }
