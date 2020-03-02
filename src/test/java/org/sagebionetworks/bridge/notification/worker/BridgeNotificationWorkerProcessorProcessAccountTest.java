@@ -37,7 +37,6 @@ import org.sagebionetworks.bridge.rest.model.UserConsentHistory;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
 
-@SuppressWarnings("JavaReflectionMemberAccess")
 public class BridgeNotificationWorkerProcessorProcessAccountTest {
     private static final String CLINICAL_CONSENT_GROUP = "clinical_consent";
     private static final String EVENT_ID_ENROLLMENT = "enrollment";
@@ -268,14 +267,6 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         verifyNoNotification();
     }
 
-    // branch coverage
-    @Test
-    public void noActivities() throws Exception {
-        activityList.clear();
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
-        verifyNoNotification();
-    }
-
     @Test
     public void didTodaysActivities() throws Exception {
         // Today is enrollment + 3. Do that activity.
@@ -341,6 +332,16 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     public void didNoActivities() throws Exception {
         // This is the "base case" for our tests. Since the majority of our tests do no send notifications, we wanted
         // the basic configuration to send a notification, to help ensure that our tests are working properly.
+        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
+    }
+
+    @Test
+    public void noActivities() throws Exception {
+        // User for whatever reason has no activity events on the server. This could happen if, for example, the user
+        // did not engage with the last 2 study bursts. If this happens, we should still act like the user has
+        // activities, and they were simply not completed.
+        activityList.clear();
         processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
         verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
     }

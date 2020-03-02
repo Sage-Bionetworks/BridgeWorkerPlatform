@@ -370,12 +370,6 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         Iterator<ScheduledActivity> activityIterator = bridgeHelper.getTaskHistory(studyId, userId, taskId,
                 activityRangeStart, activityRangeEnd);
 
-        // If the user somehow has no activities with this task ID, don't notify the user. The account is probably not
-        // fully bootstrapped, and we should avoid sending them a notification.
-        if (!activityIterator.hasNext()) {
-            return null;
-        }
-
         // Map the events by scheduled date so it's easier to work with.
         Map<LocalDate, ScheduledActivity> activitiesByDate = new HashMap<>();
         while (activityIterator.hasNext()) {
