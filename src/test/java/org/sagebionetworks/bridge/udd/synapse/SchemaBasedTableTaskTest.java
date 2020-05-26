@@ -33,7 +33,7 @@ public class SchemaBasedTableTaskTest {
     private static final String STUDY_ID = "test-study";
     private static final String TABLE_ID = "test-table-id";
 
-    private static final UploadSchemaKey SCHEMA_KEY = new UploadSchemaKey.Builder().withStudyId(STUDY_ID)
+    private static final UploadSchemaKey SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(STUDY_ID)
             .withSchemaId(SCHEMA_ID).withRevision(SCHEMA_REV).build();
     private static final UploadSchema SCHEMA = new UploadSchema.Builder().withKey(SCHEMA_KEY)
             .addField("foo", "INT")
