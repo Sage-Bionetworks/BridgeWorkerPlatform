@@ -20,10 +20,10 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
-import org.sagebionetworks.bridge.reporter.helper.BridgeHelper;
 import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
 /**
  * SQS callback. Called by the PollSqsWorker. This handles a reporting request.
@@ -36,7 +36,6 @@ public class BridgeReporterProcessor {
     private BridgeHelper bridgeHelper;
     
     @Autowired
-    @Qualifier("ReporterHelper")
     public final void setBridgeHelper(BridgeHelper bridgeHelper) {
         this.bridgeHelper = bridgeHelper;
     }
@@ -47,7 +46,7 @@ public class BridgeReporterProcessor {
     }
 
     /** Process the passed sqs msg as JsonNode. */
-    public void process(JsonNode body) throws IOException, PollSqsWorkerBadRequestException, InterruptedException {
+    public void process(JsonNode body) throws IOException, PollSqsWorkerBadRequestException {
         BridgeReporterRequest request = deserializeRequest(body);
 
         DateTime startDateTime = request.getStartDateTime();
@@ -68,7 +67,7 @@ public class BridgeReporterProcessor {
                 studyIdList = request.getStudyWhitelist();
             } else {
                 // Otherwise, call Bridge server to get a list of studies.
-                List<Study> studySummaries = bridgeHelper.getAllStudiesSummary();
+                List<Study> studySummaries = bridgeHelper.getAllStudies();
                 studyIdList = studySummaries.stream().map(Study::getIdentifier).collect(Collectors.toList());
             }
 

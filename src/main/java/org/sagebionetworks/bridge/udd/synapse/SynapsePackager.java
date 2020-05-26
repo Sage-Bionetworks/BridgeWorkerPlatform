@@ -21,6 +21,7 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import org.joda.time.DateTime;
+import org.sagebionetworks.client.exceptions.SynapseServiceUnavailable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,8 @@ import org.sagebionetworks.bridge.schema.UploadSchema;
 import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.udd.worker.BridgeUddRequest;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.SynapseUnavailableException;
 
 /**
  * Helper to query Synapse, download the results, and upload the results to S3 as a pre-signed URL. This acts as a
@@ -52,6 +55,7 @@ public class SynapsePackager {
     private static final Joiner LINE_JOINER = Joiner.on('\n');
 
     private ExecutorService auxiliaryExecutorService;
+    private DynamoHelper dynamoHelper;
     private FileHelper fileHelper;
     private S3Helper s3Helper;
     private SynapseHelper synapseHelper;
@@ -72,6 +76,12 @@ public class SynapsePackager {
     public final void setConfig(Config config) {
         urlExpirationHours = config.getInt(CONFIG_KEY_EXPIRATION_HOURS);
         userdataBucketName = config.get(CONFIG_KEY_USERDATA_BUCKET);
+    }
+
+    /** DynamoDB helper, used to delete entries from the table mappings when the table has been deleted. */
+    @Autowired
+    public final void setDynamoHelper(DynamoHelper dynamoHelper) {
+        this.dynamoHelper = dynamoHelper;
     }
 
     /**
@@ -109,8 +119,12 @@ public class SynapsePackager {
      * Schema map and survey table ID set are guaranteed by the DynamoHelper to be non-null.
      * </p>
      *
+     * @param studyId
+     *         study to download data for
      * @param synapseToSchemaMap
      *         map from Synapse table IDs to schemas, used to enumerate Synapse tables and determine file names
+     * @param defaultSynapseTableId
+     *         Synapse table for the default schema (schemaless), null if no such table exists
      * @param healthCode
      *         user health code to filter on
      * @param request
@@ -119,16 +133,17 @@ public class SynapsePackager {
      *         set of survey table IDs, which need to be downloaded in their entirety
      * @return pre-signed URL and expiration time
      */
-    public PresignedUrlInfo packageSynapseData(Map<String, UploadSchema> synapseToSchemaMap, String healthCode,
-            BridgeUddRequest request, Set<String> surveyTableIdSet) throws IOException {
+    public PresignedUrlInfo packageSynapseData(String studyId, Map<String, UploadSchema> synapseToSchemaMap,
+            String defaultSynapseTableId, String healthCode,
+            BridgeUddRequest request, Set<String> surveyTableIdSet) throws IOException, SynapseUnavailableException {
         List<File> allFileList = new ArrayList<>();
         File masterZipFile = null;
         File tmpDir = fileHelper.createTempDir();
         try {
             // create and execute Synapse downloads asynchronously
-            List<Future<SynapseDownloadFromTableResult>> queryFutureList = initAsyncQueryTasks(synapseToSchemaMap,
-                    healthCode, request, tmpDir);
-            List<Future<File>> surveyFutureList = initAsyncSurveyTasks(surveyTableIdSet, tmpDir);
+            List<Future<SynapseDownloadFromTableResult>> queryFutureList = initAsyncQueryTasks(studyId,
+                    synapseToSchemaMap, defaultSynapseTableId, healthCode, request, tmpDir);
+            List<Future<File>> surveyFutureList = initAsyncSurveyTasks(studyId, surveyTableIdSet, tmpDir);
 
             // wait for async tasks - We need to wait for all tasks and gather up all files before we check whether we
             // have no query results. Otherwise, we won't know to clean up these files, and we'll leave garbage on our
@@ -167,8 +182,12 @@ public class SynapsePackager {
      * This is made package-scoped so unit tests can hook into it.
      * </p>
      *
+     * @param studyId
+     *         study to download data for
      * @param synapseToSchemaMap
      *         map of all Synapse table IDs in the current study and their corresponding schemas
+     * @param defaultSynapseTableId
+     *         Synapse table for the default schema (schemaless), null if no such table exists
      * @param healthCode
      *         user's health code, used for generating queries
      * @param request
@@ -177,8 +196,9 @@ public class SynapsePackager {
      *         temp directory that files should be downloaded to
      * @return list of Futures for the async tasks
      */
-    List<Future<SynapseDownloadFromTableResult>> initAsyncQueryTasks(Map<String, UploadSchema> synapseToSchemaMap,
-            String healthCode, BridgeUddRequest request, File tmpDir) {
+    List<Future<SynapseDownloadFromTableResult>> initAsyncQueryTasks(String studyId,
+            Map<String, UploadSchema> synapseToSchemaMap, String defaultSynapseTableId, String healthCode,
+            BridgeUddRequest request, File tmpDir) {
         List<Future<SynapseDownloadFromTableResult>> taskFutureList = new ArrayList<>();
         for (Map.Entry<String, UploadSchema> oneSynapseToSchemaEntry : synapseToSchemaMap.entrySet()) {
             // create params
@@ -187,10 +207,27 @@ public class SynapsePackager {
             SynapseDownloadFromTableParameters param = new SynapseDownloadFromTableParameters.Builder()
                     .withSynapseTableId(synapseTableId).withHealthCode(healthCode)
                     .withStartDate(request.getStartDate()) .withEndDate(request.getEndDate()).withTempDir(tmpDir)
-                    .withSchema(schema).build();
+                    .withSchema(schema).withStudyId(studyId).build();
 
             // kick off async task
-            SynapseDownloadFromTableTask task = new SynapseDownloadFromTableTask(param);
+            SynapseDownloadFromTableTask task = new SchemaBasedTableTask(param);
+            task.setDynamoHelper(dynamoHelper);
+            task.setFileHelper(fileHelper);
+            task.setSynapseHelper(synapseHelper);
+            Future<SynapseDownloadFromTableResult> taskFuture = auxiliaryExecutorService.submit(task);
+            taskFutureList.add(taskFuture);
+        }
+
+        if (defaultSynapseTableId != null) {
+            // create params
+            SynapseDownloadFromTableParameters param = new SynapseDownloadFromTableParameters.Builder()
+                    .withSynapseTableId(defaultSynapseTableId).withHealthCode(healthCode)
+                    .withStartDate(request.getStartDate()).withEndDate(request.getEndDate()).withTempDir(tmpDir)
+                    .withStudyId(studyId).build();
+
+            // kick off async task
+            SynapseDownloadFromTableTask task = new DefaultTableTask(param);
+            task.setDynamoHelper(dynamoHelper);
             task.setFileHelper(fileHelper);
             task.setSynapseHelper(synapseHelper);
             Future<SynapseDownloadFromTableResult> taskFuture = auxiliaryExecutorService.submit(task);
@@ -203,21 +240,24 @@ public class SynapsePackager {
     /**
      * Kicks off async tasks to download survey metadata from Synapse.
      *
+     * @param studyId
+     *         study ID for the surveys to download
      * @param surveyTableIdSet
      *         set of survey metadata table IDs to download
      * @param tmpDir
      *         temp dir to download tables to
      * @return list of Futures for the async tasks
      */
-    private List<Future<File>> initAsyncSurveyTasks(Set<String> surveyTableIdSet, File tmpDir) {
+    private List<Future<File>> initAsyncSurveyTasks(String studyId, Set<String> surveyTableIdSet, File tmpDir) {
         List<Future<File>> futureList = new ArrayList<>();
         for (String oneTableId : surveyTableIdSet) {
             // create params
-            SynapseDownloadSurveyParameters param = new SynapseDownloadSurveyParameters.Builder()
+            SynapseDownloadSurveyParameters param = new SynapseDownloadSurveyParameters.Builder().withStudyId(studyId)
                     .withSynapseTableId(oneTableId).withTempDir(tmpDir).build();
 
             // kick off async task
             SynapseDownloadSurveyTask task = new SynapseDownloadSurveyTask(param);
+            task.setDynamoHelper(dynamoHelper);
             task.setFileHelper(fileHelper);
             task.setSynapseHelper(synapseHelper);
             Future<File> future = auxiliaryExecutorService.submit(task);
@@ -240,7 +280,7 @@ public class SynapsePackager {
      *         if writing the error log fails
      */
     private List<File> waitForAsyncQueryTasks(File tmpDir, List<Future<SynapseDownloadFromTableResult>> taskFutureList)
-            throws IOException {
+            throws IOException, SynapseUnavailableException {
         // join on threads until they're all done
         List<File> allFileList = new ArrayList<>();
         List<String> errorList = new ArrayList<>();
@@ -256,6 +296,8 @@ public class SynapsePackager {
                     allFileList.add(taskResult.getBulkDownloadFile());
                 }
             } catch (ExecutionException | InterruptedException ex) {
+                rethrowIfSynapseIsReadOnly(ex);
+
                 String errorMsg = "Error downloading CSV: " + ex.getMessage();
                 LOG.error(errorMsg, ex);
                 errorList.add(errorMsg);
@@ -287,7 +329,8 @@ public class SynapsePackager {
      * @throws IOException
      *         if writing the error log fails
      */
-    private List<File> waitForAsyncSurveyTasks(File tmpDir, List<Future<File>> futureList) throws IOException {
+    private List<File> waitForAsyncSurveyTasks(File tmpDir, List<Future<File>> futureList) throws IOException,
+            SynapseUnavailableException {
         // join on threads until they're all done
         List<File> fileList = new ArrayList<>();
         List<String> errorList = new ArrayList<>();
@@ -296,6 +339,8 @@ public class SynapsePackager {
                 File file = oneFuture.get();
                 fileList.add(file);
             } catch (ExecutionException | InterruptedException ex) {
+                rethrowIfSynapseIsReadOnly(ex);
+
                 String errorMsg = "Error downloading survey: " + ex.getMessage();
                 LOG.error(errorMsg, ex);
                 errorList.add(errorMsg);
@@ -313,6 +358,19 @@ public class SynapsePackager {
             fileList.add(errorLogFile);
         }
         return fileList;
+    }
+
+    // Advice from Synapse team is that 503 means Synapse is down (either for maintenance or otherwise). In this case,
+    // instead of continuing, we should abort the request and restart BridgeEX immediately.
+    //
+    // Package-scoped for unit tests.
+    static void rethrowIfSynapseIsReadOnly(Exception ex) throws SynapseUnavailableException {
+        // The real exception is in the inner exception (if it's an ExecutionException).
+        Throwable originalEx = ex.getCause();
+
+        if (originalEx instanceof SynapseServiceUnavailable) {
+            throw new SynapseUnavailableException("Synapse not in writable state");
+        }
     }
 
     /**

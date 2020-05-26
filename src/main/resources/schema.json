@@ -1,6 +1,7 @@
 [
     {
         "endpointId":"DailyActivitySummary",
+        "scopeName":"ACTIVITY",
         "ignoredKeys":["goals"],
         "url":"https://api.fitbit.com/1/user/%s/activities/date/%s.json",
         "urlParameters":["USER_ID", "DATE"],
@@ -144,6 +145,7 @@
     },
     {
         "endpointId":"HeartRate",
+        "scopeName":"HEARTRATE",
         "url":"https://api.fitbit.com/1/user/%s/activities/heart/date/%s/1d/1sec.json",
         "urlParameters":["USER_ID", "DATE"],
         "tables":[
@@ -176,6 +178,104 @@
                         "columnId":"datasetType",
                         "columnType":"STRING",
                         "maxLength":6
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "endpointId":"Sleep",
+        "scopeName":"SLEEP",
+        "url":"https://api.fitbit.com/1.2/user/%s/sleep/date/%s.json",
+        "urlParameters":["USER_ID", "DATE"],
+        "tables":[
+            {
+                "tableKey":"sleep",
+                "columns":[
+                    {
+                        "columnId":"dateOfSleep",
+                        "columnType":"STRING",
+                        "maxLength":10
+                    },
+                    {
+                        "columnId":"duration",
+                        "columnType":"INTEGER"
+                    },
+                    {
+                        "columnId":"efficiency",
+                        "columnType":"INTEGER"
+                    },
+                    {
+                        "columnId":"infoCode",
+                        "columnType":"INTEGER"
+                    },
+                    {
+                        "columnId":"isMainSleep",
+                        "columnType":"BOOLEAN"
+                    },
+                    {
+                        "columnId":"levels",
+                        "columnType":"LARGETEXT"
+                    },
+                    {
+                        "columnId":"logId",
+                        "columnType":"INTEGER"
+                    },
+                    {
+                        "columnId":"minutesAfterWakeup",
+                        "columnType":"INTEGER"
+                    },
+                    {
+                        "columnId":"minutesAsleep",
+                        "columnType":"INTEGER"
+                    },
+                    {
+                        "columnId":"minutesAwake",
+                        "columnType":"INTEGER"
+                    },
+                    {
+                        "columnId":"minutesToFallAsleep",
+                        "columnType":"INTEGER"
+                    },
+                    {
+                        "columnId":"startTime",
+                        "columnType":"STRING",
+                        "maxLength":23
+                    },
+                    {
+                        "columnId":"endTime",
+                        "columnType":"STRING",
+                        "maxLength":23
+                    },
+                    {
+                        "columnId":"timeInBed",
+                        "columnType":"INTEGER"
+                    },
+                    {
+                        "columnId":"type",
+                        "columnType":"STRING",
+                        "maxLength":7
+                    }
+                ]
+            },
+            {
+                "tableKey":"summary",
+                "columns":[
+                    {
+                        "columnId":"stages",
+                        "columnType":"LARGETEXT"
+                    },
+                    {
+                        "columnId":"totalMinutesAsleep",
+                        "columnType":"INTEGER"
+                    },
+                    {
+                        "columnId":"totalSleepRecords",
+                        "columnType":"INTEGER"
+                    },
+                    {
+                        "columnId":"totalTimeInBed",
+                        "columnType":"INTEGER"
                     }
                 ]
             }

@@ -5,7 +5,8 @@ import java.util.EnumSet;
 public enum ReportType {
     DAILY("DAILY"), // aka DAILY_UPLOADS 
     WEEKLY("WEEKLY"), // aka WEEKLY_UPLOADS
-    DAILY_SIGNUPS("DAILY_SIGNUPS");
+    DAILY_SIGNUPS("DAILY_SIGNUPS"),
+    DAILY_RETENTION("DAILY_RETENTION");
     
     private static final EnumSet<ReportType> UPLOAD_REPORTS = EnumSet.of(DAILY,WEEKLY);
 

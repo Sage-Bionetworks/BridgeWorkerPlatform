@@ -2,15 +2,16 @@ package org.sagebionetworks.bridge.fitbit.worker;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import javax.annotation.Resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import com.google.common.util.concurrent.RateLimiter;
 import org.slf4j.Logger;
@@ -19,21 +20,27 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.file.FileHelper;
-import org.sagebionetworks.bridge.fitbit.bridge.BridgeHelper;
-import org.sagebionetworks.bridge.fitbit.bridge.FitBitUser;
 import org.sagebionetworks.bridge.fitbit.schema.EndpointSchema;
 import org.sagebionetworks.bridge.fitbit.util.Utils;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.bridge.FitBitUser;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.FitBitUserNotConfiguredException;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
+import org.sagebionetworks.bridge.workerPlatform.util.JsonUtils;
 
 /** Worker consumer for the FitBit Worker. This is called by BridgeWorkerPlatform and is the main entry point. */
 @Component("FitBitWorker")
 public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
     private static final Logger LOG = LoggerFactory.getLogger(BridgeFitBitWorkerProcessor.class);
 
+    private static final Joiner COMMA_JOINER = Joiner.on(',').useForNull("");
+    private static final int USER_ERROR_LIMIT = 100;
     private static final int REPORTING_INTERVAL = 10;
     static final String REQUEST_PARAM_DATE = "date";
+    static final String REQUEST_PARAM_HEALTH_CODE_WHITELIST = "healthCodeWhitelist";
     static final String REQUEST_PARAM_STUDY_WHITELIST = "studyWhitelist";
 
     private final RateLimiter perStudyRateLimiter = RateLimiter.create(1.0);
@@ -43,6 +50,7 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
     private List<EndpointSchema> endpointSchemas;
     private FileHelper fileHelper;
     private TableProcessor tableProcessor;
+    private int userErrorLimit = USER_ERROR_LIMIT;
     private UserProcessor userProcessor;
 
     /** Bridge Helper */
@@ -79,6 +87,11 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
         this.tableProcessor = tableProcessor;
     }
 
+    // Called by unit tests to make it easier to test error conditions.
+    void setUserErrorLimit(@SuppressWarnings("SameParameterValue") int userErrorLimit) {
+        this.userErrorLimit = userErrorLimit;
+    }
+
     /** User Processor */
     @Autowired
     public final void setUserProcessor(UserProcessor userProcessor) {
@@ -95,26 +108,21 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
         }
         String dateString = dateNode.textValue();
 
-        List<String> studyWhitelist = new ArrayList<>();
-        JsonNode studyWhitelistNode = jsonNode.get(REQUEST_PARAM_STUDY_WHITELIST);
-        if (studyWhitelistNode != null && !studyWhitelistNode.isNull()) {
-            if (!studyWhitelistNode.isArray()) {
-                throw new PollSqsWorkerBadRequestException("studyWhitelist must be an array");
-            }
-
-            for (JsonNode oneStudyIdNode : studyWhitelistNode) {
-                if (!oneStudyIdNode.isTextual()) {
-                    throw new PollSqsWorkerBadRequestException("studyWhitelist can only contain strings");
-                }
-                studyWhitelist.add(oneStudyIdNode.textValue());
-            }
-        }
+        // Optional params.
+        List<String> healthCodeWhitelist = JsonUtils.asStringList(jsonNode, REQUEST_PARAM_HEALTH_CODE_WHITELIST);
+        List<String> studyWhitelist = JsonUtils.asStringList(jsonNode, REQUEST_PARAM_STUDY_WHITELIST);
 
         LOG.info("Received request for date " + dateString);
+        if (healthCodeWhitelist != null) {
+            LOG.info("With healthCodeWhitelist=" + COMMA_JOINER.join(healthCodeWhitelist));
+        }
+        if (studyWhitelist != null) {
+            LOG.info("With studyWhitelist=" + COMMA_JOINER.join(studyWhitelist));
+        }
         Stopwatch requestStopwatch = Stopwatch.createStarted();
 
         List<String> studyIdList;
-        if (!studyWhitelist.isEmpty()) {
+        if (studyWhitelist != null && !studyWhitelist.isEmpty()) {
             // If the study whitelist is specified, use it.
             studyIdList = studyWhitelist;
         } else {
@@ -133,7 +141,7 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
 
                 if (Utils.isStudyConfigured(study)) {
                     LOG.info("Processing study " + studyId);
-                    processStudy(dateString, study);
+                    processStudy(dateString, study, healthCodeWhitelist);
                 } else {
                     LOG.info("Skipping study " + studyId);
                 }
@@ -149,7 +157,7 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
     }
 
     // Visible for testing
-    void processStudy(String dateString, Study study) {
+    void processStudy(String dateString, Study study, List<String> healthCodeWhitelist) throws WorkerException {
         String studyId = study.getIdentifier();
 
         // Set up request context
@@ -158,8 +166,26 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
             RequestContext ctx = new RequestContext(dateString, study, tmpDir);
 
             // Get list of users (and their keys)
-            Iterator<FitBitUser> fitBitUserIter = bridgeHelper.getFitBitUsersForStudy(study.getIdentifier());
+            Iterator<FitBitUser> fitBitUserIter;
+            if (healthCodeWhitelist != null && !healthCodeWhitelist.isEmpty()) {
+                fitBitUserIter = healthCodeWhitelist.stream()
+                        .map(healthCode -> {
+                            try {
+                                return bridgeHelper.getFitBitUserForStudyAndHealthCode(studyId, healthCode);
+                            } catch (IOException | RuntimeException ex) {
+                                LOG.error("Error getting FitBit auth for health code " + healthCode + ": " +
+                                        ex.getMessage(), ex);
+                                return null;
+                            }
+                        })
+                        .filter(Objects::nonNull)
+                        .iterator();
+            } else {
+                fitBitUserIter = bridgeHelper.getFitBitUsersForStudy(study.getIdentifier());
+            }
+
             LOG.info("Processing users in study " + studyId);
+            int numErrors = 0;
             int numUsers = 0;
             Stopwatch userStopwatch = Stopwatch.createStarted();
             while (fitBitUserIter.hasNext()) {
@@ -169,6 +195,11 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
 
                     // Call and process endpoints.
                     for (EndpointSchema oneEndpointSchema : endpointSchemas) {
+                        if (!oneUser.getScopeSet().contains(oneEndpointSchema.getScopeName())) {
+                            // This is normal, as not all studies have the same scopes. Skip silently.
+                            continue;
+                        }
+
                         try {
                             userProcessor.processEndpointForUser(ctx, oneUser, oneEndpointSchema);
                         } catch (Exception ex) {
@@ -177,7 +208,20 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
                         }
                     }
                 } catch (Exception ex) {
-                    LOG.error("Error getting next user: " + ex.getMessage(), ex);
+                    if (ex instanceof FitBitUserNotConfiguredException) {
+                        LOG.info("User not configured for FitBit: " + ex.getMessage(), ex);
+                    } else {
+                        LOG.error("Error getting next user: " + ex.getMessage(), ex);
+                    }
+
+                    // The Iterator is a paginated iterator that calls Bridge for each user. If for some reason, it
+                    // keeps throwing exceptions (for example, Bridge is down), this could retry infinitely. Cap the
+                    // number of errors, and if we hit that threshold, break out of the loop and propagate the
+                    // exception up the call stack.
+                    numErrors++;
+                    if (numErrors >= userErrorLimit) {
+                        throw new WorkerException("User error limit reached, aborting for study " + studyId);
+                    }
                 }
 
                 // Reporting

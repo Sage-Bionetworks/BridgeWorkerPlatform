@@ -7,6 +7,8 @@ import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
+import org.sagebionetworks.client.exceptions.SynapseException;
+import org.sagebionetworks.schema.adapter.JSONObjectAdapterException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,14 +18,16 @@ import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.schema.UploadSchema;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
-import org.sagebionetworks.bridge.udd.accounts.AccountInfo;
-import org.sagebionetworks.bridge.udd.accounts.BridgeHelper;
-import org.sagebionetworks.bridge.udd.dynamodb.DynamoHelper;
-import org.sagebionetworks.bridge.udd.dynamodb.StudyInfo;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
 import org.sagebionetworks.bridge.udd.helper.SnsHelper;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
+import org.sagebionetworks.bridge.udd.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.udd.synapse.SynapsePackager;
+import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.StudyInfo;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.SynapseUnavailableException;
 
 /** SQS callback. Called by the PollSqsWorker. This handles a UDD request. */
 @Component
@@ -34,6 +38,7 @@ public class BridgeUddProcessor {
     private DynamoHelper dynamoHelper;
     private SnsHelper snsHelper;
     private SesHelper sesHelper;
+    private SynapseHelper synapseHelper;
     private SynapsePackager synapsePackager;
 
     /** Bridge helper, used to call Bridge server to get account info, such as email address and health code. */
@@ -60,13 +65,20 @@ public class BridgeUddProcessor {
         this.snsHelper = snsHelper;
     }
 
+    /** Synapse helper, used to check if Synapse is available before we start doing work. */
+    @Autowired
+    public final void setSynapseHelper(SynapseHelper synapseHelper) {
+        this.synapseHelper = synapseHelper;
+    }
+
     /** Synapse packager. Used to query Synapse and package the results in an S3 pre-signed URL. */
     @Autowired
     public final void setSynapsePackager(SynapsePackager synapsePackager) {
         this.synapsePackager = synapsePackager;
     }
 
-    public void process(JsonNode body) throws IOException, PollSqsWorkerBadRequestException {
+    public void process(JsonNode body) throws IOException, PollSqsWorkerBadRequestException,
+            SynapseUnavailableException {
         BridgeUddRequest request;
         try {
             request = DefaultObjectMapper.INSTANCE.treeToValue(body, BridgeUddRequest.class);
@@ -81,6 +93,18 @@ public class BridgeUddProcessor {
         LOG.info("Received request for userId=" + userId + ", study="
                 + studyId + ", startDate=" + startDateStr + ",endDate=" + endDateStr);
 
+        // Check to see that Synapse is up and availabe for read/write. If it isn't, throw an exception, so the
+        // PollSqsWorker can re-cycle the request until Synapse is available again.
+        boolean isSynapseWritable;
+        try {
+            isSynapseWritable = synapseHelper.isSynapseWritable();
+        } catch (JSONObjectAdapterException | SynapseException ex) {
+            throw new SynapseUnavailableException("Error calling Synapse: " + ex.getMessage(), ex);
+        }
+        if (!isSynapseWritable) {
+            throw new SynapseUnavailableException("Synapse not in writable state");
+        }
+
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         try {
             // We need the study, because accounts and data are partitioned on study.
@@ -94,9 +118,10 @@ public class BridgeUddProcessor {
             }
 
             Map<String, UploadSchema> synapseToSchemaMap = dynamoHelper.getSynapseTableIdsForStudy(studyId);
+            String defaultSynapseTableId = dynamoHelper.getDefaultSynapseTableForStudy(studyId);
             Set<String> surveyTableIdSet = dynamoHelper.getSynapseSurveyTablesForStudy(studyId);
-            PresignedUrlInfo presignedUrlInfo = synapsePackager.packageSynapseData(synapseToSchemaMap,
-                    healthCode, request, surveyTableIdSet);
+            PresignedUrlInfo presignedUrlInfo = synapsePackager.packageSynapseData(studyId, synapseToSchemaMap,
+                    defaultSynapseTableId, healthCode, request, surveyTableIdSet);
 
             if (presignedUrlInfo == null) {
                 LOG.info("No data for request for account " + accountInfo.getUserId() + ", study=" + studyId

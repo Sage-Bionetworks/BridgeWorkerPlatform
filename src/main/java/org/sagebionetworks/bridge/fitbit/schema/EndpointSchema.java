@@ -16,16 +16,18 @@ import org.apache.commons.lang3.StringUtils;
 public class EndpointSchema {
     private final String endpointId;
     private final Set<String> ignoredKeys;
+    private final String scopeName;
     private final String url;
     private final List<UrlParameterType> urlParameters;
     private final List<TableSchema> tables;
     private transient final Map<String, TableSchema> tablesByKey;
 
     /** Private constructor. To construct, use Builder. */
-    private EndpointSchema(String endpointId, Set<String> ignoredKeys, String url,
+    private EndpointSchema(String endpointId, Set<String> ignoredKeys, String scopeName, String url,
             List<UrlParameterType> urlParameters, List<TableSchema> tables) {
         this.endpointId = endpointId;
         this.ignoredKeys = ignoredKeys;
+        this.scopeName = scopeName;
         this.url = url;
         this.urlParameters = urlParameters;
         this.tables = tables;
@@ -40,6 +42,11 @@ public class EndpointSchema {
     /** Top-level keys that should be ignored when importing into Synapse. */
     public Set<String> getIgnoredKeys() {
         return ignoredKeys;
+    }
+
+    /** Scope name, as defined by the FitBit OAuth Introspect API. (Usually ACTIVITY, HEARTRATE, and SLEEP.) */
+    public String getScopeName() {
+        return scopeName;
     }
 
     /** Endpoint URL. URL can have placeholders using %s. */
@@ -67,6 +74,7 @@ public class EndpointSchema {
     public static class Builder {
         private String endpointId;
         private Set<String> ignoredKeys;
+        private String scopeName;
         private String url;
         private List<UrlParameterType> urlParameters;
         private List<TableSchema> tables;
@@ -80,6 +88,12 @@ public class EndpointSchema {
         /** @see EndpointSchema#getIgnoredKeys */
         public Builder withIgnoredKeys(Set<String> ignoredKeys) {
             this.ignoredKeys = ignoredKeys;
+            return this;
+        }
+
+        /** @see EndpointSchema#getScopeName */
+        public Builder withScopeName(String scopeName) {
+            this.scopeName = scopeName;
             return this;
         }
 
@@ -103,10 +117,13 @@ public class EndpointSchema {
 
         /** Builds an EndpointSchema */
         public EndpointSchema build() {
-            // Required params: endpointId, url, tables
+            // Required params: endpointId, scopeName, url, tables
             // These must be non-null and non-empty
             if (StringUtils.isBlank(endpointId)) {
                 throw new IllegalStateException("endpointId must be specified");
+            }
+            if (StringUtils.isBlank(scopeName)) {
+                throw new IllegalStateException("scopeName must be specified");
             }
             if (StringUtils.isBlank(url)) {
                 throw new IllegalStateException("url must be specified");
@@ -125,7 +142,7 @@ public class EndpointSchema {
                 urlParameters = ImmutableList.of();
             }
 
-            return new EndpointSchema(endpointId, ImmutableSet.copyOf(ignoredKeys), url,
+            return new EndpointSchema(endpointId, ImmutableSet.copyOf(ignoredKeys), scopeName, url,
                     ImmutableList.copyOf(urlParameters), ImmutableList.copyOf(tables));
         }
     }

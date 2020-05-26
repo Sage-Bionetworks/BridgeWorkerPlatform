@@ -12,8 +12,8 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.rest.model.UploadStatus;
-import org.sagebionetworks.bridge.workerPlatform.helper.BridgeHelper;
-import org.sagebionetworks.bridge.workerPlatform.helper.UploadStatusAndMessages;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.bridge.UploadStatusAndMessages;
 
 public class UploadRedriveWorkerProcessorProcessIdTest {
     private static final String RECORD_ID = "my-record";
@@ -52,7 +52,8 @@ public class UploadRedriveWorkerProcessorProcessIdTest {
     @Test
     public void byRecordId() throws Exception {
         // Mock Bridge Helper.
-        Upload upload = new Upload().uploadId(UPLOAD_ID);
+        Upload upload = mock(Upload.class);
+        when(upload.getUploadId()).thenReturn(UPLOAD_ID);
         when(mockBridgeHelper.getUploadByRecordId(RECORD_ID)).thenReturn(upload);
 
         UploadStatusAndMessages status = new UploadStatusAndMessages(UPLOAD_ID, null,

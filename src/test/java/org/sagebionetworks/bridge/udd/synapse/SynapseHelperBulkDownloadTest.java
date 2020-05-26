@@ -26,7 +26,7 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.config.Config;
-import org.sagebionetworks.bridge.udd.exceptions.AsyncTimeoutException;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTimeoutException;
 
 @SuppressWarnings("unchecked")
 public class SynapseHelperBulkDownloadTest {
@@ -122,8 +122,8 @@ public class SynapseHelperBulkDownloadTest {
         }
         assertNotNull(thrownEx);
 
-        // Because of retries, we call this 5 times.
-        verify(mockClient, times(5)).getBulkFileDownloadResults(anyString());
+        // Because of retries, we call this 2 times.
+        verify(mockClient, times(2)).getBulkFileDownloadResults(anyString());
         postValidation();
     }
 

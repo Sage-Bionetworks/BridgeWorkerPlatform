@@ -10,11 +10,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
-import org.sagebionetworks.bridge.reporter.helper.BridgeHelper;
 import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.rest.model.AccountStatus;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
@@ -29,7 +29,6 @@ public class SignUpsReportGenerator implements ReportGenerator {
     private BridgeHelper bridgeHelper;
     
     @Autowired
-    @Qualifier("ReporterHelper")
     public final void setBridgeHelper(BridgeHelper bridgeHelper) {
         this.bridgeHelper = bridgeHelper;
     }
@@ -48,11 +47,13 @@ public class SignUpsReportGenerator implements ReportGenerator {
 
         List<StudyParticipant> participants = bridgeHelper.getParticipantsForStudy(studyId, startDate, endDate);
         for (StudyParticipant participant : participants) {
-            statuses.add(participant.getStatus());
-            // Accounts that aren't enabled do not have interesting sharing statuses. We'd like to count these
-            // for consented accounts, but this isn't easy to do.
-            if (participant.getStatus() == AccountStatus.ENABLED) {
-                sharingScopes.add(participant.getSharingScope());    
+            if (participant.getRoles().isEmpty()) {
+                statuses.add(participant.getStatus());
+                // Accounts that aren't enabled do not have interesting sharing statuses. 
+                // We'd like to count these for consented accounts, but this isn't easy to do.
+                if (participant.getStatus() == AccountStatus.ENABLED) {
+                    sharingScopes.add(participant.getSharingScope());    
+                }
             }
         }
         

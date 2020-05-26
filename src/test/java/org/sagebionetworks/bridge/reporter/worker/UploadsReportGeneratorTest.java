@@ -12,10 +12,10 @@ import java.util.Map;
 import org.joda.time.DateTime;
 import org.testng.annotations.Test;
 
-import org.sagebionetworks.bridge.reporter.helper.BridgeHelper;
 import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.rest.model.UploadStatus;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
 public class UploadsReportGeneratorTest {
     
@@ -34,8 +34,8 @@ public class UploadsReportGeneratorTest {
         BridgeHelper bridgeHelper = mock(BridgeHelper.class);
 
         List<Upload> uploads = new ArrayList<>();
-        uploads.add(new Upload().recordId("record1").status(UploadStatus.SUCCEEDED));
-        uploads.add(new Upload().recordId("record2").status(UploadStatus.REQUESTED));
+        uploads.add(mockUpload("record1", UploadStatus.SUCCEEDED));
+        uploads.add(mockUpload("record2", UploadStatus.REQUESTED));
         when(bridgeHelper.getUploadsForStudy(STUDY_ID, START_DATE, END_DATE)).thenReturn(uploads);
         
         UploadsReportGenerator generator = new UploadsReportGenerator();
@@ -50,5 +50,12 @@ public class UploadsReportGeneratorTest {
         assertEquals(map.get("succeeded"), new Integer(1));
         
         verify(bridgeHelper).getUploadsForStudy(STUDY_ID, START_DATE, END_DATE);
+    }
+
+    private static Upload mockUpload(String recordId, UploadStatus status) {
+        Upload mockUpload = mock(Upload.class);
+        when(mockUpload.getRecordId()).thenReturn(recordId);
+        when(mockUpload.getStatus()).thenReturn(status);
+        return mockUpload;
     }
 }

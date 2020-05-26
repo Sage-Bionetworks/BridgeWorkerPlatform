@@ -5,6 +5,7 @@ import static org.mockito.Matchers.notNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
@@ -17,17 +18,23 @@ import java.io.Writer;
 
 import com.google.common.io.CharStreams;
 import org.sagebionetworks.client.exceptions.SynapseException;
+import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 import org.sagebionetworks.repo.model.table.TableEntity;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionException;
 
+@SuppressWarnings("unchecked")
 public class SynapseDownloadSurveyTaskTest {
+    private static final String STUDY_ID = "my-study";
     private static final String TEST_FILE_HANDLE = "test-file-handle";
     private static final String TEST_SYNAPSE_TABLE_ID = "test-table";
     private static final String TEST_SYNAPSE_TABLE_NAME = "Test Table";
 
+    private DynamoHelper dynamoHelper;
     private InMemoryFileHelper fileHelper;
     private SynapseHelper synapseHelper;
     private SynapseDownloadSurveyTask task;
@@ -35,6 +42,9 @@ public class SynapseDownloadSurveyTaskTest {
 
     @BeforeMethod
     public void setup() throws Exception {
+        // Mock Dynamo helper.
+        dynamoHelper = mock(DynamoHelper.class);
+
         // mock Synapse helper
         synapseHelper = mock(SynapseHelper.class);
 
@@ -51,13 +61,34 @@ public class SynapseDownloadSurveyTaskTest {
         tmpDir = fileHelper.createTempDir();
 
         // create params
-        SynapseDownloadSurveyParameters params = new SynapseDownloadSurveyParameters.Builder()
+        SynapseDownloadSurveyParameters params = new SynapseDownloadSurveyParameters.Builder().withStudyId(STUDY_ID)
                 .withSynapseTableId(TEST_SYNAPSE_TABLE_ID).withTempDir(tmpDir).build();
 
         // create task
         task = new SynapseDownloadSurveyTask(params);
+        task.setDynamoHelper(dynamoHelper);
         task.setFileHelper(fileHelper);
         task.setSynapseHelper(synapseHelper);
+    }
+
+    @Test
+    public void tableDoesntExist() throws Exception {
+        // getTable() throws.
+        when(synapseHelper.getTable(TEST_SYNAPSE_TABLE_ID)).thenThrow(SynapseNotFoundException.class);
+
+        // Execute (throws exception).
+        try {
+            task.call();
+            fail("expected exception");
+        } catch (AsyncTaskExecutionException ex) {
+            assertEquals(ex.getMessage(), "Survey table " + TEST_SYNAPSE_TABLE_ID + " no longer exists");
+        }
+
+        // Verify we delete the schema from the table mapping.
+        verify(dynamoHelper).deleteSynapseSurveyTableMapping(STUDY_ID, TEST_SYNAPSE_TABLE_ID);
+
+        // Verify file helper is clean.
+        postValidation();
     }
 
     @Test
@@ -129,7 +160,7 @@ public class SynapseDownloadSurveyTaskTest {
     }
 
     // We can't use an AfterMethod, because AfterMethod doesn't report which method failed.
-    private void postValidation() throws Exception {
+    private void postValidation() {
         fileHelper.deleteDir(tmpDir);
         assertTrue(fileHelper.isEmpty());
     }

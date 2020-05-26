@@ -6,12 +6,15 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.common.base.Stopwatch;
 import org.sagebionetworks.client.exceptions.SynapseException;
+import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 import org.sagebionetworks.repo.model.table.TableEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.sagebionetworks.bridge.file.FileHelper;
-import org.sagebionetworks.bridge.udd.exceptions.AsyncTimeoutException;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionException;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTimeoutException;
 
 /**
  * This one-shot asynchronous task downloads a survey metadata table from Synapse. The survey metadata is downloaded in
@@ -25,6 +28,7 @@ public class SynapseDownloadSurveyTask implements Callable<File> {
 
     // Helpers and config objects. Originates from Spring configs and is passed in through setters using a similar
     // pattern.
+    private DynamoHelper dynamoHelper;
     private FileHelper fileHelper;
     private SynapseHelper synapseHelper;
 
@@ -38,6 +42,16 @@ public class SynapseDownloadSurveyTask implements Callable<File> {
         this.params = params;
     }
 
+    /** DynamoDB helper, used to delete entries from the table mappings when the table has been deleted. */
+    public final void setDynamoHelper(DynamoHelper dynamoHelper) {
+        this.dynamoHelper = dynamoHelper;
+    }
+
+    // Package-scoped for unit tests.
+    DynamoHelper getDynamoHelper() {
+        return dynamoHelper;
+    }
+
     /**
      * Wrapper class around the file system. Used by unit tests to test the functionality without hitting the real file
      * system.
@@ -46,9 +60,19 @@ public class SynapseDownloadSurveyTask implements Callable<File> {
         this.fileHelper = fileHelper;
     }
 
+    // Package-scoped for unit tests.
+    FileHelper getFileHelper() {
+        return fileHelper;
+    }
+
     /** Synapse helper, used to download survey metadata from Synapse. */
     public final void setSynapseHelper(SynapseHelper synapseHelper) {
         this.synapseHelper = synapseHelper;
+    }
+
+    // Package-scoped for unit tests.
+    SynapseHelper getSynapseHelper() {
+        return synapseHelper;
     }
 
     /**
@@ -57,11 +81,18 @@ public class SynapseDownloadSurveyTask implements Callable<File> {
      * @return the file containing the survey metadata in CSV format, never null
      */
     @Override
-    public File call() throws AsyncTimeoutException, SynapseException {
+    public File call() throws AsyncTaskExecutionException, AsyncTimeoutException, SynapseException {
         String synapseTableId = params.getSynapseTableId();
 
         // get table name
-        TableEntity table = synapseHelper.getTable(synapseTableId);
+        TableEntity table;
+        try {
+            table = synapseHelper.getTable(synapseTableId);
+        } catch (SynapseNotFoundException ex) {
+            // Clean this table from the table mapping to prevent future errors.
+            dynamoHelper.deleteSynapseSurveyTableMapping(params.getStudyId(), synapseTableId);
+            throw new AsyncTaskExecutionException("Survey table " + synapseTableId + " no longer exists");
+        }
 
         // download table
         File surveyFile = fileHelper.newFile(params.getTempDir(), table.getName() + ".csv");

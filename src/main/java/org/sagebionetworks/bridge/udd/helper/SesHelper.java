@@ -12,9 +12,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import org.sagebionetworks.bridge.udd.accounts.AccountInfo;
-import org.sagebionetworks.bridge.udd.dynamodb.StudyInfo;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
+import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.StudyInfo;
 
 /** Helper class to format and send the presigned URL as an email through SES. */
 @Component

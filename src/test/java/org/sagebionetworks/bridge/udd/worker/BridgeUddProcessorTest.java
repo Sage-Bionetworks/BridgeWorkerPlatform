@@ -6,7 +6,11 @@ import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertSame;
+import static org.testng.Assert.fail;
 
 import java.io.IOException;
 import java.util.Map;
@@ -16,6 +20,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+
+import org.sagebionetworks.client.exceptions.SynapseServiceUnavailable;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -25,14 +31,16 @@ import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.rest.model.Phone;
 import org.sagebionetworks.bridge.schema.UploadSchema;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
-import org.sagebionetworks.bridge.udd.accounts.AccountInfo;
-import org.sagebionetworks.bridge.udd.accounts.BridgeHelper;
-import org.sagebionetworks.bridge.udd.dynamodb.DynamoHelper;
-import org.sagebionetworks.bridge.udd.dynamodb.StudyInfo;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
 import org.sagebionetworks.bridge.udd.helper.SnsHelper;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
+import org.sagebionetworks.bridge.udd.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.udd.synapse.SynapsePackager;
+import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.StudyInfo;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.SynapseUnavailableException;
 
 @SuppressWarnings("unchecked")
 public class BridgeUddProcessorTest {
@@ -44,6 +52,7 @@ public class BridgeUddProcessorTest {
     public static final PresignedUrlInfo MOCK_PRESIGNED_URL_INFO = mock(PresignedUrlInfo.class);
 
     // simple strings for test
+    private static final String DEFAULT_TABLE_ID = "default-table";
     public static final String EMAIL = "test@example.com";
     public static final String HEALTH_CODE = "test-health-code";
     public static final String USER_ID = "test-user-id";
@@ -79,6 +88,7 @@ public class BridgeUddProcessorTest {
     private SynapsePackager mockPackager;
     private SesHelper mockSesHelper;
     private SnsHelper mockSnsHelper;
+    private SynapseHelper mockSynapseHelper;
 
     @BeforeClass
     public void generalSetup() throws IOException{
@@ -94,6 +104,7 @@ public class BridgeUddProcessorTest {
 
         // mock dynamo helper
         DynamoHelper mockDynamoHelper = mock(DynamoHelper.class);
+        when(mockDynamoHelper.getDefaultSynapseTableForStudy(STUDY_ID)).thenReturn(DEFAULT_TABLE_ID);
         when(mockDynamoHelper.getStudy(STUDY_ID)).thenReturn(MOCK_STUDY_INFO);
         when(mockDynamoHelper.getSynapseTableIdsForStudy(STUDY_ID)).thenReturn(MOCK_SYNAPSE_TO_SCHEMA);
         when(mockDynamoHelper.getSynapseSurveyTablesForStudy(STUDY_ID)).thenReturn(MOCK_SURVEY_TABLE_ID_SET);
@@ -107,12 +118,17 @@ public class BridgeUddProcessorTest {
         // mock Synapse packager
         mockPackager = mock(SynapsePackager.class);
 
+        // Mock Synapse helper.
+        mockSynapseHelper = mock(SynapseHelper.class);
+        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
+
         // set up callback
         callback = new BridgeUddProcessor();
         callback.setBridgeHelper(mockBridgeHelper);
         callback.setDynamoHelper(mockDynamoHelper);
         callback.setSesHelper(mockSesHelper);
         callback.setSnsHelper(mockSnsHelper);
+        callback.setSynapseHelper(mockSynapseHelper);
         callback.setSynapsePackager(mockPackager);
     }
 
@@ -154,7 +170,54 @@ public class BridgeUddProcessorTest {
     public void malformedRequest() throws Exception {
         callback.process(invalidRequestJson);
     }
-    
+
+    @Test
+    public void noHealthCode() throws Exception {
+        // Mock Bridge helper with an account that's missing health code.
+        when(mockBridgeHelper.getAccountInfo(STUDY_ID, USER_ID)).thenReturn(ACCOUNT_INFO_NO_HEALTH_CODE);
+
+        // Execute (throws exception).
+        try {
+            callback.process(userIdRequestJson);
+            fail("expected exception");
+        } catch (PollSqsWorkerBadRequestException ex) {
+            assertEquals(ex.getMessage(), "Health code not found for account " + USER_ID);
+        }
+
+        // Verify no back-end calls.
+        verifyZeroInteractions(mockPackager, mockSesHelper, mockSnsHelper);
+    }
+
+    @Test
+    public void synapseWritableThrows() throws Exception {
+        // Mock Synapse helper to throw.
+        Exception originalEx = new SynapseServiceUnavailable("test exception");
+        when(mockSynapseHelper.isSynapseWritable()).thenThrow(originalEx);
+
+        // Execute (throws exception).
+        try {
+            callback.process(userIdRequestJson);
+            fail("expected exception");
+        } catch (SynapseUnavailableException ex) {
+            assertEquals(ex.getMessage(), "Error calling Synapse: test exception");
+            assertSame(ex.getCause(), originalEx);
+        }
+    }
+
+    @Test
+    public void synapseWritableFalse() throws Exception {
+        // Mock Synapse helper with writable=false.
+        when(mockSynapseHelper.isSynapseWritable()).thenReturn(false);
+
+        // Execute (throws exception).
+        try {
+            callback.process(userIdRequestJson);
+            fail("expected exception");
+        } catch (SynapseUnavailableException ex) {
+            assertEquals(ex.getMessage(), "Synapse not in writable state");
+        }
+    }
+
     @Test
     public void userWithPhoneNumber() throws Exception { 
         Phone phone = new Phone().regionCode("US").number("4082588569");
@@ -190,7 +253,7 @@ public class BridgeUddProcessorTest {
     }
 
     private void mockPackagerWithResult(PresignedUrlInfo presignedUrlInfo) throws Exception {
-        when(mockPackager.packageSynapseData(same(MOCK_SYNAPSE_TO_SCHEMA), eq(HEALTH_CODE),
+        when(mockPackager.packageSynapseData(eq(STUDY_ID), same(MOCK_SYNAPSE_TO_SCHEMA), eq(DEFAULT_TABLE_ID), eq(HEALTH_CODE),
                 any(BridgeUddRequest.class), same(MOCK_SURVEY_TABLE_ID_SET))).thenReturn(presignedUrlInfo);
     }
 

@@ -22,19 +22,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.sagebionetworks.bridge.file.FileHelper;
-import org.sagebionetworks.bridge.schema.UploadSchema;
-import org.sagebionetworks.bridge.udd.exceptions.AsyncTaskExecutionException;
-import org.sagebionetworks.bridge.udd.exceptions.AsyncTimeoutException;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionException;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTimeoutException;
 
 /**
  * A one-shot asynchronous task to query a Synapse table and download the CSV. This task returns the struct of files
  * downloaded. This includes the CSV (if the query pulls data from the table) and a ZIP with the attached file handles
  * (if there are any).
  */
-public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFromTableResult> {
+public abstract class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFromTableResult> {
     private static final Logger LOG = LoggerFactory.getLogger(SynapseDownloadFromTableTask.class);
 
     private static final String COL_HEALTH_CODE = "healthCode";
+    private static final String COL_RAW_DATA = "rawData";
     private static final String ERROR_DOWNLOADING_ATTACHMENT = "Unknown error downloading attachment";
     private static final String QUERY_TEMPLATE =
             "SELECT * FROM %s WHERE healthCode = '%s' AND uploadDate >= '%s' AND uploadDate <= '%s'";
@@ -45,6 +46,7 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
 
     // Helpers and config objects. Originates from Spring configs and is passed in through setters using a similar
     // pattern.
+    private DynamoHelper dynamoHelper;
     private FileHelper fileHelper;
     private SynapseHelper synapseHelper;
 
@@ -54,8 +56,18 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
      * @param params
      *         task parameters
      */
-    public SynapseDownloadFromTableTask(SynapseDownloadFromTableParameters params) {
+    protected SynapseDownloadFromTableTask(SynapseDownloadFromTableParameters params) {
         this.params = params;
+    }
+
+    /** DynamoDB helper, used to delete entries from the table mappings when the table has been deleted. */
+    public final void setDynamoHelper(DynamoHelper dynamoHelper) {
+        this.dynamoHelper = dynamoHelper;
+    }
+
+    /** Dynamo Helper, made available to subclasses and unit tests. */
+    protected DynamoHelper getDynamoHelper() {
+        return dynamoHelper;
     }
 
     /**
@@ -66,9 +78,19 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
         this.fileHelper = fileHelper;
     }
 
+    // Package-scoped for unit tests.
+    FileHelper getFileHelper() {
+        return fileHelper;
+    }
+
     /** Synapse helper, used to download CSV and bulk file download from Synapse. */
     public final void setSynapseHelper(SynapseHelper synapseHelper) {
         this.synapseHelper = synapseHelper;
+    }
+
+    /** Synapse Helper, made available to subclasses and unit tests. */
+    protected SynapseHelper getSynapseHelper() {
+        return synapseHelper;
     }
 
     /**
@@ -80,6 +102,7 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
     @Override
     public SynapseDownloadFromTableResult call() throws AsyncTaskExecutionException {
         try {
+            verifySynapseTableExists();
             downloadCsv();
             if (filterNoDataCsvFiles()) {
                 // return an empty result, to signify no data
@@ -120,7 +143,7 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
      */
     private void downloadCsv() throws AsyncTaskExecutionException {
         String synapseTableId = params.getSynapseTableId();
-        File csvFile = fileHelper.newFile(params.getTempDir(), params.getSchema().getKey().toString() + ".csv");
+        File csvFile = fileHelper.newFile(params.getTempDir(), getDownloadFilenamePrefix() + ".csv");
         String csvFilePath = csvFile.getAbsolutePath();
 
         Stopwatch downloadCsvStopwatch = Stopwatch.createStarted();
@@ -181,7 +204,7 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
 
     /**
      * Get file handle column indexes. This will tell us if we need to download file handles and inject the paths
-     * into the CSV. This method reads from {@link SynapseDownloadFromTableParameters#getSchema} and
+     * into the CSV. This method reads from
      * {@link SynapseDownloadFromTableContext#getCsvFile} and writes the results to
      * {@link SynapseDownloadFromTableContext#setColumnInfo}.
      */
@@ -192,17 +215,17 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
 
             // Iterate through the headers. Identify relevant fields.
             SynapseTableColumnInfo.Builder colInfoBuilder = new SynapseTableColumnInfo.Builder();
-            Map<String, String> fieldTypeMap = params.getSchema().getFieldTypeMap();
+            Set<String> additionalAttachmentColumnSet = getAdditionalAttachmentColumnSet();
             for (int i = 0; i < headerRow.length; i++) {
                 String oneFieldName = headerRow[i];
                 if (COL_HEALTH_CODE.equals(oneFieldName)) {
                     // Health code. Definitely not file handle ID.
                     colInfoBuilder.withHealthCodeColumnIndex(i);
-                } else {
-                    String bridgeType = fieldTypeMap.get(oneFieldName);
-                    if (bridgeType != null && UploadSchema.ATTACHMENT_TYPE_SET.contains(bridgeType)) {
-                        colInfoBuilder.addFileHandleColumnIndex(i);
-                    }
+                } else if (COL_RAW_DATA.equals(oneFieldName)) {
+                    // Raw Data is implicitly an attachment.
+                    colInfoBuilder.addFileHandleColumnIndex(i);
+                } else if (additionalAttachmentColumnSet.contains(oneFieldName)) {
+                    colInfoBuilder.addFileHandleColumnIndex(i);
                 }
             }
             ctx.setColumnInfo(colInfoBuilder.build());
@@ -248,7 +271,6 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
     /**
      * This method takes the set of file handle IDs and bulk downloads them from Synapse (using the bulk download API).
      * This method reads from {@link SynapseDownloadFromTableParameters#getTempDir} to determine download location,
-     * {@link SynapseDownloadFromTableParameters#getSchema} to generate the zip file name,
      * {@link SynapseDownloadFromTableParameters#getSynapseTableId}, and
      * {@link SynapseDownloadFromTableContext#getFileHandleIdSet}, and writes the results to
      * {@link SynapseDownloadFromTableContext#setFileSummaryList} and
@@ -256,8 +278,7 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
      */
     private void bulkDownloadFileHandles() throws AsyncTaskExecutionException {
         // download file handles
-        File bulkDownloadFile = fileHelper.newFile(params.getTempDir(), params.getSchema().getKey().toString() +
-                ".zip");
+        File bulkDownloadFile = fileHelper.newFile(params.getTempDir(), getDownloadFilenamePrefix() + ".zip");
         String bulkDownloadFilePath = bulkDownloadFile.getAbsolutePath();
 
         Stopwatch bulkDownloadStopwatch = Stopwatch.createStarted();
@@ -284,8 +305,7 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
      * <p>
      * We need to make edits to the CSV: (1) Replace the file handle IDs with zip entry names. (2) Remove health
      * codes, since those aren't supposed to be exposed to users. This method reads from
-     * {@link SynapseDownloadFromTableParameters#getTempDir} to determine where to write the edited CSV and from
-     * {@link SynapseDownloadFromTableParameters#getSchema} to generate the edited CSV file name. It also reads from
+     * {@link SynapseDownloadFromTableParameters#getTempDir} to determine where to write the edited CSV. It also reads from
      * {@link SynapseDownloadFromTableContext#getFileSummaryList},
      * {@link SynapseDownloadFromTableContext#getColumnInfo}, {@link SynapseDownloadFromTableContext#getCsvFile}, and
      * writes the results to {@link SynapseDownloadFromTableContext#setEditedCsvFile}.
@@ -318,7 +338,7 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
 
         int healthCodeIdx = ctx.getColumnInfo().getHealthCodeColumnIndex();
         Set<Integer> fileHandleColIdxSet = ctx.getColumnInfo().getFileHandleColumnIndexSet();
-        File editedCsvFile = fileHelper.newFile(params.getTempDir(), params.getSchema().getKey().toString() +
+        File editedCsvFile = fileHelper.newFile(params.getTempDir(), getDownloadFilenamePrefix() +
                 "-edited.csv");
         String editedCsvFilePath = editedCsvFile.getAbsolutePath();
         ctx.setEditedCsvFile(editedCsvFile);
@@ -399,8 +419,8 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
         }
     }
 
-    /** Returns the params. Package-scoped to support tests for {@link SynapsePackager}. */
-    SynapseDownloadFromTableParameters getParameters() {
+    /** Returns the params. Made available to subclasses and unit tests. */
+    protected SynapseDownloadFromTableParameters getParameters() {
         return params;
     }
 
@@ -408,4 +428,19 @@ public class SynapseDownloadFromTableTask implements Callable<SynapseDownloadFro
     SynapseDownloadFromTableContext getContext() {
         return ctx;
     }
+
+    /**
+     * Gets the set of column names that are attachments. For example, this might come from the schema. Should never
+     * return null.
+     */
+    protected abstract Set<String> getAdditionalAttachmentColumnSet();
+
+    /**
+     * Gets the filename prefix for the downloaded files. Example: "api-legacy-survey-v2" will generate files that with
+     * names like "api-legacy-survey-v2.csv".
+     */
+    protected abstract String getDownloadFilenamePrefix();
+
+    /** Verifies that the Synapse table exists, cleaning up DynamoDB mappings as needed. */
+    protected abstract void verifySynapseTableExists() throws AsyncTaskExecutionException;
 }

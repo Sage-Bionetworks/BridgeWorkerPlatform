@@ -4,13 +4,25 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import javax.annotation.PostConstruct;
+
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Index;
 import com.amazonaws.services.dynamodbv2.document.Table;
+import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
+import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
+import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
+import com.amazonaws.services.dynamodbv2.model.KeyType;
+import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
+import com.amazonaws.services.dynamodbv2.util.TableUtils;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.simpleemail.AmazonSimpleEmailServiceClient;
 import com.amazonaws.services.sns.AmazonSNSClient;
@@ -18,6 +30,8 @@ import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.sagebionetworks.client.SynapseAdminClientImpl;
 import org.sagebionetworks.client.SynapseClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -41,7 +55,7 @@ import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.udd.worker.BridgeUddProcessor;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.multiplexer.BridgeWorkerPlatformSqsCallback;
-import org.sagebionetworks.bridge.workerPlatform.multiplexer.Constants;
+import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 // These configs get credentials from the default credential chain. For developer desktops, this is ~/.aws/credentials.
 // For EC2 instances, this happens transparently.
@@ -59,6 +73,8 @@ import org.sagebionetworks.bridge.workerPlatform.multiplexer.Constants;
 })
 @Configuration("GeneralConfig")
 public class SpringConfig {
+    private static final Logger LOG = LoggerFactory.getLogger(SpringConfig.class);
+
     private static final String CONFIG_FILE = "BridgeWorkerPlatform.conf";
     private static final String DEFAULT_CONFIG_FILE = CONFIG_FILE;
     private static final String USER_CONFIG_FILE = System.getProperty("user.home") + "/" + CONFIG_FILE;
@@ -117,6 +133,11 @@ public class SpringConfig {
     @Bean(name = "ddbSynapseMapTable")
     public Table ddbSynapseMapTable() {
         return ddbClient().getTable(bridgeConfig().get("synapse.map.table"));
+    }
+
+    @Bean(name = "ddbSynapseMetaTable")
+    public Table ddbSynapseMetaTable() {
+        return ddbClient().getTable(bridgeConfig().get("synapse.meta.table"));
     }
 
     // Naming note: This is a DDB table containing references to a set of Synapse tables. The name is a bit confusing,
@@ -241,5 +262,63 @@ public class SpringConfig {
     @Autowired
     public ThrowingConsumer<JsonNode> uddWorker(BridgeUddProcessor uddProcessor) {
         return uddProcessor::process;
+    }
+
+    @PostConstruct
+    public void initDynamoDbTables() throws InterruptedException {
+        LOG.info("Initializing DynamoDB tables...");
+        DynamoNamingHelper namingHelper = dynamoNamingHelper();
+        AmazonDynamoDB ddbClient = AmazonDynamoDBClientBuilder.defaultClient();
+
+        // Create tables.
+        createTable(ddbClient, namingHelper, "FitBitTables",
+                "studyId", ScalarAttributeType.S, "tableId", ScalarAttributeType.S);
+        createTable(ddbClient, namingHelper, "NotificationConfig",
+                "studyId", ScalarAttributeType.S, null, null);
+        createTable(ddbClient, namingHelper, "NotificationLog",
+                "userId", ScalarAttributeType.S, "notificationTime", ScalarAttributeType.N);
+        createTable(ddbClient, namingHelper, "SynapseSurveyTables",
+                "studyId", ScalarAttributeType.S, null, null);
+        createTable(ddbClient, namingHelper, "WorkerLog",
+                "workerId", ScalarAttributeType.S, "finishTime", ScalarAttributeType.N);
+
+        // Wait for tables to be ready.
+        waitForTable(ddbClient, namingHelper, "FitBitTables");
+        waitForTable(ddbClient, namingHelper, "NotificationConfig");
+        waitForTable(ddbClient, namingHelper, "NotificationLog");
+        waitForTable(ddbClient, namingHelper, "SynapseSurveyTables");
+        waitForTable(ddbClient, namingHelper, "WorkerLog");
+
+        LOG.info("Finished initializing DynamoDB tables...");
+    }
+
+    private static void createTable(AmazonDynamoDB ddbClient, DynamoNamingHelper namingHelper, String tableName,
+            String hashKeyName, ScalarAttributeType hashKeyType,
+            String rangeKeyName, ScalarAttributeType rangeKeyType) {
+        List<KeySchemaElement> keyList = new ArrayList<>();
+        List<AttributeDefinition> attrList = new ArrayList<>();
+
+        // Use the naming helper to resolve the table name.
+        String resolvedTableName = namingHelper.getFullyQualifiedTableName(tableName);
+
+        // Hash key.
+        keyList.add(new KeySchemaElement(hashKeyName, KeyType.HASH));
+        attrList.add(new AttributeDefinition(hashKeyName, hashKeyType));
+
+        // Range key, if present.
+        if (rangeKeyName != null) {
+            keyList.add(new KeySchemaElement(rangeKeyName, KeyType.RANGE));
+            attrList.add(new AttributeDefinition(rangeKeyName, rangeKeyType));
+        }
+
+        // Create table.
+        CreateTableRequest req = new CreateTableRequest().withTableName(resolvedTableName).withKeySchema(keyList)
+                .withAttributeDefinitions(attrList);
+        TableUtils.createTableIfNotExists(ddbClient, req);
+    }
+
+    private static void waitForTable(AmazonDynamoDB ddbClient, DynamoNamingHelper namingHelper, String tableName)
+            throws InterruptedException {
+        TableUtils.waitUntilActive(ddbClient, namingHelper.getFullyQualifiedTableName(tableName));
     }
 }

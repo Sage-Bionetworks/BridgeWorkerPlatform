@@ -8,6 +8,7 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 public class BridgeWorkerPlatformRequestTest {
     private static final String TEST_JSON_NODE_STRING = "{\n" +

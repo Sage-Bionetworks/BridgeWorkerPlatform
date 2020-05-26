@@ -10,8 +10,8 @@
     <packaging>war</packaging>
 
     <properties>
-        <aws.version>1.11.198</aws.version>
-        <jackson.version>2.9.7</jackson.version>
+        <aws.version>1.11.592</aws.version>
+        <jackson.version>2.9.8</jackson.version>
         <java.version>1.8</java.version>
         <logback.version>1.1.6</logback.version>
         <maven.compiler.source>${java.version}</maven.compiler.source>
@@ -108,7 +108,7 @@
         <dependency>
             <groupId>org.sagebionetworks.bridge</groupId>
             <artifactId>rest-client</artifactId>
-            <version>0.16.20</version>
+            <version>0.19.11</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -213,7 +213,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>findbugs-maven-plugin</artifactId>
-                <version>3.0.2</version>
+                <version>3.0.5</version>
                 <configuration>
                     <excludeFilterFile>findbugs-exclude.xml</excludeFilterFile>
                 </configuration>
@@ -238,11 +238,9 @@
                         <exclude>org/sagebionetworks/bridge/workerPlatform/config/*</exclude>
 
                         <!-- constants are also not testable -->
-                        <exclude>org/sagebionetworks/bridge/fitbit/worker/Constants.class</exclude>
-                        <exclude>org/sagebionetworks/bridge/workerPlatform/multiplexer/Constants.class</exclude>
+                        <exclude>org/sagebionetworks/bridge/workerPlatform/util/Constants.class</exclude>
 
                         <!-- no point in testing exceptions, since they are entirely boilerplate code -->
-                        <exclude>org/sagebionetworks/bridge/udd/exceptions/*</exclude>
                         <exclude>org/sagebionetworks/bridge/workerPlatform/exceptions/*</exclude>
                     </excludes>
                     <rules>

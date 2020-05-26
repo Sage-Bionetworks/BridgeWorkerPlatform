@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -13,7 +12,10 @@ import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterators;
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.RateLimiter;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -23,17 +25,19 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import org.sagebionetworks.bridge.notification.helper.BridgeHelper;
-import org.sagebionetworks.bridge.notification.helper.DynamoHelper;
 import org.sagebionetworks.bridge.notification.helper.TemplateVariableHelper;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.ActivityEvent;
 import org.sagebionetworks.bridge.rest.model.ScheduleStatus;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.rest.model.UserConsentHistory;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.time.DateUtils;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.UserNotConfiguredException;
 
 /** Worker that sends notifications when users do not engage with the study burst. */
 @Component("ActivityNotificationWorker")
@@ -43,12 +47,17 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     // If there are a lot of users, write log messages regularly so we know the worker is still running.
     private static final int REPORTING_INTERVAL = 250;
 
+    private static final Set<String> CONSENT_NOT_REQUIRED_DATA_GROUPS = ImmutableSet.of("clinical_consent",
+            "test_no_consent");
     private static final int MIN_TIMEZONE_OFFSET_MILLIS = -11 * 60 * 60 * 1000;
     private static final int MAX_TIMEZONE_OFFSET_MILLIS = -1 * 60 * 60 * 1000;
     static final String REQUEST_PARAM_DATE = "date";
     static final String REQUEST_PARAM_STUDY_ID = "studyId";
     static final String REQUEST_PARAM_USER_LIST = "userList";
     static final String REQUEST_PARAM_TAG = "tag";
+
+    // Worker ID for the Worker Log
+    static final String VALUE_WORKER_ID = "ActivityNotificationWorker";
 
     private final RateLimiter perUserRateLimiter = RateLimiter.create(1.0);
 
@@ -132,7 +141,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
             userIdIterator = Iterators.transform(userListNode.elements(), JsonNode::textValue);
             LOG.info("Custom user list received, " + userListNode.size() + " users");
         } else {
-            userIdIterator = Iterators.transform(bridgeHelper.getAllAccountSummaries(studyId), AccountSummary::getId);
+            userIdIterator = Iterators.transform(bridgeHelper.getAllAccountSummaries(studyId, true), AccountSummary::getId);
         }
 
         int numUsers = 0;
@@ -147,6 +156,10 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
                 try {
                     processAccountForDate(studyId, date, userId);
+                } catch (UserNotConfiguredException ex) {
+                    // Users not being configured properly is a fairly common occurence. Log a warning instead of an
+                    // error.
+                    LOG.warn("User ID " + userId + " is not configured for notifications: " + ex.getMessage(), ex);
                 } catch (Exception ex) {
                     LOG.error("Error processing user ID " + userId + ": " + ex.getMessage(), ex);
                 }
@@ -163,7 +176,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         }
 
         // Write to Worker Log in DDB so we can signal end of processing.
-        dynamoHelper.writeWorkerLog(tag);
+        dynamoHelper.writeWorkerLog(VALUE_WORKER_ID, tag);
 
         LOG.info("Finished processing users: " + numUsers + " users in " + stopwatch.elapsed(TimeUnit.SECONDS) +
                 " seconds");
@@ -171,9 +184,10 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     }
 
     // Processes a single user for the given date. Package-scoped for unit tests.
-    void processAccountForDate(String studyId, LocalDate date, String userId) throws IOException {
+    void processAccountForDate(String studyId, LocalDate date, String userId)
+            throws IOException, UserNotConfiguredException {
         // Get participant. We'll need some attributes.
-        StudyParticipant participant = bridgeHelper.getParticipant(studyId, userId);
+        StudyParticipant participant = bridgeHelper.getParticipant(studyId, userId, true);
 
         // Exclude users who are not eligible for notifications.
         if (shouldExcludeUser(studyId, participant)) {
@@ -238,7 +252,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         }
 
         // Unconsented users can't be notified
-        if (!Objects.equals(participant.isConsented(), Boolean.TRUE)) {
+        if (!isUserConsented(studyId, participant)) {
             return true;
         }
 
@@ -262,6 +276,30 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
         // We've checked all the exclude conditions. Do not exclude user.
         return false;
+    }
+
+    // Hardcode consent logic based on specific data groups. We do this because RequestInfo is volatile, so we need
+    // calculate consent status in the Worker.
+    private boolean isUserConsented(String studyId, StudyParticipant participant) {
+        // Some data groups put the user in a subpop that doesn't require e-consent. If the user is in one of these
+        // data groups, treat the user as consented.
+        Set<String> userDataGroupSet = ImmutableSet.copyOf(participant.getDataGroups());
+        if (!Sets.intersection(CONSENT_NOT_REQUIRED_DATA_GROUPS, userDataGroupSet).isEmpty()) {
+            return true;
+        }
+
+        // Otherwise, the user is in the default subpop (matches the study ID). Consents are already sorted in
+        // increasing signedOn. Last one is the active (latest) consent.
+        List<UserConsentHistory> consentList = participant.getConsentHistories().get(studyId);
+        if (consentList == null || consentList.isEmpty()) {
+            // No consents in a required subpop means not consented.
+            return false;
+        }
+
+        // Bridge only saves consents if they have been signed. However, we need to check that it hasn't been
+        // withdrawn.
+        UserConsentHistory consent = consentList.get(consentList.size() - 1);
+        return consent.getWithdrewOn() == null;
     }
 
     // Helper method to determine if there's an upcoming study burst coming up tomorrow.
@@ -332,12 +370,6 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         Iterator<ScheduledActivity> activityIterator = bridgeHelper.getTaskHistory(studyId, userId, taskId,
                 activityRangeStart, activityRangeEnd);
 
-        // If the user somehow has no activities with this task ID, don't notify the user. The account is probably not
-        // fully bootstrapped, and we should avoid sending them a notification.
-        if (!activityIterator.hasNext()) {
-            return null;
-        }
-
         // Map the events by scheduled date so it's easier to work with.
         Map<LocalDate, ScheduledActivity> activitiesByDate = new HashMap<>();
         while (activityIterator.hasNext()) {
@@ -400,12 +432,12 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
     // Encapsulates sending an SMS notification to the user.
     private void notifyUser(String studyId, StudyParticipant participant, NotificationType notificationType)
-            throws IOException {
+            throws IOException, UserNotConfiguredException {
         String userId = participant.getId();
         WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
 
         // Get notification messages for type.
-        List<String> messageList = null;
+        List<String> messageList;
         switch (notificationType) {
             case CUMULATIVE:
                 messageList = workerConfig.getMissedCumulativeActivitiesMessagesList();
@@ -417,6 +449,16 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
                 messageList = workerConfig.getMissedLaterActivitiesMessagesList();
                 break;
             case PRE_BURST:
+                // Set the default message list, in case we can't generate a pre-burst message.
+                messageList = ImmutableList.of(workerConfig.getDefaultPreburstMessage());
+
+                // Pre-burst requires a study commitment.
+                String studyCommitment = templateVariableHelper.getStudyCommitment(studyId, userId);
+                if (studyCommitment == null) {
+                    // Break and fall back to the default.
+                    break;
+                }
+
                 // Narrow down notification messages for data group.
                 Map<String, List<String>> messagesByDataGroup = workerConfig.getPreburstMessagesByDataGroup();
                 for (String oneDataGroup : participant.getDataGroups()) {
@@ -431,7 +473,8 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         }
 
         if (messageList == null) {
-            throw new IllegalStateException("No messages found for type " + notificationType + " for user " + userId);
+            LOG.warn("No messages found for type " + notificationType + " for user " + userId);
+            return;
         }
 
         // Pick message at random.

@@ -20,9 +20,9 @@ import org.mockito.ArgumentCaptor;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import org.sagebionetworks.bridge.udd.accounts.AccountInfo;
-import org.sagebionetworks.bridge.udd.dynamodb.StudyInfo;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
+import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.StudyInfo;
 
 public class SesHelperTest {
     private SesHelper sesHelper;

@@ -2,6 +2,7 @@ package org.sagebionetworks.bridge.udd.synapse;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.isNull;
 import static org.mockito.Matchers.same;
 import static org.mockito.Matchers.startsWith;
 import static org.mockito.Mockito.doAnswer;
@@ -38,6 +39,10 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.joda.time.LocalDate;
 import org.mockito.ArgumentCaptor;
+import org.sagebionetworks.client.exceptions.SynapseBadRequestException;
+import org.sagebionetworks.client.exceptions.SynapseServiceUnavailable;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.config.Config;
@@ -48,11 +53,15 @@ import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelperTest;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.udd.worker.BridgeUddRequest;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.SynapseUnavailableException;
 
 @SuppressWarnings({ "unchecked", "rawtypes" })
 public class SynapsePackagerTest {
+    private static final String DEFAULT_TABLE_ID = "default-table";
     private static final String DUMMY_USER_DATA_BUCKET = "dummy-user-data-bucket";
     private static final DateTime MOCK_NOW = DateTime.parse("2015-09-17T12:43:41-07:00");
+    private static final String STUDY_ID = "my-study";
     private static final String TEST_START_DATE = "2015-03-09";
     private static final String TEST_END_DATE = "2015-09-17";
     private static final String TEST_HEALTH_CODE = "test-health-code";
@@ -67,10 +76,17 @@ public class SynapsePackagerTest {
     
     private ArgumentCaptor<ObjectMetadata> objectMetadataCaptor;
 
+    private DynamoHelper mockDynamoHelper;
     private S3Helper mockS3Helper;
+    private SynapseHelper mockSynapseHelper;
     private InMemoryFileHelper inMemoryFileHelper;
     private SynapsePackager packager;
     private byte[] s3FileBytes;
+
+    @AfterClass
+    public static void unmockNow() {
+        DateTimeUtils.setCurrentMillisSystem();
+    }
 
     @Test
     public void noSchemas() throws Exception {
@@ -82,8 +98,8 @@ public class SynapsePackagerTest {
         setupPackager(synapseTableToSchema, synapseTableToResult, null, surveyTableToResultContent, null);
 
         // execute and validate
-        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(synapseTableToSchema, TEST_HEALTH_CODE,
-                TEST_UDD_REQUEST, surveyTableIdSet);
+        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(STUDY_ID, synapseTableToSchema,
+                null, TEST_HEALTH_CODE, TEST_UDD_REQUEST, surveyTableIdSet);
         assertNull(presignedUrlInfo);
 
         // validate S3 not called
@@ -99,15 +115,17 @@ public class SynapsePackagerTest {
         // setup test
         // We don't care about data inside the schema. Use mock schemas.
         Map<String, UploadSchema> synapseTableToSchema = ImmutableMap.of("test-table-id", mock(UploadSchema.class));
-        Map<String, SynapseTaskResultContent> synapseTableToResult = ImmutableMap.of("test-table-id",
-                new SynapseTaskResultContent(null, null, null, null));
+        Map<String, SynapseTaskResultContent> synapseTableToResult = ImmutableMap.<String, SynapseTaskResultContent>builder()
+                .put("test-table-id", new SynapseTaskResultContent(null, null, null, null))
+                .put(DEFAULT_TABLE_ID, new SynapseTaskResultContent(null, null, null, null))
+                .build();
         Map<String, String> surveyTableToResultContent = ImmutableMap.of("test-survey", "dummy survey content");
         Set<String> surveyTableIdSet = surveyTableToResultContent.keySet();
         setupPackager(synapseTableToSchema, synapseTableToResult, null, surveyTableToResultContent, null);
 
         // execute and validate
-        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(synapseTableToSchema, TEST_HEALTH_CODE,
-                TEST_UDD_REQUEST, surveyTableIdSet);
+        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(STUDY_ID, synapseTableToSchema,
+                DEFAULT_TABLE_ID, TEST_HEALTH_CODE, TEST_UDD_REQUEST, surveyTableIdSet);
         assertNull(presignedUrlInfo);
 
         // validate S3 not called
@@ -124,6 +142,7 @@ public class SynapsePackagerTest {
         // * task with no files
         // * task with CSV
         // * task with CSV and bulk download
+        // * default table task
         // * 2 tasks with errors (to make sure error messages are collated properly)
         // * 2 surveys
         // * 2 survey errors
@@ -144,6 +163,8 @@ public class SynapsePackagerTest {
                 .put("csv-and-bulk-download-table", new SynapseTaskResultContent("csv-and-bulk-download.csv",
                         "csv-and-bulk-download dummy csv", "csv-and-bulk-download.zip",
                         "csv-and-bulk-download dummy zip"))
+                .put(DEFAULT_TABLE_ID, new SynapseTaskResultContent("my-study-default.csv",
+                        "default dummy csv", null, null))
                 .build();
 
         Map<String, ExecutionException> synapseTableToException = new ImmutableMap.Builder()
@@ -174,17 +195,18 @@ public class SynapsePackagerTest {
 
         // execute and validate
         long expectedExpirationTimeMillis = MOCK_NOW.plusHours(URL_EXPIRATION_HOURS).getMillis();
-        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(synapseTableToSchema, TEST_HEALTH_CODE,
-                TEST_UDD_REQUEST, surveyTableIdSet);
+        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(STUDY_ID, synapseTableToSchema,
+                DEFAULT_TABLE_ID, TEST_HEALTH_CODE, TEST_UDD_REQUEST, surveyTableIdSet);
         assertEquals(presignedUrlInfo.getUrl().toString(), "http://example.com/");
         assertEquals(presignedUrlInfo.getExpirationTime().getMillis(), expectedExpirationTimeMillis);
 
         // validate uploaded S3 file
         Map<String, String> unzippedMap = ZipHelperTest.unzipHelper(s3FileBytes);
-        assertEquals(unzippedMap.size(), 7);
+        assertEquals(unzippedMap.size(), 8);
         assertEquals(unzippedMap.get("csv-only.csv"), "csv-only dummy csv");
         assertEquals(unzippedMap.get("csv-and-bulk-download.csv"), "csv-and-bulk-download dummy csv");
         assertEquals(unzippedMap.get("csv-and-bulk-download.zip"), "csv-and-bulk-download dummy zip");
+        assertEquals(unzippedMap.get("my-study-default.csv"), "default dummy csv");
         assertEquals(unzippedMap.get("foo-survey.csv"), "foo-survey dummy content");
         assertEquals(unzippedMap.get("bar-survey.csv"), "bar-survey dummy content");
 
@@ -227,8 +249,8 @@ public class SynapsePackagerTest {
 
         // execute and validate
         long expectedExpirationTimeMillis = MOCK_NOW.plusHours(URL_EXPIRATION_HOURS).getMillis();
-        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(synapseTableToSchema, TEST_HEALTH_CODE,
-                TEST_UDD_REQUEST, surveyTableIdSet);
+        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(STUDY_ID, synapseTableToSchema,
+                null, TEST_HEALTH_CODE, TEST_UDD_REQUEST, surveyTableIdSet);
         assertEquals(presignedUrlInfo.getUrl().toString(), "http://example.com/");
         assertEquals(presignedUrlInfo.getExpirationTime().getMillis(), expectedExpirationTimeMillis);
 
@@ -257,8 +279,8 @@ public class SynapsePackagerTest {
 
         // set up mocks - We bypass most of the stuff in setupPackager()
         packager = spy(new SynapsePackager());
-        doThrow(RuntimeException.class).when(packager).initAsyncQueryTasks(same(synapseTableToSchema),
-                eq(TEST_HEALTH_CODE), same(TEST_UDD_REQUEST), any(File.class));
+        doThrow(RuntimeException.class).when(packager).initAsyncQueryTasks(eq(STUDY_ID), same(synapseTableToSchema),
+                isNull(String.class), eq(TEST_HEALTH_CODE), same(TEST_UDD_REQUEST), any(File.class));
 
         inMemoryFileHelper = new InMemoryFileHelper();
         packager.setFileHelper(inMemoryFileHelper);
@@ -266,7 +288,7 @@ public class SynapsePackagerTest {
         // execute
         Exception thrownEx = null;
         try {
-            packager.packageSynapseData(synapseTableToSchema, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
+            packager.packageSynapseData(STUDY_ID, synapseTableToSchema, null, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
                     ImmutableSet.of("test-survey"));
             fail("expected exception");
         } catch (RuntimeException ex) {
@@ -300,7 +322,8 @@ public class SynapsePackagerTest {
         // execute
         Exception thrownEx = null;
         try {
-            packager.packageSynapseData(synapseTableToSchema, TEST_HEALTH_CODE, TEST_UDD_REQUEST, surveyTableIdSet);
+            packager.packageSynapseData(STUDY_ID, synapseTableToSchema, null, TEST_HEALTH_CODE,
+                    TEST_UDD_REQUEST, surveyTableIdSet);
             fail("expected exception");
         } catch (AmazonClientException ex) {
             thrownEx = ex;
@@ -322,6 +345,88 @@ public class SynapsePackagerTest {
         assertTrue(inMemoryFileHelper.isEmpty());
     }
 
+    @Test
+    public void tableQuerySynapseReadOnly() throws Exception {
+        // Test that when Synapse is read-only, that this gets propagated up the call stack.
+
+        // Setup test.
+        // We don't care about data inside the schema. Use mock schemas.
+        Map<String, UploadSchema> synapseTableToSchema = ImmutableMap.of("test-table-id", mock(UploadSchema.class));
+        Map<String, SynapseTaskResultContent> synapseTableToResult = ImmutableMap.of();
+        Map<String, String> surveyTableToResultContent = ImmutableMap.of();
+
+        Map<String, ExecutionException> synapseTableToException = ImmutableMap.of("test-table-id",
+                new ExecutionException(new SynapseServiceUnavailable("Service Unavailable")));
+
+        setupPackager(synapseTableToSchema, synapseTableToResult, synapseTableToException, surveyTableToResultContent,
+                null);
+
+        // Execute (throws exception).
+        try {
+            packager.packageSynapseData(STUDY_ID, synapseTableToSchema, null, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
+                    ImmutableSet.of());
+            fail("expected exception");
+        } catch (SynapseUnavailableException ex) {
+            assertEquals(ex.getMessage(), "Synapse not in writable state");
+        }
+
+        // Validate mock file helper is clean.
+        assertTrue(inMemoryFileHelper.isEmpty());
+    }
+
+    @Test
+    public void surveyQuerySynapseReadOnly() throws Exception {
+        // Test that when Synapse is read-only, that this gets propagated up the call stack.
+
+        // Setup test.
+        // We don't care about data inside the schema. Use mock schemas.
+        Map<String, UploadSchema> synapseTableToSchema = ImmutableMap.of("test-table-id", mock(UploadSchema.class));
+        Map<String, SynapseTaskResultContent> synapseTableToResult = ImmutableMap.of("test-table-id",
+                new SynapseTaskResultContent("csv.csv", "dummy csv content",
+                        "bulkdownload.zip", "dummy bulk download content"));
+
+        Map<String, String> surveyTableToResultContent = ImmutableMap.of();
+        Map<String, ExecutionException> surveyTableToException = ImmutableMap.of("test-survey",
+                new ExecutionException(new SynapseServiceUnavailable("Service Unavailable")));
+
+        setupPackager(synapseTableToSchema, synapseTableToResult, null,
+                surveyTableToResultContent, surveyTableToException);
+
+        // Execute (throws exception).
+        try {
+            packager.packageSynapseData(STUDY_ID, synapseTableToSchema, null, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
+                    ImmutableSet.of("test-survey"));
+            fail("expected exception");
+        } catch (SynapseUnavailableException ex) {
+            assertEquals(ex.getMessage(), "Synapse not in writable state");
+        }
+
+        // Validate mock file helper is clean.
+        assertTrue(inMemoryFileHelper.isEmpty());
+    }
+
+    @DataProvider(name = "notSynapseReadOnlyDataProvider")
+    public Object[][] notSynapseReadOnlyDataProvider() {
+        return new Object[][] {
+                { new ExecutionException("no cause", null) },
+                { new ExecutionException("not Synapse exception", new RuntimeException()) },
+                { new ExecutionException("Synapse 400 Bad Request", new SynapseBadRequestException()) },
+        };
+    }
+
+    @Test(dataProvider = "notSynapseReadOnlyDataProvider")
+    public void notSynapseReadOnly(ExecutionException ex) throws Exception {
+        // If this method doesn't throw, then that's a successfuly test.
+        SynapsePackager.rethrowIfSynapseIsReadOnly(ex);
+    }
+
+    @Test(expectedExceptions = SynapseUnavailableException.class,
+            expectedExceptionsMessageRegExp = "Synapse not in writable state")
+    public void throwSynapseReadOnlyException() throws Exception {
+        ExecutionException ex = new ExecutionException("Synapse 503 Unavailable", new SynapseServiceUnavailable("Service Unavailable"));
+        SynapsePackager.rethrowIfSynapseIsReadOnly(ex);
+    }
+
     private void setupPackager(Map<String, UploadSchema> synapseTableToSchema,
             Map<String, SynapseTaskResultContent> synapseTableToResult,
             Map<String, ExecutionException> synapseTableToException, Map<String, String> surveyTableToResultContent,
@@ -339,6 +444,13 @@ public class SynapsePackagerTest {
         inMemoryFileHelper = new InMemoryFileHelper();
         packager.setFileHelper(inMemoryFileHelper);
 
+        // Mock other helpers.
+        mockDynamoHelper = mock(DynamoHelper.class);
+        packager.setDynamoHelper(mockDynamoHelper);
+
+        mockSynapseHelper = mock(SynapseHelper.class);
+        packager.setSynapseHelper(mockSynapseHelper);
+
         // mock executor service to just call the callables directly
         ExecutorService mockExecutorService = mock(ExecutorService.class);
         packager.setAuxiliaryExecutorService(mockExecutorService);
@@ -348,17 +460,34 @@ public class SynapsePackagerTest {
         when(mockExecutorService.submit(any(Callable.class))).then(invocation -> {
             Callable<?> callable = invocation.getArgumentAt(0, Callable.class);
             if (callable instanceof SynapseDownloadFromTableTask) {
-                // validate params
                 SynapseDownloadFromTableTask task = (SynapseDownloadFromTableTask) callable;
+
+                // Validate helpers.
+                assertSame(task.getDynamoHelper(), mockDynamoHelper);
+                assertSame(task.getFileHelper(), inMemoryFileHelper);
+                assertSame(task.getSynapseHelper(), mockSynapseHelper);
+
+                // validate params
                 SynapseDownloadFromTableParameters params = task.getParameters();
-                String synapseTableId = params.getSynapseTableId();
                 File tmpDir = params.getTempDir();
 
                 assertEquals(params.getHealthCode(), TEST_HEALTH_CODE);
                 assertEquals(params.getStartDate().toString(), TEST_START_DATE);
                 assertEquals(params.getEndDate().toString(), TEST_END_DATE);
                 assertNotNull(tmpDir);
-                assertSame(params.getSchema(), synapseTableToSchema.get(synapseTableId));
+                assertEquals(params.getStudyId(), STUDY_ID);
+
+                String synapseTableId = params.getSynapseTableId();
+                assertNotNull(synapseTableId);
+                if (task instanceof SchemaBasedTableTask) {
+                    assertNotNull(params.getSchema());
+                    assertSame(params.getSchema(), synapseTableToSchema.get(synapseTableId));
+                } else if (task instanceof DefaultTableTask) {
+                    assertNull(params.getSchema());
+                    assertEquals(synapseTableId, DEFAULT_TABLE_ID);
+                } else {
+                    fail("Unexpected task type " + task.getClass());
+                }
 
                 Future<SynapseDownloadFromTableResult> mockFuture = mock(Future.class);
 
@@ -389,9 +518,16 @@ public class SynapsePackagerTest {
                 when(mockFuture.get()).thenReturn(taskResultBuilder.build());
                 return mockFuture;
             } else if (callable instanceof SynapseDownloadSurveyTask) {
-                // validate params
                 SynapseDownloadSurveyTask task = invocation.getArgumentAt(0, SynapseDownloadSurveyTask.class);
+
+                // Validate helpers.
+                assertSame(task.getDynamoHelper(), mockDynamoHelper);
+                assertSame(task.getFileHelper(), inMemoryFileHelper);
+                assertSame(task.getSynapseHelper(), mockSynapseHelper);
+
+                // validate params
                 SynapseDownloadSurveyParameters params = task.getParameters();
+                assertEquals(params.getStudyId(), STUDY_ID);
                 String synapseTableId = params.getSynapseTableId();
                 assertFalse(Strings.isNullOrEmpty(synapseTableId));
                 File tmpDir = params.getTempDir();

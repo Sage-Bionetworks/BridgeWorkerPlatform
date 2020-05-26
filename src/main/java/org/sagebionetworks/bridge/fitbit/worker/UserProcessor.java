@@ -11,6 +11,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.http.client.HttpResponseException;
 import org.apache.http.client.fluent.Request;
 import org.joda.time.DateTime;
 import org.sagebionetworks.client.exceptions.SynapseException;
@@ -21,13 +22,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.file.FileHelper;
-import org.sagebionetworks.bridge.fitbit.bridge.FitBitUser;
 import org.sagebionetworks.bridge.fitbit.schema.ColumnSchema;
 import org.sagebionetworks.bridge.fitbit.schema.EndpointSchema;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
 import org.sagebionetworks.bridge.fitbit.schema.UrlParameterType;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
+import org.sagebionetworks.bridge.workerPlatform.bridge.FitBitUser;
+import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 /** The User Processor downloads data from the FitBit Web API and collates the data into tables. */
 @Component
@@ -67,7 +69,23 @@ public class UserProcessor {
 
         // Get data from FitBit
         String url = String.format(endpointSchema.getUrl(), resolvedUrlParamList.toArray());
-        String response = makeHttpRequest(url, user.getAccessToken());
+        String response;
+        try {
+            response = makeHttpRequest(url, user.getAccessToken());
+        } catch (HttpResponseException ex) {
+            // 403s are fairly common, if the participant grants Fitbit permissions and then revokes
+            // them. In this case, log a warning instead of an error.
+            if (ex.getStatusCode() == 403) {
+                LOG.warn("403 Unauthorized for healthCode " + user.getHealthCode() +
+                        " on endpoint " + endpointSchema.getEndpointId());
+            } else {
+                LOG.error("HTTP error " + ex.getStatusCode() + " for healthCode " +
+                        user.getHealthCode() + " on endpoint " + endpointSchema.getEndpointId());
+            }
+
+            // We don't have permissions, so just return.
+            return;
+        }
         JsonNode responseNode = DefaultObjectMapper.INSTANCE.readTree(response);
 
         // Process each key (top-level table) in the response
@@ -107,25 +125,29 @@ public class UserProcessor {
         PopulatedTable populatedTable = ctx.getPopulatedTablesById().get(tableId);
         Map<String, String> rowValueMap = new HashMap<>();
 
-        // Iterate through all values in the node. Serialize the values into the PopulatedTable.
-        Iterator<String> columnNameIter = rowNode.fieldNames();
-        while (columnNameIter.hasNext()) {
-            String oneColumnName = columnNameIter.next();
-            JsonNode columnValueNode = rowNode.get(oneColumnName);
+        if (rowNode.size() > 0) {
+            // Upload raw row data as a file handle.
+            String rawDataFileHandleId = uploadJsonAsFileHandle(ctx, rowNode, Constants.COLUMN_RAW_DATA);
+            rowValueMap.put(Constants.COLUMN_RAW_DATA, rawDataFileHandleId);
 
-            ColumnSchema columnSchema = tableSchema.getColumnsById().get(oneColumnName);
-            if (columnSchema == null) {
-                warnWrapper("Unexpected column " + oneColumnName + " in table " + tableId + " for user " +
-                        user.getHealthCode());
-            } else {
-                Object value = serializeJsonForColumn(ctx, columnValueNode, columnSchema);
-                if (value != null) {
-                    rowValueMap.put(oneColumnName, value.toString());
+            // Iterate through all values in the node. Serialize the values into the PopulatedTable.
+            Iterator<String> columnNameIter = rowNode.fieldNames();
+            while (columnNameIter.hasNext()) {
+                String oneColumnName = columnNameIter.next();
+                JsonNode columnValueNode = rowNode.get(oneColumnName);
+
+                ColumnSchema columnSchema = tableSchema.getColumnsById().get(oneColumnName);
+                if (columnSchema == null) {
+                    warnWrapper("Unexpected column " + oneColumnName + " in table " + tableId + " for user " +
+                            user.getHealthCode());
+                } else {
+                    Object value = serializeJsonForColumn(ctx, columnValueNode, columnSchema);
+                    if (value != null) {
+                        rowValueMap.put(oneColumnName, value.toString());
+                    }
                 }
             }
-        }
 
-        if (!rowValueMap.isEmpty()) {
             // Always include the user's health code and the created date.
             rowValueMap.put(Constants.COLUMN_HEALTH_CODE, user.getHealthCode());
             rowValueMap.put(Constants.COLUMN_CREATED_DATE, ctx.getDate());
@@ -178,19 +200,7 @@ public class UserProcessor {
                 }
                 break;
             case FILEHANDLEID:
-                // Write value to temp file on disk.
-                String tempFileName = columnId + RandomStringUtils.randomAlphabetic(4);
-                File fileToUpload = fileHelper.newFile(ctx.getTmpDir(), tempFileName);
-                try (OutputStream fileOutputStream = fileHelper.getOutputStream(fileToUpload)) {
-                    DefaultObjectMapper.INSTANCE.writeValue(fileOutputStream, node);
-                }
-
-                // Upload file handle. Value is the file handle ID.
-                FileHandle fileHandle = synapseHelper.createFileHandleWithRetry(fileToUpload);
-                value = fileHandle.getId();
-
-                // Finally, delete the temp file.
-                fileHelper.deleteFile(fileToUpload);
+                value = uploadJsonAsFileHandle(ctx, node, columnId);
                 break;
             case INTEGER:
                 if (node.isNumber()) {
@@ -235,6 +245,30 @@ public class UserProcessor {
 
         // Convert to string.
         return String.valueOf(value);
+    }
+
+    // Helper method for uploading the given JSON node as a Synapse file handle. This method also appends a random
+    // 4-character alphabetical string to the filename to minimize the probability of a file collision. This method
+    // both creates and deletes the temporary file.
+    private String uploadJsonAsFileHandle(RequestContext ctx, JsonNode node, String filename) throws IOException,
+            SynapseException {
+        // Append a random string to the filename to make it probabilistically unique.
+        String uniqueFilename = filename + RandomStringUtils.randomAlphabetic(4) + ".json";
+
+        // Write value to temp file on disk.
+        File fileToUpload = fileHelper.newFile(ctx.getTmpDir(), uniqueFilename);
+        try (OutputStream fileOutputStream = fileHelper.getOutputStream(fileToUpload)) {
+            DefaultObjectMapper.INSTANCE.writeValue(fileOutputStream, node);
+        }
+
+        // Upload file handle. Value is the file handle ID.
+        FileHandle fileHandle = synapseHelper.createFileHandleWithRetry(fileToUpload);
+        String fileHandleId = fileHandle.getId();
+
+        // Finally, delete the temp file.
+        fileHelper.deleteFile(fileToUpload);
+
+        return fileHandleId;
     }
 
     // Abstracts away the HTTP call to FitBit Web API.

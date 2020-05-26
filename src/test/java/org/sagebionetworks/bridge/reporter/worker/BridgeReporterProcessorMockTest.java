@@ -22,9 +22,9 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
-import org.sagebionetworks.bridge.reporter.helper.BridgeHelper;
 import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
 public class BridgeReporterProcessorMockTest {
     private static final DateTime START_DATE_TIME = DateTime.parse("2018-01-11T0:00-0800");
@@ -47,7 +47,7 @@ public class BridgeReporterProcessorMockTest {
                 new Study().identifier(STUDY_ID_2), new Study().identifier(STUDY_ID_3));
 
         mockBridgeHelper = mock(BridgeHelper.class);
-        when(mockBridgeHelper.getAllStudiesSummary()).thenReturn(studySummaryList);
+        when(mockBridgeHelper.getAllStudies()).thenReturn(studySummaryList);
 
         // Mock report generator. For the purposes of this test, the generator is always DAILY.
         mockGenerator = mock(ReportGenerator.class);

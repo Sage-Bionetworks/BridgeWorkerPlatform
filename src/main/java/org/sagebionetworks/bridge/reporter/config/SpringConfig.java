@@ -2,6 +2,7 @@ package org.sagebionetworks.bridge.reporter.config;
 
 import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.reporter.worker.ReportGenerator;
+import org.sagebionetworks.bridge.reporter.worker.RetentionReportGenerator;
 import org.sagebionetworks.bridge.reporter.worker.SignUpsReportGenerator;
 import org.sagebionetworks.bridge.reporter.worker.UploadsReportGenerator;
 
@@ -22,11 +23,12 @@ import java.util.Map;
 public class SpringConfig {
     @Bean(name="generatorMap")
     public Map<ReportType, ReportGenerator> generatorMap(UploadsReportGenerator uploadsGenerator,
-            SignUpsReportGenerator signupsGenerator) {
+            SignUpsReportGenerator signupsGenerator, RetentionReportGenerator retentionGenerator) {
         return new ImmutableMap.Builder<ReportType, ReportGenerator>()
             .put(ReportType.DAILY, uploadsGenerator)
             .put(ReportType.WEEKLY, uploadsGenerator)
             .put(ReportType.DAILY_SIGNUPS, signupsGenerator)
+            .put(ReportType.DAILY_RETENTION, retentionGenerator)
             .build();
     }
 }

@@ -10,9 +10,9 @@ import org.sagebionetworks.repo.model.table.ColumnModel;
 import org.sagebionetworks.repo.model.table.ColumnType;
 
 import org.sagebionetworks.bridge.fitbit.schema.ColumnSchema;
-import org.sagebionetworks.bridge.fitbit.worker.Constants;
 import org.sagebionetworks.bridge.fitbit.worker.PopulatedTable;
 import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 /** Utility functions */
 public class Utils {
@@ -24,7 +24,9 @@ public class Utils {
             new ColumnSchema.Builder().withColumnId(Constants.COLUMN_HEALTH_CODE).withColumnType(ColumnType.STRING)
                     .withMaxLength(36).build(),
             new ColumnSchema.Builder().withColumnId(Constants.COLUMN_CREATED_DATE).withColumnType(ColumnType.STRING)
-                    .withMaxLength(10).build());
+                    .withMaxLength(10).build(),
+            new ColumnSchema.Builder().withColumnId(Constants.COLUMN_RAW_DATA).withColumnType(ColumnType.FILEHANDLEID)
+                    .build());
 
     /**
      * Helper method which merges the common column list with the table-specific column schemas and returns the full

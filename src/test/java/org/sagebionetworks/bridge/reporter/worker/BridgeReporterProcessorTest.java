@@ -25,7 +25,6 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.reporter.Tests;
-import org.sagebionetworks.bridge.reporter.helper.BridgeHelper;
 import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.rest.RestUtils;
 import org.sagebionetworks.bridge.rest.model.ReportData;
@@ -33,6 +32,7 @@ import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
 
 public class BridgeReporterProcessorTest {
@@ -86,18 +86,21 @@ public class BridgeReporterProcessorTest {
     private static final String PARTICIPANT_1 = Tests.unescapeJson("{" +
             "'id':'user1'," +
             "'sharingScope':'no_sharing'," +
+            "'roles': []," +
             "'status':'enabled'" +
             "}");
 
     private static final String PARTICIPANT_2 = Tests.unescapeJson("{" +
             "'id':'user2'," +
             "'sharingScope':'all_qualified_researchers'," +
+            "'roles': []," +
             "'status':'enabled'" +
             "}");
 
     private static final String PARTICIPANT_3 = Tests.unescapeJson("{" +
             "'id':'user3'," +
             "'sharingScope':'no_sharing'," +
+            "'roles': []," +
             "'status':'unverified'" +
             "}");
 
@@ -160,7 +163,7 @@ public class BridgeReporterProcessorTest {
     @BeforeMethod
     public void setup() throws Exception {
         mockBridgeHelper = mock(BridgeHelper.class);
-        when(mockBridgeHelper.getAllStudiesSummary()).thenReturn(TEST_STUDY_SUMMARY_LIST);
+        when(mockBridgeHelper.getAllStudies()).thenReturn(TEST_STUDY_SUMMARY_LIST);
         when(mockBridgeHelper.getUploadsForStudy(any(), any(), any())).thenReturn(testUploads);
 
         UploadsReportGenerator uploadsGenerator = new UploadsReportGenerator();
@@ -171,7 +174,7 @@ public class BridgeReporterProcessorTest {
         
         Map<ReportType, ReportGenerator> generators = new ImmutableMap.Builder<ReportType, ReportGenerator>()
                 .put(ReportType.DAILY, uploadsGenerator).put(ReportType.WEEKLY, uploadsGenerator)
-                .put(ReportType.DAILY_SIGNUPS, signUpsGenerator).build();        
+                .put(ReportType.DAILY_SIGNUPS, signUpsGenerator).build();
         
         // set up callback
         processor = new BridgeReporterProcessor();
@@ -187,7 +190,7 @@ public class BridgeReporterProcessorTest {
         processor.process(requestJson);
 
         // verify
-        verify(mockBridgeHelper).getAllStudiesSummary();
+        verify(mockBridgeHelper).getAllStudies();
         verify(mockBridgeHelper).getUploadsForStudy(eq(TEST_STUDY_ID), eq(TEST_START_DATETIME), eq(TEST_END_DATETIME));
         
         verify(mockBridgeHelper).saveReportForStudy(reportCaptor.capture());
@@ -206,7 +209,7 @@ public class BridgeReporterProcessorTest {
         processor.process(requestJsonWeekly);
 
         // verify
-        verify(mockBridgeHelper).getAllStudiesSummary();
+        verify(mockBridgeHelper).getAllStudies();
         verify(mockBridgeHelper, times(1)).getUploadsForStudy(eq(TEST_STUDY_ID), any(), any());
 
         verify(mockBridgeHelper).saveReportForStudy(reportCaptor.capture());
@@ -221,14 +224,14 @@ public class BridgeReporterProcessorTest {
     public void testMultipleStudies() throws Exception {
         ArgumentCaptor<Report> reportCaptor = ArgumentCaptor.forClass(Report.class);
 
-        when(mockBridgeHelper.getAllStudiesSummary()).thenReturn(TEST_STUDY_SUMMARY_LIST_2);
+        when(mockBridgeHelper.getAllStudies()).thenReturn(TEST_STUDY_SUMMARY_LIST_2);
         when(mockBridgeHelper.getUploadsForStudy(any(), any(), any())).thenReturn(testUploads);
 
         // execute
         processor.process(requestJson);
 
         // verify
-        verify(mockBridgeHelper).getAllStudiesSummary();
+        verify(mockBridgeHelper).getAllStudies();
         verify(mockBridgeHelper).getUploadsForStudy(eq(TEST_STUDY_ID), eq(TEST_START_DATETIME), eq(TEST_END_DATETIME));
         verify(mockBridgeHelper).getUploadsForStudy(eq(TEST_STUDY_ID_2), eq(TEST_START_DATETIME), eq(TEST_END_DATETIME));
         
@@ -250,14 +253,14 @@ public class BridgeReporterProcessorTest {
     public void testMultipleUploads() throws Exception {
         ArgumentCaptor<Report> reportCaptor = ArgumentCaptor.forClass(Report.class);
         
-        when(mockBridgeHelper.getAllStudiesSummary()).thenReturn(TEST_STUDY_SUMMARY_LIST);
+        when(mockBridgeHelper.getAllStudies()).thenReturn(TEST_STUDY_SUMMARY_LIST);
         when(mockBridgeHelper.getUploadsForStudy(any(), any(), any())).thenReturn(testUploads2);
 
         // execute
         processor.process(requestJson);
 
         // verify
-        verify(mockBridgeHelper).getAllStudiesSummary();
+        verify(mockBridgeHelper).getAllStudies();
         verify(mockBridgeHelper).getUploadsForStudy(eq(TEST_STUDY_ID), eq(TEST_START_DATETIME), eq(TEST_END_DATETIME));
         verify(mockBridgeHelper).saveReportForStudy(reportCaptor.capture());
         
@@ -282,13 +285,13 @@ public class BridgeReporterProcessorTest {
         
         ArgumentCaptor<Report> reportCaptor = ArgumentCaptor.forClass(Report.class);
         
-        when(mockBridgeHelper.getAllStudiesSummary()).thenReturn(TEST_STUDY_SUMMARY_LIST);
+        when(mockBridgeHelper.getAllStudies()).thenReturn(TEST_STUDY_SUMMARY_LIST);
         when(mockBridgeHelper.getParticipantsForStudy(TEST_STUDY_ID, startDateTime, endDateTime))
                 .thenReturn(testParticipants);
         
         processor.process(requestJsonDailySignUps);
         
-        verify(mockBridgeHelper).getAllStudiesSummary();
+        verify(mockBridgeHelper).getAllStudies();
         verify(mockBridgeHelper).getParticipantsForStudy(TEST_STUDY_ID, startDateTime, endDateTime);
         verify(mockBridgeHelper).saveReportForStudy(reportCaptor.capture());
         
@@ -301,5 +304,4 @@ public class BridgeReporterProcessorTest {
         assertTrue(map.containsKey("byStatus"));
         assertTrue(map.containsKey("bySharing"));
     }
-    
 }

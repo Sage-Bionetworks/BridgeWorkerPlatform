@@ -27,17 +27,18 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import org.sagebionetworks.bridge.notification.helper.BridgeHelper;
-import org.sagebionetworks.bridge.notification.helper.DynamoHelper;
 import org.sagebionetworks.bridge.notification.helper.TemplateVariableHelper;
 import org.sagebionetworks.bridge.rest.model.ActivityEvent;
 import org.sagebionetworks.bridge.rest.model.Phone;
 import org.sagebionetworks.bridge.rest.model.ScheduleStatus;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.rest.model.UserConsentHistory;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
 
-@SuppressWarnings("JavaReflectionMemberAccess")
 public class BridgeNotificationWorkerProcessorProcessAccountTest {
+    private static final String CLINICAL_CONSENT_GROUP = "clinical_consent";
     private static final String EVENT_ID_ENROLLMENT = "enrollment";
     private static final String EVENT_ID_BURST_2_START = "custom:activityBurst2Start";
     private static final String EXCLUDED_DATA_GROUP_1 = "excluded-group-1";
@@ -47,13 +48,16 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     private static final String MESSAGE_LATE = "message-late";
     private static final String MESSAGE_PRE_BURST_1 = "message-pre-burst-1";
     private static final String MESSAGE_PRE_BURST_2 = "message-pre-burst-2";
+    private static final String MESSAGE_PRE_BURST_DEFAULT = "default pre-burst message";
     private static final long MOCK_NOW_MILLIS = DateTime.parse("2018-04-30T16:41:15.831-0700").getMillis();
     private static final Phone PHONE = new Phone().regionCode("US").number("425-555-5555");
     private static final String RESOLVED_TEMPLATE_VAR_SUFFIX = " w/ resolved variables";
     private static final String PREBURST_GROUP_1 = "preburst-group-1";
     private static final String PREBURST_GROUP_2 = "preburst-group-2";
+    private static final String STUDY_COMMITMENT = "dummy study commitment";
     private static final String STUDY_ID = "test-study";
     private static final String TASK_ID = "study-burst-task";
+    private static final String TEST_NO_CONSENT_GROUP = "test_no_consent";
     private static final String USER_ID = "test-user";
 
     private static final DateTime ENROLLMENT_TIME = DateTime.parse("2018-04-27T18:51:47.159-0700");
@@ -63,6 +67,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
 
     private List<ScheduledActivity> activityList;
     private BridgeHelper mockBridgeHelper;
+    private UserConsentHistory mockConsent;
     private DynamoHelper mockDynamoHelper;
     private StudyParticipant mockParticipant;
     private TemplateVariableHelper mockTemplateVariableHelper;
@@ -97,12 +102,16 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         // Participant needs to be mocked because we can't set ID
         mockParticipant = mock(StudyParticipant.class);
         when(mockParticipant.getId()).thenReturn(USER_ID);
-        when(mockParticipant.isConsented()).thenReturn(true);
         when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-data-group"));
         when(mockParticipant.getPhone()).thenReturn(PHONE);
         when(mockParticipant.isPhoneVerified()).thenReturn(true);
         when(mockParticipant.getTimeZone()).thenReturn("-07:00");
-        when(mockBridgeHelper.getParticipant(STUDY_ID, USER_ID)).thenReturn(mockParticipant);
+        when(mockBridgeHelper.getParticipant(STUDY_ID, USER_ID, true)).thenReturn(mockParticipant);
+
+        // Similarly, mock consent.
+        mockConsent = mock(UserConsentHistory.class);
+        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of(STUDY_ID,
+                ImmutableList.of(mockConsent)));
 
         // Mock getTaskHistory - We only ask for events between the burst start and the current date, but for the sake
         // of simpler tests, return all tasks for burst 1.
@@ -136,6 +145,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         config.setBurstDurationDays(9);
         config.setBurstStartEventIdSet(ImmutableSet.of(EVENT_ID_ENROLLMENT, EVENT_ID_BURST_2_START));
         config.setBurstTaskId(TASK_ID);
+        config.setDefaultPreburstMessage(MESSAGE_PRE_BURST_DEFAULT);
         config.setEarlyLateCutoffDays(5);
         config.setExcludedDataGroupSet(ImmutableSet.of(EXCLUDED_DATA_GROUP_1, EXCLUDED_DATA_GROUP_2));
         config.setMissedCumulativeActivitiesMessagesList(missedCumulativeMessageList);
@@ -152,6 +162,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         // Mock template variable helper. For this test, just append a string. Actually template variable logic is
         // tested somewhere else.
         mockTemplateVariableHelper = mock(TemplateVariableHelper.class);
+        when(mockTemplateVariableHelper.getStudyCommitment(STUDY_ID, USER_ID)).thenReturn(STUDY_COMMITMENT);
         when(mockTemplateVariableHelper.resolveTemplateVariables(eq(STUDY_ID), any(), any()))
                 .thenAnswer(invocation -> {
                     String message = invocation.getArgumentAt(2, String.class);
@@ -194,15 +205,22 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     }
 
     @Test
-    public void notConsented() throws Exception {
-        when(mockParticipant.isConsented()).thenReturn(false);
+    public void nullConsentList() throws Exception {
+        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of());
         processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
     @Test
-    public void nullConsent() throws Exception {
-        when(mockParticipant.isConsented()).thenReturn(null);
+    public void emptyConsentList() throws Exception {
+        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of(STUDY_ID, ImmutableList.of()));
+        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        verifyNoNotification();
+    }
+
+    @Test
+    public void withdrawnConsent() throws Exception {
+        when(mockConsent.getWithdrewOn()).thenReturn(DateTime.parse("2019-07-23T16:47:43.715-0700"));
         processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
@@ -246,14 +264,6 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     public void blackoutTail() throws Exception {
         // Last days (8) is a blackout days
         processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.plusDays(8), USER_ID);
-        verifyNoNotification();
-    }
-
-    // branch coverage
-    @Test
-    public void noActivities() throws Exception {
-        activityList.clear();
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
@@ -327,6 +337,34 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     }
 
     @Test
+    public void noActivities() throws Exception {
+        // User for whatever reason has no activity events on the server. This could happen if, for example, the user
+        // did not engage with the last 2 study bursts. If this happens, we should still act like the user has
+        // activities, and they were simply not completed.
+        activityList.clear();
+        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
+    }
+
+    @Test
+    public void clinicalConsentDoesNotRequireConsent() throws Exception {
+        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of());
+        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group",
+                CLINICAL_CONSENT_GROUP));
+        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
+    }
+
+    @Test
+    public void testNoConsentGroupDoesNotRequireConsent() throws Exception {
+        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of());
+        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group",
+                TEST_NO_CONSENT_GROUP));
+        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
+    }
+
+    @Test
     public void missedThreeTotalDays() throws Exception {
         // We did days 1 and 3, but missed 0, 2, and 4
         activityList.get(1).setStatus(ScheduleStatus.FINISHED);
@@ -356,6 +394,26 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         // Execute test.
         processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
         verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_2);
+    }
+
+    @Test
+    public void preburstNotificationWithNoStudyCommitment() throws Exception {
+        // Mock template variable helper to not have a study commitment.
+        when(mockTemplateVariableHelper.getStudyCommitment(STUDY_ID, USER_ID)).thenReturn(null);
+
+        // Execute test.
+        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
+        verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_DEFAULT);
+    }
+
+    @Test
+    public void preburstNotificationWithNoDataGroups() throws Exception {
+        // Set up data group
+        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group"));
+
+        // Execute test.
+        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
+        verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_DEFAULT);
     }
 
     @Test

@@ -26,6 +26,7 @@ import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
+import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 public class TableProcessorEdgeCasesTest {
     private static final String DATE_STRING = "2017-12-11";

@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import javax.annotation.Resource;
@@ -20,6 +21,7 @@ import org.sagebionetworks.repo.model.table.ColumnModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.exceptions.BridgeSynapseException;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.fitbit.schema.ColumnSchema;
@@ -34,14 +36,25 @@ import org.sagebionetworks.bridge.synapse.SynapseHelper;
 @Component
 public class TableProcessor {
     // Visible for testing
+    static final String CONFIG_KEY_TEAM_BRIDGE_ADMIN = "team.bridge.admin";
+    static final String CONFIG_KEY_TEAM_BRIDGE_STAFF = "team.bridge.staff";
     static final String DDB_KEY_STUDY_ID = "studyId";
     static final String DDB_KEY_SYNAPSE_TABLE_ID = "synapseTableId";
     static final String DDB_KEY_TABLE_ID = "tableId";
 
+    private long bridgeAdminTeamId;
+    private long bridgeStaffTeamId;
     private Table ddbTablesMap;
     private FileHelper fileHelper;
     private SynapseHelper synapseHelper;
     private long synapsePrincipalId;
+
+    /** Bridge config. */
+    @Autowired
+    public final void setBridgeConfig(Config bridgeConfig) {
+        this.bridgeAdminTeamId = bridgeConfig.getInt(CONFIG_KEY_TEAM_BRIDGE_ADMIN);
+        this.bridgeStaffTeamId = bridgeConfig.getInt(CONFIG_KEY_TEAM_BRIDGE_STAFF);
+    }
 
     /** DynamoDB table which maps the study ID and table ID (table name) to a Synapse table ID. */
     @Resource(name = "ddbTablesMap")
@@ -143,10 +156,11 @@ public class TableProcessor {
         if (!tableExists) {
             // Delegate table creation to SynapseHelper.
             Study study = ctx.getStudy();
-            long dataAccessTeamId = study.getSynapseDataAccessTeamId();
+            Set<Long> readOnlyPrincipalIdSet = ImmutableSet.of(bridgeStaffTeamId, study.getSynapseDataAccessTeamId());
+            Set<Long> adminPrincipalIdSet = ImmutableSet.of(bridgeAdminTeamId, synapsePrincipalId);
             String projectId = study.getSynapseProjectId();
             String newSynapseTableId = synapseHelper.createTableWithColumnsAndAcls(columnModelList,
-                    ImmutableSet.of(dataAccessTeamId), ImmutableSet.of(synapsePrincipalId), projectId, tableId);
+                    readOnlyPrincipalIdSet, adminPrincipalIdSet, projectId, tableId);
 
             // write back to DDB table
             setSynapseTableIdToDdb(study.getIdentifier(), tableId, newSynapseTableId);

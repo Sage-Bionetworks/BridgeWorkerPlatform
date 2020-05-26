@@ -1,6 +1,7 @@
 package org.sagebionetworks.bridge.notification.worker;
 
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -19,10 +20,11 @@ import org.joda.time.LocalDate;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import org.sagebionetworks.bridge.notification.helper.BridgeHelper;
-import org.sagebionetworks.bridge.notification.helper.DynamoHelper;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.UserNotConfiguredException;
 
 public class BridgeNotificationWorkerProcessorTest {
     private static final String DATE_STRING = "2018-04-27";
@@ -108,16 +110,20 @@ public class BridgeNotificationWorkerProcessorTest {
 
     @Test
     public void multipleUsers() throws Exception {
-        // Bridge returns 3 users. The second user throws an exception during processing.
+        // Bridge returns 4 users. The second user throws an exception during processing. The third user throws a
+        // UserNotConfiguredException
 
         // Set up mocks
-        AccountSummary accountSummary1 = new AccountSummary().id("user-1");
-        AccountSummary accountSummary2 = new AccountSummary().id("user-2");
-        AccountSummary accountSummary3 = new AccountSummary().id("user-3");
-        when(mockBridgeHelper.getAllAccountSummaries(STUDY_ID)).thenReturn(ImmutableList.of(accountSummary1,
-                accountSummary2, accountSummary3).iterator());
+        AccountSummary accountSummary1 = mockAccountSummary("user-1");
+        AccountSummary accountSummary2 = mockAccountSummary("user-2");
+        AccountSummary accountSummary3 = mockAccountSummary("user-3");
+        AccountSummary accountSummary4 = mockAccountSummary("user-4");
+        when(mockBridgeHelper.getAllAccountSummaries(STUDY_ID, true)).thenReturn(ImmutableList.of(accountSummary1,
+                accountSummary2, accountSummary3, accountSummary4).iterator());
 
         doThrow(IOException.class).when(processor).processAccountForDate(STUDY_ID, DATE, "user-2");
+        doThrow(UserNotConfiguredException.class).when(processor).processAccountForDate(STUDY_ID, DATE,
+                "user-3");
 
         // Execute
         processor.accept(makeValidRequestNode());
@@ -126,9 +132,16 @@ public class BridgeNotificationWorkerProcessorTest {
         verify(processor).processAccountForDate(STUDY_ID, DATE, "user-1");
         verify(processor).processAccountForDate(STUDY_ID, DATE, "user-2");
         verify(processor).processAccountForDate(STUDY_ID, DATE, "user-3");
+        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-4");
 
         // Verify call to dynamoHelper.writeWorkerLog()
-        verify(mockDynamoHelper).writeWorkerLog(TAG);
+        verify(mockDynamoHelper).writeWorkerLog(BridgeNotificationWorkerProcessor.VALUE_WORKER_ID, TAG);
+    }
+
+    private static AccountSummary mockAccountSummary(String id) {
+        AccountSummary summary = mock(AccountSummary.class);
+        when(summary.getId()).thenReturn(id);
+        return summary;
     }
 
     @Test
@@ -149,10 +162,10 @@ public class BridgeNotificationWorkerProcessorTest {
         verify(processor).processAccountForDate(STUDY_ID, DATE, "user-C");
 
         // Verify call to dynamoHelper.writeWorkerLog()
-        verify(mockDynamoHelper).writeWorkerLog(TAG);
+        verify(mockDynamoHelper).writeWorkerLog(BridgeNotificationWorkerProcessor.VALUE_WORKER_ID, TAG);
 
         // We don't call Bridge to get users.
-        verify(mockBridgeHelper, never()).getAllAccountSummaries(any());
+        verify(mockBridgeHelper, never()).getAllAccountSummaries(any(), anyBoolean());
     }
 
     private static ObjectNode makeValidRequestNode() {

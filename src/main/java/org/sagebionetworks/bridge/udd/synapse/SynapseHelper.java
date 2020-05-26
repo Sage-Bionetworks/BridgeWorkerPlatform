@@ -7,16 +7,21 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.util.concurrent.RateLimiter;
 import com.jcabi.aspects.RetryOnFailure;
 import org.sagebionetworks.client.SynapseClient;
 import org.sagebionetworks.client.exceptions.SynapseException;
+import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 import org.sagebionetworks.client.exceptions.SynapseResultNotReadyException;
 import org.sagebionetworks.repo.model.file.BulkFileDownloadRequest;
 import org.sagebionetworks.repo.model.file.BulkFileDownloadResponse;
 import org.sagebionetworks.repo.model.file.FileHandleAssociateType;
 import org.sagebionetworks.repo.model.file.FileHandleAssociation;
+import org.sagebionetworks.repo.model.status.StackStatus;
+import org.sagebionetworks.repo.model.status.StatusEnum;
 import org.sagebionetworks.repo.model.table.DownloadFromTableResult;
 import org.sagebionetworks.repo.model.table.TableEntity;
+import org.sagebionetworks.schema.adapter.JSONObjectAdapterException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,16 +29,20 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.config.Config;
-import org.sagebionetworks.bridge.udd.exceptions.AsyncTimeoutException;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTimeoutException;
 
 /** Helper class to Synapse, which wraps Synapse async call patterns.. */
 @Component("uddSynapseHelper")
+@SuppressWarnings("DefaultAnnotationParam")
 public class SynapseHelper {
     private static final Logger LOG = LoggerFactory.getLogger(SynapseHelper.class);
 
     // Package-scoped to be available in unit tests
     static final String CONFIG_KEY_POLL_INTERVAL_MILLIS = "synapse.poll.interval.millis";
     static final String CONFIG_KEY_POLL_MAX_TRIES = "synapse.poll.max.tries";
+
+    // Rate limiter, used to limit the amount of traffic to Synapse. Synapse throttles at 10 requests per second.
+    private final RateLimiter rateLimiter = RateLimiter.create(10.0);
 
     private int pollIntervalMillis;
     private int pollMaxTries;
@@ -65,9 +74,10 @@ public class SynapseHelper {
      * @throws SynapseException
      *         if calling Synapse fails
      */
-    @RetryOnFailure(attempts = 5, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
             randomize = false)
     public void downloadFileHandle(String fileHandleId, File targetFile) throws SynapseException {
+        rateLimiter.acquire();
         synapseClient.downloadFromFileHandleTemporaryUrl(fileHandleId, targetFile);
     }
 
@@ -109,17 +119,19 @@ public class SynapseHelper {
     }
 
     /** Wrapper around SynapseClient.startBulkFileDownload to enable retries. */
-    @RetryOnFailure(attempts = 5, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
             randomize = false)
     private String startBulkFileDownload(BulkFileDownloadRequest request) throws SynapseException {
+        rateLimiter.acquire();
         return synapseClient.startBulkFileDownload(request);
     }
 
     /** Wrapper around SynapseClient.startBulkFileDownload to enable retries. */
-    @RetryOnFailure(attempts = 5, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
             randomize = false)
     private BulkFileDownloadResponse getBulkFileDownloadResults(String asyncJobToken) throws SynapseException {
         try {
+            rateLimiter.acquire();
             return synapseClient.getBulkFileDownloadResults(asyncJobToken);
         } catch (SynapseResultNotReadyException ex) {
             // catch this and return null so we don't retry on "not ready"
@@ -151,19 +163,21 @@ public class SynapseHelper {
     }
 
     /** Wrapper around SynapseClient.downloadCsvFromTableAsyncStart to enable retries. */
-    @RetryOnFailure(attempts = 5, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
-            randomize = false)
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
+            ignore = SynapseNotFoundException.class, randomize = false)
     private String downloadCsvFromTableAsyncStart(String query, String synapseTableId) throws SynapseException {
+        rateLimiter.acquire();
         return synapseClient.downloadCsvFromTableAsyncStart(query, /*writeHeader*/true,
                     /*includeRowIdAndRowVersion*/false, /*csvDescriptor*/null, synapseTableId);
     }
 
     /** Wrapper around SynapseClient.downloadCsvFromTableAsyncGet to enable retries. */
-    @RetryOnFailure(attempts = 5, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
-            randomize = false)
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
+            ignore = SynapseNotFoundException.class, randomize = false)
     private DownloadFromTableResult downloadCsvFromTableAsyncGet(String asyncJobToken, String synapseTableId)
             throws SynapseException {
         try {
+            rateLimiter.acquire();
             return synapseClient.downloadCsvFromTableAsyncGet(asyncJobToken, synapseTableId);
         } catch (SynapseResultNotReadyException ex) {
             // catch this and return null so we don't retry on "not ready"
@@ -181,10 +195,22 @@ public class SynapseHelper {
      * @throws SynapseException
      *         if the Synapse call fails
      */
-    @RetryOnFailure(attempts = 5, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
-            randomize = false)
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
+            ignore = SynapseNotFoundException.class, randomize = false)
     public TableEntity getTable(String tableId) throws SynapseException {
+        rateLimiter.acquire();
         return synapseClient.getEntity(tableId, TableEntity.class);
+    }
+
+    /**
+     * Gets the Synapse stack status and returns true if Synapse is up and in read/write state. Also includes retries.
+     */
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS, types = SynapseException.class,
+            randomize = false)
+    public boolean isSynapseWritable() throws JSONObjectAdapterException, SynapseException {
+        rateLimiter.acquire();
+        StackStatus status = synapseClient.getCurrentStackStatus();
+        return status.getStatus() == StatusEnum.READ_WRITE;
     }
 
     /**
