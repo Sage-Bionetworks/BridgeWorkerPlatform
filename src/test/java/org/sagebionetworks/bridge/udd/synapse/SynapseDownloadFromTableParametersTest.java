@@ -21,7 +21,7 @@ public class SynapseDownloadFromTableParametersTest {
     private static final String TEST_TABLE_ID = "test-table";
 
     private static final String TEST_STUDY_ID = "test-study";
-    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withStudyId(TEST_STUDY_ID)
+    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(TEST_STUDY_ID)
             .withSchemaId("test-schema").withRevision(42).build();
     private static final UploadSchema TEST_SCHEMA = new UploadSchema.Builder().withKey(TEST_SCHEMA_KEY)
             .addField("foo", "STRING").build();

@@ -53,7 +53,7 @@ public class DynamoHelperTest {
             "   }\n" +
             "]";
 
-    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withStudyId(STUDY_ID)
+    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(STUDY_ID)
             .withSchemaId("test-schema").withRevision(42).build();
 
     private DynamoHelper dynamoHelper;

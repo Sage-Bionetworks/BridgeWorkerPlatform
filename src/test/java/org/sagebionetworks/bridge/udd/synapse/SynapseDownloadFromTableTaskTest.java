@@ -43,7 +43,7 @@ import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionEx
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class SynapseDownloadFromTableTaskTest {
     private static final String TEST_STUDY_ID = "test-study";
-    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withStudyId(TEST_STUDY_ID)
+    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(TEST_STUDY_ID)
             .withSchemaId("test-schema").withRevision(42).build();
 
     // The default test schema should include at least 2 file handle IDs and a mix of file handles and
