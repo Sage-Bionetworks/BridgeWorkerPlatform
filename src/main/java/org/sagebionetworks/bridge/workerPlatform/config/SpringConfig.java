@@ -18,6 +18,7 @@ import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Index;
 import com.amazonaws.services.dynamodbv2.document.Table;
 import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
+import com.amazonaws.services.dynamodbv2.model.BillingMode;
 import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
 import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
 import com.amazonaws.services.dynamodbv2.model.KeyType;
@@ -313,7 +314,7 @@ public class SpringConfig {
 
         // Create table.
         CreateTableRequest req = new CreateTableRequest().withTableName(resolvedTableName).withKeySchema(keyList)
-                .withAttributeDefinitions(attrList);
+                .withAttributeDefinitions(attrList).withBillingMode(BillingMode.PAY_PER_REQUEST);
         TableUtils.createTableIfNotExists(ddbClient, req);
     }
 

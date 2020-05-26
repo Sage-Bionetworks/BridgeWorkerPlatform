@@ -20,7 +20,6 @@ import com.amazonaws.services.dynamodbv2.document.Table;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-
 import org.mockito.ArgumentCaptor;
 import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 import org.sagebionetworks.repo.model.table.ColumnModel;
@@ -102,8 +101,8 @@ public class TableProcessorTest {
         });
 
         // Creating a Synapse table should return table ID. (We verify the args elsewhere.
-        when(mockSynapseHelper.createTableWithColumnsAndAcls(any(), any(Set.class), any(Set.class), any(), any()))
-                .thenReturn(SYNAPSE_TABLE_ID);
+        when(mockSynapseHelper.createTableWithColumnsAndAcls(any(), any(), any(), any(), any())).thenReturn(
+                SYNAPSE_TABLE_ID);
 
         // Set up Table Processor
         processor = new TableProcessor();
