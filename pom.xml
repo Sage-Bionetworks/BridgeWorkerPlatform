@@ -98,12 +98,12 @@
         <dependency>
             <groupId>org.sagebionetworks</groupId>
             <artifactId>bridge-base</artifactId>
-            <version>2.7.18</version>
+            <version>2.7.26</version>
         </dependency>
         <dependency>
             <groupId>org.sagebionetworks</groupId>
             <artifactId>synapseJavaClient</artifactId>
-            <version>157.0</version>
+            <version>311.1</version>
         </dependency>
         <dependency>
             <groupId>org.sagebionetworks.bridge</groupId>
@@ -160,14 +160,9 @@
 
     <repositories>
         <repository>
-            <id>org-sagebridge-repo-maven-releases-s3</id>
-            <name>org-sagebridge-repo-maven-releases</name>
-            <url>s3://org-sagebridge-repo-maven-releases</url>
-        </repository>
-        <repository>
             <id>sagebionetworks-libs-releases-local</id>
             <name>sagebionetworks-libs-releases-local</name>
-            <url>http://sagebionetworks.artifactoryonline.com/sagebionetworks/libs-releases-local</url>
+            <url>https://sagebionetworks.artifactoryonline.com/sagebionetworks/libs-releases-local</url>
         </repository>
         <repository>
             <id>org-sagebridge-repo-maven-releases</id>

@@ -208,7 +208,7 @@ public class SpringConfig {
     @Bean(name="workerPlatformSynapseClient")
     public SynapseClient synapseClient() {
         SynapseClient synapseClient = new SynapseAdminClientImpl();
-        synapseClient.setUserName(bridgeConfig().get("synapse.user"));
+        synapseClient.setUsername(bridgeConfig().get("synapse.user"));
         synapseClient.setApiKey(bridgeConfig().get("synapse.api.key"));
         return synapseClient;
     }

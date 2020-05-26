@@ -16,7 +16,7 @@ import org.sagebionetworks.bridge.schema.UploadSchemaKey;
 // Deep tests for SynapseDownloadFromTableTask.cleanupFiles()
 public class SynapseDownloadFromTableTaskCleanupFilesTest {
     private static final byte[] EMPTY_FILE_CONTENT = new byte[0];
-    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withStudyId("test-study")
+    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId("test-study")
             .withSchemaId("test-schema").withRevision(42).build();
     private static final UploadSchema TEST_SCHEMA = new UploadSchema.Builder().withKey(TEST_SCHEMA_KEY)
             .addField("foo", "STRING").build();

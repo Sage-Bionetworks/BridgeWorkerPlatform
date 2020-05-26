@@ -16,7 +16,7 @@ public class SynapseDownloadFromTableParametersTest {
     private static final File DUMMY_FILE = mock(File.class);
     private static final LocalDate TEST_START_DATE = LocalDate.parse("2015-03-09");
     private static final LocalDate TEST_END_DATE = LocalDate.parse("2015-09-16");
-    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withStudyId("test-study")
+    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId("test-study")
             .withSchemaId("test-schema").withRevision(42).build();
     private static final UploadSchema TEST_SCHEMA = new UploadSchema.Builder().withKey(TEST_SCHEMA_KEY)
             .addField("foo", "STRING").build();

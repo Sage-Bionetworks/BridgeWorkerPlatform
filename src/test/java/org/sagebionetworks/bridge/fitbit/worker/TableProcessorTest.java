@@ -14,11 +14,14 @@ import static org.testng.Assert.assertTrue;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.Table;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+
 import org.mockito.ArgumentCaptor;
 import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 import org.sagebionetworks.repo.model.table.ColumnModel;
@@ -90,8 +93,8 @@ public class TableProcessorTest {
         });
 
         // Creating a Synapse table should return table ID. (We verify the args elsewhere.
-        when(mockSynapseHelper.createTableWithColumnsAndAcls(any(), anyLong(), anyLong(), any(), any())).thenReturn(
-                SYNAPSE_TABLE_ID);
+        when(mockSynapseHelper.createTableWithColumnsAndAcls(any(), any(Set.class), any(Set.class), any(), any()))
+                .thenReturn(SYNAPSE_TABLE_ID);
 
         // Set up Table Processor
         processor = new TableProcessor();
@@ -124,7 +127,7 @@ public class TableProcessorTest {
         validateCleanFileSystem();
 
         // Verify back-ends
-        verify(mockSynapseHelper, never()).createTableWithColumnsAndAcls(any(), anyLong(), anyLong(), any(), any());
+        verify(mockSynapseHelper, never()).createTableWithColumnsAndAcls(any(), any(Set.class), any(Set.class), any(), any());
         verify(mockDdbTablesMap, never()).putItem(any(Item.class));
 
         ArgumentCaptor<List> columnModelListCaptor = ArgumentCaptor.forClass(List.class);
@@ -162,7 +165,8 @@ public class TableProcessorTest {
 
         ArgumentCaptor<List> columnModelListCaptor = ArgumentCaptor.forClass(List.class);
         verify(mockSynapseHelper).createTableWithColumnsAndAcls(columnModelListCaptor.capture(),
-                eq(SYNAPSE_DATA_ACCESS_TEAM_ID), eq(SYNAPSE_PRINCIPAL_ID), eq(SYNAPSE_PROJECT_ID), eq(TABLE_ID));
+                eq(ImmutableSet.of(SYNAPSE_DATA_ACCESS_TEAM_ID)), eq(ImmutableSet.of(SYNAPSE_PRINCIPAL_ID)),
+                eq(SYNAPSE_PROJECT_ID), eq(TABLE_ID));
         validateColumnModelList(columnModelListCaptor.getValue());
 
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);

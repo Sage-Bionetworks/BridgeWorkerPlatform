@@ -12,6 +12,8 @@ import javax.annotation.Resource;
 
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.Table;
+import com.google.common.collect.ImmutableSet;
+
 import org.sagebionetworks.client.exceptions.SynapseException;
 import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
 import org.sagebionetworks.repo.model.table.ColumnModel;
@@ -143,8 +145,8 @@ public class TableProcessor {
             Study study = ctx.getStudy();
             long dataAccessTeamId = study.getSynapseDataAccessTeamId();
             String projectId = study.getSynapseProjectId();
-            String newSynapseTableId = synapseHelper.createTableWithColumnsAndAcls(columnModelList, dataAccessTeamId,
-                    synapsePrincipalId, projectId, tableId);
+            String newSynapseTableId = synapseHelper.createTableWithColumnsAndAcls(columnModelList,
+                    ImmutableSet.of(dataAccessTeamId), ImmutableSet.of(synapsePrincipalId), projectId, tableId);
 
             // write back to DDB table
             setSynapseTableIdToDdb(study.getIdentifier(), tableId, newSynapseTableId);
