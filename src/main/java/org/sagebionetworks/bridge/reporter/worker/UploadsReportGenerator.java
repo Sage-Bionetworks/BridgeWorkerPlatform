@@ -27,7 +27,7 @@ public class UploadsReportGenerator implements ReportGenerator {
     }
 
     @Override
-    public Report generate(BridgeReporterRequest request, String studyId) throws IOException {
+    public Report generate(BridgeReporterRequest request, String appId) throws IOException {
         DateTime startDateTime = request.getStartDateTime();
         DateTime endDateTime = request.getEndDateTime();
         String scheduler = request.getScheduler();
@@ -37,15 +37,15 @@ public class UploadsReportGenerator implements ReportGenerator {
         
         Map<String, Integer> data = new HashMap<>();
 
-        // get all uploads for this studyid
-        List<Upload> uploadsForStudy = bridgeHelper.getUploadsForStudy(studyId, startDateTime, endDateTime);
+        // get all uploads for this appId
+        List<Upload> uploadsForApp = bridgeHelper.getUploadsForApp(appId, startDateTime, endDateTime);
 
         // aggregate and grouping by upload status
-        uploadsForStudy.stream()
+        uploadsForApp.stream()
                 .collect(Collectors.groupingBy(Upload::getStatus, counting()))
                 .forEach((status, cnt) -> data.put(status.toString(), cnt.intValue()));
 
-        return new Report.Builder().withStudyId(studyId).withReportId(reportId).withDate(startDateTime.toLocalDate())
+        return new Report.Builder().withAppId(appId).withReportId(reportId).withDate(startDateTime.toLocalDate())
                 .withReportData(data).build();
     }
 }

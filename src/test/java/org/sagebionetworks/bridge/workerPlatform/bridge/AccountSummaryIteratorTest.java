@@ -26,7 +26,7 @@ import org.sagebionetworks.bridge.rest.model.AccountSummaryList;
 
 @SuppressWarnings("unchecked")
 public class AccountSummaryIteratorTest {
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
     private static final String USER_ID_PREFIX = "dummy-user-id-";
 
     private ClientManager mockClientManager;
@@ -43,7 +43,7 @@ public class AccountSummaryIteratorTest {
     @Test
     public void testWith0Users() throws Exception {
         mockApiWithPage(0, 0, 0);
-        AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, STUDY_ID, true);
+        AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, APP_ID, true);
         assertFalse(iter.hasNext());
     }
 
@@ -80,12 +80,12 @@ public class AccountSummaryIteratorTest {
         Response<AccountSummaryList> pageResponse = makePageResponse(0, 1, 1);
         Call<AccountSummaryList> mockPageCall = mock(Call.class);
         when(mockPageCall.execute()).thenReturn(pageResponse);
-        when(mockApi.getParticipantsForStudy(STUDY_ID, 0, AccountSummaryIterator.PAGE_SIZE, null,
+        when(mockApi.getParticipantsForApp(APP_ID, 0, AccountSummaryIterator.PAGE_SIZE, null,
                 null, null, null)).thenReturn(mockPageCall);
 
         // Create iterator. Verify initial call to server.
-        AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, STUDY_ID, false);
-        verify(mockApi).getParticipantsForStudy(STUDY_ID, 0, AccountSummaryIterator.PAGE_SIZE, null,
+        AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, APP_ID, false);
+        verify(mockApi).getParticipantsForApp(APP_ID, 0, AccountSummaryIterator.PAGE_SIZE, null,
                 null, null, null);
 
         // We have one account.
@@ -100,8 +100,8 @@ public class AccountSummaryIteratorTest {
         mockApiWithPage(0, 2, 2);
 
         // Create iterator. Verify initial call to server.
-        AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, STUDY_ID, true);
-        verify(mockApi).getParticipantsForStudy(STUDY_ID, 0, AccountSummaryIterator.PAGE_SIZE, null,
+        AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, APP_ID, true);
+        verify(mockApi).getParticipantsForApp(APP_ID, 0, AccountSummaryIterator.PAGE_SIZE, null,
                 "1", null, null);
 
         // Make a few extra calls to hasNext(). Verify that no server calls are made
@@ -120,11 +120,11 @@ public class AccountSummaryIteratorTest {
         // Mock page call to throw
         Call<AccountSummaryList> mockPageCall = mock(Call.class);
         when(mockPageCall.execute()).thenThrow(IOException.class);
-        when(mockApi.getParticipantsForStudy(STUDY_ID, 0, AccountSummaryIterator.PAGE_SIZE, null,
+        when(mockApi.getParticipantsForApp(APP_ID, 0, AccountSummaryIterator.PAGE_SIZE, null,
                 "1", null, null)).thenReturn(mockPageCall);
 
         // Execute
-        new AccountSummaryIterator(mockClientManager, STUDY_ID, true);
+        new AccountSummaryIterator(mockClientManager, APP_ID, true);
     }
 
     @Test
@@ -136,13 +136,13 @@ public class AccountSummaryIteratorTest {
         Response<AccountSummaryList> secondPageResponse = makePageResponse(1, 1, 3);
         Call<AccountSummaryList> mockSecondPageCall = mock(Call.class);
         when(mockSecondPageCall.execute()).thenThrow(IOException.class).thenReturn(secondPageResponse);
-        when(mockApi.getParticipantsForStudy(STUDY_ID, 1, AccountSummaryIterator.PAGE_SIZE, null,
+        when(mockApi.getParticipantsForApp(APP_ID, 1, AccountSummaryIterator.PAGE_SIZE, null,
                 "1", null, null)).thenReturn(mockSecondPageCall);
 
         mockApiWithPage(2, 1, 3);
 
         // Execute and validate
-        AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, STUDY_ID, true);
+        AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, APP_ID, true);
 
         // User 0
         assertTrue(iter.hasNext());
@@ -176,13 +176,13 @@ public class AccountSummaryIteratorTest {
         mockApiWithPage(0, 1, 1);
 
         // next() twice throws
-        AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, STUDY_ID, true);
+        AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, APP_ID, true);
         iter.next();
         try {
             iter.next();
             fail("expected exception");
         } catch (IllegalStateException ex) {
-            assertEquals(ex.getMessage(), "No more accounts left for study " + STUDY_ID);
+            assertEquals(ex.getMessage(), "No more accounts left for app " + APP_ID);
         }
     }
 
@@ -191,7 +191,7 @@ public class AccountSummaryIteratorTest {
         Response<AccountSummaryList> pageResponse = makePageResponse(offset, accountsInPage, total);
         Call<AccountSummaryList> mockPageCall = mock(Call.class);
         when(mockPageCall.execute()).thenReturn(pageResponse);
-        when(mockApi.getParticipantsForStudy(STUDY_ID, offset, AccountSummaryIterator.PAGE_SIZE, null,
+        when(mockApi.getParticipantsForApp(APP_ID, offset, AccountSummaryIterator.PAGE_SIZE, null,
                 "1", null, null)).thenReturn(mockPageCall);
     }
 
@@ -215,7 +215,7 @@ public class AccountSummaryIteratorTest {
     }
 
     private void testIterator(int expectedCount) {
-        AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, STUDY_ID, true);
+        AccountSummaryIterator iter = new AccountSummaryIterator(mockClientManager, APP_ID, true);
 
         int numAccounts = 0;
         while (iter.hasNext()) {

@@ -18,7 +18,7 @@ public class FitBitUserIterator implements Iterator<FitBitUser> {
 
     // Instance invariants
     private final ClientManager bridgeClientManager;
-    private final String studyId;
+    private final String appId;
     private final int pageSize;
 
     // Instance state tracking
@@ -26,17 +26,17 @@ public class FitBitUserIterator implements Iterator<FitBitUser> {
     private int nextIndex;
 
     /**
-     * Constructs a FitBitUserIterator for the given Bridge client and study. This kicks off requests to load the first
+     * Constructs a FitBitUserIterator for the given Bridge client and app. This kicks off requests to load the first
      * page.
      */
-    public FitBitUserIterator(ClientManager bridgeClientManager, String studyId) {
-        this(bridgeClientManager, studyId, DEFAULT_PAGESIZE);
+    public FitBitUserIterator(ClientManager bridgeClientManager, String appId) {
+        this(bridgeClientManager, appId, DEFAULT_PAGESIZE);
     }
 
     // Constructor with page size, used for unit tests.
-    FitBitUserIterator(ClientManager bridgeClientManager, String studyId, int pageSize) {
+    FitBitUserIterator(ClientManager bridgeClientManager, String appId, int pageSize) {
         this.bridgeClientManager = bridgeClientManager;
-        this.studyId = studyId;
+        this.appId = appId;
         this.pageSize = pageSize;
 
         // Load first page. Pass in null offsetKey to get the first page.
@@ -49,10 +49,10 @@ public class FitBitUserIterator implements Iterator<FitBitUser> {
         // Call server for the next page.
         try {
             healthCodeList = bridgeClientManager.getClient(ForWorkersApi.class).getHealthCodesGrantingOAuthAccess(
-                    studyId, Constants.FITBIT_VENDOR_ID, pageSize, offsetKey).execute().body();
+                    appId, Constants.FITBIT_VENDOR_ID, pageSize, offsetKey).execute().body();
         } catch (IOException ex) {
             // Iterator can't throw exceptions. Wrap in a RuntimeException.
-            throw new RuntimeException("Error getting next page for study " + studyId + ": " + ex.getMessage(), ex);
+            throw new RuntimeException("Error getting next page for app " + appId + ": " + ex.getMessage(), ex);
         }
 
         // Reset nextIndex.
@@ -84,7 +84,7 @@ public class FitBitUserIterator implements Iterator<FitBitUser> {
             loadNextPage(healthCodeList.getNextPageOffsetKey());
             return getNextFitBitUser();
         } else {
-            throw new IllegalStateException("No more tokens left for study " + studyId);
+            throw new IllegalStateException("No more tokens left for app " + appId);
         }
     }
 
@@ -94,7 +94,7 @@ public class FitBitUserIterator implements Iterator<FitBitUser> {
         String healthCode = healthCodeList.getItems().get(nextIndex);
         OAuthAccessToken token;
         try {
-            token = bridgeClientManager.getClient(ForWorkersApi.class).getOAuthAccessToken(studyId,
+            token = bridgeClientManager.getClient(ForWorkersApi.class).getOAuthAccessToken(appId,
                     Constants.FITBIT_VENDOR_ID, healthCode).execute().body();
         } catch (BridgeSDKException | IOException ex) {
             // If it's a 4XX error, we know this is a deterministic error. Don't try again. Advance the nextIndex.

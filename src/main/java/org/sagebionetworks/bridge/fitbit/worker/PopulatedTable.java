@@ -31,7 +31,7 @@ public class PopulatedTable {
         this.tableSchema = tableSchema;
     }
 
-    /** Table ID, used to uniquely identify a table withiin a study. Also used as the table name in Synapse. */
+    /** Table ID, used to uniquely identify a table withiin an app. Also used as the table name in Synapse. */
     public String getTableId() {
         return tableId;
     }

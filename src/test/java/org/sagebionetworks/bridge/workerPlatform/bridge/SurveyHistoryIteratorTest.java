@@ -24,7 +24,7 @@ public class SurveyHistoryIteratorTest {
     private static final String ACTIVITY_GUID = "activity-guid";
     private static final DateTime SCHEDULED_ON_START = DateTime.parse("2018-04-11T0:00-0700");
     private static final DateTime SCHEDULED_ON_END = DateTime.parse("2018-04-18T0:00-0700");
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
     private static final String SURVEY_GUID = "survey-guid";
     private static final String USER_ID = "dummy-user-id";
 
@@ -46,7 +46,7 @@ public class SurveyHistoryIteratorTest {
         when(mockPageCall.execute()).thenReturn(pageResponse);
 
         ForWorkersApi mockApi = mock(ForWorkersApi.class);
-        when(mockApi.getParticipantSurveyHistoryForStudy(STUDY_ID, USER_ID, SURVEY_GUID, SCHEDULED_ON_START, SCHEDULED_ON_END,
+        when(mockApi.getParticipantSurveyHistoryForApp(APP_ID, USER_ID, SURVEY_GUID, SCHEDULED_ON_START, SCHEDULED_ON_END,
                 null, ActivityHistoryIterator.PAGE_SIZE)).thenReturn(mockPageCall);
 
         // Mock client manager.
@@ -54,7 +54,7 @@ public class SurveyHistoryIteratorTest {
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockApi);
 
         // Set up iterator and execute test.
-        SurveyHistoryIterator iter = new SurveyHistoryIterator(mockClientManager, STUDY_ID, USER_ID, SURVEY_GUID,
+        SurveyHistoryIterator iter = new SurveyHistoryIterator(mockClientManager, APP_ID, USER_ID, SURVEY_GUID,
                 SCHEDULED_ON_START, SCHEDULED_ON_END);
         assertTrue(iter.hasNext());
 

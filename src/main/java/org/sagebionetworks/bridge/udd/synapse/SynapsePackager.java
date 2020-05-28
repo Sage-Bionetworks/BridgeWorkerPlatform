@@ -119,8 +119,8 @@ public class SynapsePackager {
      * Schema map and survey table ID set are guaranteed by the DynamoHelper to be non-null.
      * </p>
      *
-     * @param studyId
-     *         study to download data for
+     * @param appId
+     *         app to download data for
      * @param synapseToSchemaMap
      *         map from Synapse table IDs to schemas, used to enumerate Synapse tables and determine file names
      * @param defaultSynapseTableId
@@ -133,7 +133,7 @@ public class SynapsePackager {
      *         set of survey table IDs, which need to be downloaded in their entirety
      * @return pre-signed URL and expiration time
      */
-    public PresignedUrlInfo packageSynapseData(String studyId, Map<String, UploadSchema> synapseToSchemaMap,
+    public PresignedUrlInfo packageSynapseData(String appId, Map<String, UploadSchema> synapseToSchemaMap,
             String defaultSynapseTableId, String healthCode,
             BridgeUddRequest request, Set<String> surveyTableIdSet) throws IOException, SynapseUnavailableException {
         List<File> allFileList = new ArrayList<>();
@@ -141,9 +141,9 @@ public class SynapsePackager {
         File tmpDir = fileHelper.createTempDir();
         try {
             // create and execute Synapse downloads asynchronously
-            List<Future<SynapseDownloadFromTableResult>> queryFutureList = initAsyncQueryTasks(studyId,
+            List<Future<SynapseDownloadFromTableResult>> queryFutureList = initAsyncQueryTasks(appId,
                     synapseToSchemaMap, defaultSynapseTableId, healthCode, request, tmpDir);
-            List<Future<File>> surveyFutureList = initAsyncSurveyTasks(studyId, surveyTableIdSet, tmpDir);
+            List<Future<File>> surveyFutureList = initAsyncSurveyTasks(appId, surveyTableIdSet, tmpDir);
 
             // wait for async tasks - We need to wait for all tasks and gather up all files before we check whether we
             // have no query results. Otherwise, we won't know to clean up these files, and we'll leave garbage on our
@@ -182,10 +182,10 @@ public class SynapsePackager {
      * This is made package-scoped so unit tests can hook into it.
      * </p>
      *
-     * @param studyId
-     *         study to download data for
+     * @param appId
+     *         app to download data for
      * @param synapseToSchemaMap
-     *         map of all Synapse table IDs in the current study and their corresponding schemas
+     *         map of all Synapse table IDs in the current app and their corresponding schemas
      * @param defaultSynapseTableId
      *         Synapse table for the default schema (schemaless), null if no such table exists
      * @param healthCode
@@ -196,7 +196,7 @@ public class SynapsePackager {
      *         temp directory that files should be downloaded to
      * @return list of Futures for the async tasks
      */
-    List<Future<SynapseDownloadFromTableResult>> initAsyncQueryTasks(String studyId,
+    List<Future<SynapseDownloadFromTableResult>> initAsyncQueryTasks(String appId,
             Map<String, UploadSchema> synapseToSchemaMap, String defaultSynapseTableId, String healthCode,
             BridgeUddRequest request, File tmpDir) {
         List<Future<SynapseDownloadFromTableResult>> taskFutureList = new ArrayList<>();
@@ -207,7 +207,7 @@ public class SynapsePackager {
             SynapseDownloadFromTableParameters param = new SynapseDownloadFromTableParameters.Builder()
                     .withSynapseTableId(synapseTableId).withHealthCode(healthCode)
                     .withStartDate(request.getStartDate()) .withEndDate(request.getEndDate()).withTempDir(tmpDir)
-                    .withSchema(schema).withStudyId(studyId).build();
+                    .withSchema(schema).withAppId(appId).build();
 
             // kick off async task
             SynapseDownloadFromTableTask task = new SchemaBasedTableTask(param);
@@ -223,7 +223,7 @@ public class SynapsePackager {
             SynapseDownloadFromTableParameters param = new SynapseDownloadFromTableParameters.Builder()
                     .withSynapseTableId(defaultSynapseTableId).withHealthCode(healthCode)
                     .withStartDate(request.getStartDate()).withEndDate(request.getEndDate()).withTempDir(tmpDir)
-                    .withStudyId(studyId).build();
+                    .withAppId(appId).build();
 
             // kick off async task
             SynapseDownloadFromTableTask task = new DefaultTableTask(param);
@@ -240,19 +240,19 @@ public class SynapsePackager {
     /**
      * Kicks off async tasks to download survey metadata from Synapse.
      *
-     * @param studyId
-     *         study ID for the surveys to download
+     * @param appId
+     *         app ID for the surveys to download
      * @param surveyTableIdSet
      *         set of survey metadata table IDs to download
      * @param tmpDir
      *         temp dir to download tables to
      * @return list of Futures for the async tasks
      */
-    private List<Future<File>> initAsyncSurveyTasks(String studyId, Set<String> surveyTableIdSet, File tmpDir) {
+    private List<Future<File>> initAsyncSurveyTasks(String appId, Set<String> surveyTableIdSet, File tmpDir) {
         List<Future<File>> futureList = new ArrayList<>();
         for (String oneTableId : surveyTableIdSet) {
             // create params
-            SynapseDownloadSurveyParameters param = new SynapseDownloadSurveyParameters.Builder().withStudyId(studyId)
+            SynapseDownloadSurveyParameters param = new SynapseDownloadSurveyParameters.Builder().withAppId(appId)
                     .withSynapseTableId(oneTableId).withTempDir(tmpDir).build();
 
             // kick off async task

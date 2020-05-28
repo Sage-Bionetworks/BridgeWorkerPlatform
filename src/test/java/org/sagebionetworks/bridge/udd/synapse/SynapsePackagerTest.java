@@ -61,7 +61,7 @@ public class SynapsePackagerTest {
     private static final String DEFAULT_TABLE_ID = "default-table";
     private static final String DUMMY_USER_DATA_BUCKET = "dummy-user-data-bucket";
     private static final DateTime MOCK_NOW = DateTime.parse("2015-09-17T12:43:41-07:00");
-    private static final String STUDY_ID = "my-study";
+    private static final String APP_ID = "my-app";
     private static final String TEST_START_DATE = "2015-03-09";
     private static final String TEST_END_DATE = "2015-09-17";
     private static final String TEST_HEALTH_CODE = "test-health-code";
@@ -69,8 +69,8 @@ public class SynapsePackagerTest {
             TEST_END_DATE + "-";
     private static final int URL_EXPIRATION_HOURS = 12;
 
-    // study and username don't matter for this class, only start date and end date
-    private static final BridgeUddRequest TEST_UDD_REQUEST = new BridgeUddRequest.Builder().withStudyId("dummy-study")
+    // app and username don't matter for this class, only start date and end date
+    private static final BridgeUddRequest TEST_UDD_REQUEST = new BridgeUddRequest.Builder().withAppId("dummy-app")
             .withUserId("dummy-user").withStartDate(LocalDate.parse(TEST_START_DATE))
             .withEndDate(LocalDate.parse(TEST_END_DATE)).build();
     
@@ -98,7 +98,7 @@ public class SynapsePackagerTest {
         setupPackager(synapseTableToSchema, synapseTableToResult, null, surveyTableToResultContent, null);
 
         // execute and validate
-        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(STUDY_ID, synapseTableToSchema,
+        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(APP_ID, synapseTableToSchema,
                 null, TEST_HEALTH_CODE, TEST_UDD_REQUEST, surveyTableIdSet);
         assertNull(presignedUrlInfo);
 
@@ -124,7 +124,7 @@ public class SynapsePackagerTest {
         setupPackager(synapseTableToSchema, synapseTableToResult, null, surveyTableToResultContent, null);
 
         // execute and validate
-        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(STUDY_ID, synapseTableToSchema,
+        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(APP_ID, synapseTableToSchema,
                 DEFAULT_TABLE_ID, TEST_HEALTH_CODE, TEST_UDD_REQUEST, surveyTableIdSet);
         assertNull(presignedUrlInfo);
 
@@ -163,7 +163,7 @@ public class SynapsePackagerTest {
                 .put("csv-and-bulk-download-table", new SynapseTaskResultContent("csv-and-bulk-download.csv",
                         "csv-and-bulk-download dummy csv", "csv-and-bulk-download.zip",
                         "csv-and-bulk-download dummy zip"))
-                .put(DEFAULT_TABLE_ID, new SynapseTaskResultContent("my-study-default.csv",
+                .put(DEFAULT_TABLE_ID, new SynapseTaskResultContent("my-app-default.csv",
                         "default dummy csv", null, null))
                 .build();
 
@@ -195,7 +195,7 @@ public class SynapsePackagerTest {
 
         // execute and validate
         long expectedExpirationTimeMillis = MOCK_NOW.plusHours(URL_EXPIRATION_HOURS).getMillis();
-        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(STUDY_ID, synapseTableToSchema,
+        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(APP_ID, synapseTableToSchema,
                 DEFAULT_TABLE_ID, TEST_HEALTH_CODE, TEST_UDD_REQUEST, surveyTableIdSet);
         assertEquals(presignedUrlInfo.getUrl().toString(), "http://example.com/");
         assertEquals(presignedUrlInfo.getExpirationTime().getMillis(), expectedExpirationTimeMillis);
@@ -206,7 +206,7 @@ public class SynapsePackagerTest {
         assertEquals(unzippedMap.get("csv-only.csv"), "csv-only dummy csv");
         assertEquals(unzippedMap.get("csv-and-bulk-download.csv"), "csv-and-bulk-download dummy csv");
         assertEquals(unzippedMap.get("csv-and-bulk-download.zip"), "csv-and-bulk-download dummy zip");
-        assertEquals(unzippedMap.get("my-study-default.csv"), "default dummy csv");
+        assertEquals(unzippedMap.get("my-app-default.csv"), "default dummy csv");
         assertEquals(unzippedMap.get("foo-survey.csv"), "foo-survey dummy content");
         assertEquals(unzippedMap.get("bar-survey.csv"), "bar-survey dummy content");
 
@@ -249,7 +249,7 @@ public class SynapsePackagerTest {
 
         // execute and validate
         long expectedExpirationTimeMillis = MOCK_NOW.plusHours(URL_EXPIRATION_HOURS).getMillis();
-        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(STUDY_ID, synapseTableToSchema,
+        PresignedUrlInfo presignedUrlInfo = packager.packageSynapseData(APP_ID, synapseTableToSchema,
                 null, TEST_HEALTH_CODE, TEST_UDD_REQUEST, surveyTableIdSet);
         assertEquals(presignedUrlInfo.getUrl().toString(), "http://example.com/");
         assertEquals(presignedUrlInfo.getExpirationTime().getMillis(), expectedExpirationTimeMillis);
@@ -279,7 +279,7 @@ public class SynapsePackagerTest {
 
         // set up mocks - We bypass most of the stuff in setupPackager()
         packager = spy(new SynapsePackager());
-        doThrow(RuntimeException.class).when(packager).initAsyncQueryTasks(eq(STUDY_ID), same(synapseTableToSchema),
+        doThrow(RuntimeException.class).when(packager).initAsyncQueryTasks(eq(APP_ID), same(synapseTableToSchema),
                 isNull(String.class), eq(TEST_HEALTH_CODE), same(TEST_UDD_REQUEST), any(File.class));
 
         inMemoryFileHelper = new InMemoryFileHelper();
@@ -288,7 +288,7 @@ public class SynapsePackagerTest {
         // execute
         Exception thrownEx = null;
         try {
-            packager.packageSynapseData(STUDY_ID, synapseTableToSchema, null, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
+            packager.packageSynapseData(APP_ID, synapseTableToSchema, null, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
                     ImmutableSet.of("test-survey"));
             fail("expected exception");
         } catch (RuntimeException ex) {
@@ -322,7 +322,7 @@ public class SynapsePackagerTest {
         // execute
         Exception thrownEx = null;
         try {
-            packager.packageSynapseData(STUDY_ID, synapseTableToSchema, null, TEST_HEALTH_CODE,
+            packager.packageSynapseData(APP_ID, synapseTableToSchema, null, TEST_HEALTH_CODE,
                     TEST_UDD_REQUEST, surveyTableIdSet);
             fail("expected exception");
         } catch (AmazonClientException ex) {
@@ -363,7 +363,7 @@ public class SynapsePackagerTest {
 
         // Execute (throws exception).
         try {
-            packager.packageSynapseData(STUDY_ID, synapseTableToSchema, null, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
+            packager.packageSynapseData(APP_ID, synapseTableToSchema, null, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
                     ImmutableSet.of());
             fail("expected exception");
         } catch (SynapseUnavailableException ex) {
@@ -394,7 +394,7 @@ public class SynapsePackagerTest {
 
         // Execute (throws exception).
         try {
-            packager.packageSynapseData(STUDY_ID, synapseTableToSchema, null, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
+            packager.packageSynapseData(APP_ID, synapseTableToSchema, null, TEST_HEALTH_CODE, TEST_UDD_REQUEST,
                     ImmutableSet.of("test-survey"));
             fail("expected exception");
         } catch (SynapseUnavailableException ex) {
@@ -475,7 +475,7 @@ public class SynapsePackagerTest {
                 assertEquals(params.getStartDate().toString(), TEST_START_DATE);
                 assertEquals(params.getEndDate().toString(), TEST_END_DATE);
                 assertNotNull(tmpDir);
-                assertEquals(params.getStudyId(), STUDY_ID);
+                assertEquals(params.getAppId(), APP_ID);
 
                 String synapseTableId = params.getSynapseTableId();
                 assertNotNull(synapseTableId);
@@ -527,7 +527,7 @@ public class SynapsePackagerTest {
 
                 // validate params
                 SynapseDownloadSurveyParameters params = task.getParameters();
-                assertEquals(params.getStudyId(), STUDY_ID);
+                assertEquals(params.getAppId(), APP_ID);
                 String synapseTableId = params.getSynapseTableId();
                 assertFalse(Strings.isNullOrEmpty(synapseTableId));
                 File tmpDir = params.getTempDir();

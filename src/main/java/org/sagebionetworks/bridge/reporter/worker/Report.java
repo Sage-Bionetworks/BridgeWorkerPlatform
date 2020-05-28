@@ -6,20 +6,20 @@ import org.joda.time.LocalDate;
 
 public class Report {
 
-    private final String studyId;
+    private final String appId;
     private final String reportId;
     private final LocalDate date;
     private final Object data;
     
-    private Report(String studyId, String reportId, LocalDate date, Object data) {
-        this.studyId = studyId;
+    private Report(String appId, String reportId, LocalDate date, Object data) {
+        this.appId = appId;
         this.reportId = reportId;
         this.date = date;
         this.data = data;
     }
 
-    public String getStudyId() {
-        return studyId;
+    public String getAppId() {
+        return appId;
     }
 
     public String getReportId() {
@@ -35,13 +35,13 @@ public class Report {
     }
 
     public static class Builder {
-        private String studyId;
+        private String appId;
         private String reportId;
         private LocalDate date;
         private Object data;
         
-        public Builder withStudyId(String studyId) {
-            this.studyId = studyId;
+        public Builder withAppId(String appId) {
+            this.appId = appId;
             return this;
         }
         public Builder withReportId(String reportId) {
@@ -57,17 +57,17 @@ public class Report {
             return this;
         }
         public Report build() {
-            checkNotNull(studyId);
+            checkNotNull(appId);
             checkNotNull(reportId);
             checkNotNull(date);
             checkNotNull(data);
-            return new Report(studyId, reportId, date, data);
+            return new Report(appId, reportId, date, data);
         }
     }
 
     @Override
     public String toString() {
-        return String.format("Report [studyId=%s, reportId=%s, date=%s, data=%s]",
-                studyId, reportId, date, data);
+        return String.format("Report [appId=%s, reportId=%s, date=%s, data=%s]",
+                appId, reportId, date, data);
     }
 }

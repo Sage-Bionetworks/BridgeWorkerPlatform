@@ -3,11 +3,9 @@ package org.sagebionetworks.bridge.workerPlatform.dynamodb;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
@@ -43,7 +41,7 @@ import org.sagebionetworks.bridge.schema.UploadSchemaKey;
 public class DynamoHelperTest {
     private static final String DEFAULT_TABLE_ID = "default-table";
     private static final long MOCK_NOW_MILLIS = DateTime.parse("2018-04-27T16:41:15.831-0700").getMillis();
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
     private static final String USER_ID = "test-user";
 
     private static final String DUMMY_FIELD_DEF_LIST_JSON = "[\n" +
@@ -53,7 +51,7 @@ public class DynamoHelperTest {
             "   }\n" +
             "]";
 
-    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(STUDY_ID)
+    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(APP_ID)
             .withSchemaId("test-schema").withRevision(42).build();
 
     private DynamoHelper dynamoHelper;
@@ -68,13 +66,13 @@ public class DynamoHelperTest {
     private Table mockNotificationLogTable;
 
     @Mock
-    private Index mockSchemaStudyIndex;
+    private Index mockSchemaAppIndex;
 
     @Mock
     private Table mockSchemaTable;
 
     @Mock
-    private Table mockStudyTable;
+    private Table mockAppTable;
 
     @Mock
     private Table mockSynapseMetaTable;
@@ -108,49 +106,49 @@ public class DynamoHelperTest {
         dynamoHelper.setDynamoQueryHelper(mockQueryHelper);
         dynamoHelper.setDdbNotificationConfigTable(mockNotificationConfigTable);
         dynamoHelper.setDdbNotificationLogTable(mockNotificationLogTable);
-        dynamoHelper.setDdbStudyTable(mockStudyTable);
+        dynamoHelper.setDdbAppTable(mockAppTable);
         dynamoHelper.setDdbSynapseMetaTable(mockSynapseMetaTable);
         dynamoHelper.setDdbSynapseMapTable(mockSynapseMapTable);
         dynamoHelper.setDdbSynapseSurveyTablesTable(mockSynapseSurveyTable);
-        dynamoHelper.setDdbUploadSchemaStudyIndex(mockSchemaStudyIndex);
+        dynamoHelper.setDdbUploadSchemaAppIndex(mockSchemaAppIndex);
         dynamoHelper.setDdbUploadSchemaTable(mockSchemaTable);
         dynamoHelper.setDdbWorkerLogTable(mockWorkerLogTable);
     }
 
     @Test
-    public void getDefaultSynapseTableForStudy_SuccessCase() {
+    public void getDefaultSynapseTableForApp_SuccessCase() {
         // Mock SynapseMetaTables table.
-        Item mockItem = new Item().withString(DynamoHelper.ATTR_TABLE_NAME, STUDY_ID + DynamoHelper.SUFFIX_DEFAULT)
+        Item mockItem = new Item().withString(DynamoHelper.ATTR_TABLE_NAME, APP_ID + DynamoHelper.SUFFIX_DEFAULT)
                 .withString(DynamoHelper.ATTR_TABLE_ID, DEFAULT_TABLE_ID);
         when(mockSynapseMetaTable.getItem(DynamoHelper.ATTR_TABLE_NAME,
-                STUDY_ID + DynamoHelper.SUFFIX_DEFAULT)).thenReturn(mockItem);
+                APP_ID + DynamoHelper.SUFFIX_DEFAULT)).thenReturn(mockItem);
 
         // Execute and validate.
-        String retval = dynamoHelper.getDefaultSynapseTableForStudy(STUDY_ID);
+        String retval = dynamoHelper.getDefaultSynapseTableForApp(APP_ID);
         assertEquals(retval, DEFAULT_TABLE_ID);
     }
 
     @Test
-    public void getDefaultSynapseTableForStudy_NoTable() {
+    public void getDefaultSynapseTableForApp_NoTable() {
         // Mock SynapseMetaTables table.
         when(mockSynapseMetaTable.getItem(DynamoHelper.ATTR_TABLE_NAME,
-                STUDY_ID + DynamoHelper.SUFFIX_DEFAULT)).thenReturn(null);
+                APP_ID + DynamoHelper.SUFFIX_DEFAULT)).thenReturn(null);
 
         // Execute and validate.
-        String retval = dynamoHelper.getDefaultSynapseTableForStudy(STUDY_ID);
+        String retval = dynamoHelper.getDefaultSynapseTableForApp(APP_ID);
         assertNull(retval);
     }
 
     @Test
-    public void deleteDefaultSynapseTableForStudy() {
+    public void deleteDefaultSynapseTableForApp() {
         // Execute and validate.
-        dynamoHelper.deleteDefaultSynapseTableForStudy(STUDY_ID);
+        dynamoHelper.deleteDefaultSynapseTableForApp(APP_ID);
         verify(mockSynapseMetaTable).deleteItem(DynamoHelper.ATTR_TABLE_NAME,
-                STUDY_ID + DynamoHelper.SUFFIX_DEFAULT);
+                APP_ID + DynamoHelper.SUFFIX_DEFAULT);
     }
 
     @Test
-    public void getNotificationConfigForStudy() {
+    public void getNotificationConfigForApp() {
         // Set up dummy maps
         List<String> missedCumulativeMessagesList = ImmutableList.of("cumulative-message-0", "cumulative-message-1",
                 "cumulative-message-2");
@@ -164,7 +162,7 @@ public class DynamoHelperTest {
 
         // Set up mock
         Item item = new Item()
-                .withPrimaryKey(DynamoHelper.KEY_STUDY_ID, STUDY_ID)
+                .withPrimaryKey(DynamoHelper.KEY_APP_ID, APP_ID)
                 .withString(DynamoHelper.KEY_APP_URL, "http://example.com/app-url")
                 .withInt(DynamoHelper.KEY_BURST_DURATION_DAYS, 19)
                 .withStringSet(DynamoHelper.KEY_BURST_EVENT_ID_SET, "enrollment", "custom:activityBurst2Start")
@@ -182,10 +180,10 @@ public class DynamoHelperTest {
                 .withInt(DynamoHelper.KEY_NUM_MISSED_CONSECUTIVE_DAYS_TO_NOTIFY, 3)
                 .withInt(DynamoHelper.KEY_NUM_MISSED_DAYS_TO_NOTIFY, 4)
                 .withMap(DynamoHelper.KEY_PREBURST_MESSAGES, preburstMessagesMap);
-        when(mockNotificationConfigTable.getItem(DynamoHelper.KEY_STUDY_ID, STUDY_ID)).thenReturn(item);
+        when(mockNotificationConfigTable.getItem(DynamoHelper.KEY_APP_ID, APP_ID)).thenReturn(item);
 
         // Execute and validate
-        WorkerConfig config = dynamoHelper.getNotificationConfigForStudy(STUDY_ID);
+        WorkerConfig config = dynamoHelper.getNotificationConfigForApp(APP_ID);
         assertEquals(config.getAppUrl(), "http://example.com/app-url");
         assertEquals(config.getBurstDurationDays(), 19);
         assertEquals(config.getBurstStartEventIdSet(), ImmutableSet.of("enrollment",
@@ -206,12 +204,17 @@ public class DynamoHelperTest {
         assertEquals(config.getNumMissedDaysToNotify(), 4);
         assertEquals(config.getPreburstMessagesByDataGroup(), preburstMessagesMap);
 
-        verify(mockNotificationConfigTable).getItem(DynamoHelper.KEY_STUDY_ID, STUDY_ID);
+        verify(mockNotificationConfigTable).getItem(DynamoHelper.KEY_APP_ID, APP_ID);
 
+        // NOTE: The caching is provided by the Spring container, and this helper is manually
+        // constructed outside of the container. It should not exhibit any caching behavior.
+        // Not sure how this test initially passed.
         // Test caching
-        WorkerConfig config2 = dynamoHelper.getNotificationConfigForStudy(STUDY_ID);
+        /*
+        WorkerConfig config2 = dynamoHelper.getNotificationConfigForApp(APP_ID);
         assertNotNull(config2);
         verifyNoMoreInteractions(mockNotificationConfigTable);
+        */
     }
 
     @Test
@@ -286,29 +289,29 @@ public class DynamoHelperTest {
     }
 
     @Test
-    public void testGetStudy() {
-        // mock study table
-        Item mockItem = new Item().withString("name", "Test Study")
+    public void testGetApp() {
+        // mock app table
+        Item mockItem = new Item().withString("name", "Test App")
                 .withString("shortName", "Test").withString("supportEmail", "support@sagebase.org");
-        when(mockStudyTable.getItem("identifier", "test-study")).thenReturn(mockItem);
+        when(mockAppTable.getItem("identifier", "test-app")).thenReturn(mockItem);
 
         // execute and validate
-        StudyInfo studyInfo = dynamoHelper.getStudy("test-study");
-        assertEquals(studyInfo.getStudyId(), "test-study");
-        assertEquals(studyInfo.getShortName(), "Test");
-        assertEquals(studyInfo.getName(), "Test Study");
-        assertEquals(studyInfo.getSupportEmail(), "support@sagebase.org");
+        AppInfo appInfo = dynamoHelper.getApp("test-app");
+        assertEquals(appInfo.getAppId(), "test-app");
+        assertEquals(appInfo.getShortName(), "Test");
+        assertEquals(appInfo.getName(), "Test App");
+        assertEquals(appInfo.getSupportEmail(), "support@sagebase.org");
     }
 
     @Test
     public void testGetSynapseSurveyTables() {
         // mock Synapse survey table
-        Item mockItem = new Item().withString("studyId", "test-study").withStringSet("tableIdSet", "foo-table",
+        Item mockItem = new Item().withString("studyId", "test-app").withStringSet("tableIdSet", "foo-table",
                 "bar-table");
-        when(mockSynapseSurveyTable.getItem("studyId", "test-study")).thenReturn(mockItem);
+        when(mockSynapseSurveyTable.getItem("studyId", "test-app")).thenReturn(mockItem);
 
         // execute and validate
-        Set<String> tableIdSet = dynamoHelper.getSynapseSurveyTablesForStudy("test-study");
+        Set<String> tableIdSet = dynamoHelper.getSynapseSurveyTablesForApp("test-app");
         assertEquals(tableIdSet.size(), 2);
         assertTrue(tableIdSet.contains("foo-table"));
         assertTrue(tableIdSet.contains("bar-table"));
@@ -317,21 +320,21 @@ public class DynamoHelperTest {
     @Test
     public void testGetSynapseSurveyTablesNoTableIds() {
         // mock Synapse survey table
-        Item mockItem = new Item().withString("studyId", "test-study");
-        when(mockSynapseSurveyTable.getItem("studyId", "test-study")).thenReturn(mockItem);
+        Item mockItem = new Item().withString("studyId", "test-app");
+        when(mockSynapseSurveyTable.getItem("studyId", "test-app")).thenReturn(mockItem);
 
         // execute and validate
-        Set<String> tableIdSet = dynamoHelper.getSynapseSurveyTablesForStudy("test-study");
+        Set<String> tableIdSet = dynamoHelper.getSynapseSurveyTablesForApp("test-app");
         assertTrue(tableIdSet.isEmpty());
     }
 
     @Test
     public void testGetSynapseSurveyTablesNoItem() {
         // mock Synapse survey table
-        when(mockSynapseSurveyTable.getItem("studyId", "test-study")).thenReturn(null);
+        when(mockSynapseSurveyTable.getItem("studyId", "test-app")).thenReturn(null);
 
         // execute and validate
-        Set<String> tableIdSet = dynamoHelper.getSynapseSurveyTablesForStudy("test-study");
+        Set<String> tableIdSet = dynamoHelper.getSynapseSurveyTablesForApp("test-app");
         assertTrue(tableIdSet.isEmpty());
     }
 
@@ -342,45 +345,45 @@ public class DynamoHelperTest {
         // * bar schema has a table
         // * qwerty and asdf schemas both point to the same table
 
-        // Mock Schema table Study index. This involves stubbing out queryHelper() because indices can't be mocked
+        // Mock Schema table App index. This involves stubbing out queryHelper() because indices can't be mocked
         // directly.
-        List<Item> mockSchemaStudyIndexResult = new ArrayList<>();
-        mockSchemaStudyIndexResult.add(makeUploadSchemaDdbItem("test-study", "foo", 1, null));
-        mockSchemaStudyIndexResult.add(makeUploadSchemaDdbItem("test-study", "bar", 2, null));
-        mockSchemaStudyIndexResult.add(makeUploadSchemaDdbItem("test-study", "qwerty", 3, null));
-        mockSchemaStudyIndexResult.add(makeUploadSchemaDdbItem("test-study", "asdf", 4, null));
+        List<Item> mockSchemaAppIndexResult = new ArrayList<>();
+        mockSchemaAppIndexResult.add(makeUploadSchemaDdbItem("test-app", "foo", 1, null));
+        mockSchemaAppIndexResult.add(makeUploadSchemaDdbItem("test-app", "bar", 2, null));
+        mockSchemaAppIndexResult.add(makeUploadSchemaDdbItem("test-app", "qwerty", 3, null));
+        mockSchemaAppIndexResult.add(makeUploadSchemaDdbItem("test-app", "asdf", 4, null));
 
-        when(mockQueryHelper.query(mockSchemaStudyIndex, "studyId", "test-study"))
-                .thenReturn(mockSchemaStudyIndexResult);
+        when(mockQueryHelper.query(mockSchemaAppIndex, "studyId", "test-app"))
+                .thenReturn(mockSchemaAppIndexResult);
 
         // mock schema table
-        when(mockSchemaTable.getItem("key", "test-study:foo", "revision", 1)).thenReturn(makeUploadSchemaDdbItem(
-                "test-study", "foo", 1, DUMMY_FIELD_DEF_LIST_JSON));
-        when(mockSchemaTable.getItem("key", "test-study:bar", "revision", 2)).thenReturn(makeUploadSchemaDdbItem(
-                "test-study", "bar", 2, DUMMY_FIELD_DEF_LIST_JSON));
-        when(mockSchemaTable.getItem("key", "test-study:qwerty", "revision", 3)).thenReturn(makeUploadSchemaDdbItem(
-                "test-study", "qwerty", 3, DUMMY_FIELD_DEF_LIST_JSON));
-        when(mockSchemaTable.getItem("key", "test-study:asdf", "revision", 4)).thenReturn(makeUploadSchemaDdbItem(
-                "test-study", "asdf", 4, DUMMY_FIELD_DEF_LIST_JSON));
+        when(mockSchemaTable.getItem("key", "test-app:foo", "revision", 1)).thenReturn(makeUploadSchemaDdbItem(
+                "test-app", "foo", 1, DUMMY_FIELD_DEF_LIST_JSON));
+        when(mockSchemaTable.getItem("key", "test-app:bar", "revision", 2)).thenReturn(makeUploadSchemaDdbItem(
+                "test-app", "bar", 2, DUMMY_FIELD_DEF_LIST_JSON));
+        when(mockSchemaTable.getItem("key", "test-app:qwerty", "revision", 3)).thenReturn(makeUploadSchemaDdbItem(
+                "test-app", "qwerty", 3, DUMMY_FIELD_DEF_LIST_JSON));
+        when(mockSchemaTable.getItem("key", "test-app:asdf", "revision", 4)).thenReturn(makeUploadSchemaDdbItem(
+                "test-app", "asdf", 4, DUMMY_FIELD_DEF_LIST_JSON));
 
         // mock synapse map table
-        when(mockSynapseMapTable.getItem("schemaKey", "test-study-bar-v2")).thenReturn(makeSynapseMapDdbItem(
-                "test-study-bar-v2", "bar-table-id"));
-        when(mockSynapseMapTable.getItem("schemaKey", "test-study-qwerty-v3")).thenReturn(makeSynapseMapDdbItem(
-                "test-study-qwerty-v3", "qwerty-asdf-table-id"));
-        when(mockSynapseMapTable.getItem("schemaKey", "test-study-asdf-v4")).thenReturn(makeSynapseMapDdbItem(
-                "test-study-asdf-v4", "qwerty-asdf-table-id"));
+        when(mockSynapseMapTable.getItem("schemaKey", "test-app-bar-v2")).thenReturn(makeSynapseMapDdbItem(
+                "test-app-bar-v2", "bar-table-id"));
+        when(mockSynapseMapTable.getItem("schemaKey", "test-app-qwerty-v3")).thenReturn(makeSynapseMapDdbItem(
+                "test-app-qwerty-v3", "qwerty-asdf-table-id"));
+        when(mockSynapseMapTable.getItem("schemaKey", "test-app-asdf-v4")).thenReturn(makeSynapseMapDdbItem(
+                "test-app-asdf-v4", "qwerty-asdf-table-id"));
 
         // execute and validate - Just check the key equals the schema we expect. Deep validation of schemas is done
         // in the schema tests
-        Map<String, UploadSchema> synapseToSchemaMap = dynamoHelper.getSynapseTableIdsForStudy("test-study");
+        Map<String, UploadSchema> synapseToSchemaMap = dynamoHelper.getSynapseTableIdsForApp("test-app");
         assertEquals(synapseToSchemaMap.size(), 2);
-        assertEquals(synapseToSchemaMap.get("bar-table-id").getKey().toString(), "test-study-bar-v2");
-        assertEquals(synapseToSchemaMap.get("qwerty-asdf-table-id").getKey().toString(), "test-study-asdf-v4");
+        assertEquals(synapseToSchemaMap.get("bar-table-id").getKey().toString(), "test-app-bar-v2");
+        assertEquals(synapseToSchemaMap.get("qwerty-asdf-table-id").getKey().toString(), "test-app-asdf-v4");
     }
 
-    private static Item makeUploadSchemaDdbItem(String studyId, String schemaId, int rev, String fieldDefListJson) {
-        Item retval = new Item().withString("studyId", studyId).withString("key", studyId + ":" + schemaId)
+    private static Item makeUploadSchemaDdbItem(String appId, String schemaId, int rev, String fieldDefListJson) {
+        Item retval = new Item().withString("studyId", appId).withString("key", appId + ":" + schemaId)
                 .withInt("revision", rev);
         if (fieldDefListJson != null) {
             retval.withString("fieldDefinitions", fieldDefListJson);

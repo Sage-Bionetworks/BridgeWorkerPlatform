@@ -19,7 +19,7 @@ import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
 public class UploadsReportGeneratorTest {
     
-    private static final String STUDY_ID = "studyId";
+    private static final String APP_ID = "appId";
     private static final DateTime START_DATE = DateTime.parse("2017-06-09T00:00:00.000-07:00");
     private static final DateTime END_DATE = DateTime.parse("2017-06-09T23:59:59.999-07:00");
 
@@ -36,20 +36,20 @@ public class UploadsReportGeneratorTest {
         List<Upload> uploads = new ArrayList<>();
         uploads.add(mockUpload("record1", UploadStatus.SUCCEEDED));
         uploads.add(mockUpload("record2", UploadStatus.REQUESTED));
-        when(bridgeHelper.getUploadsForStudy(STUDY_ID, START_DATE, END_DATE)).thenReturn(uploads);
+        when(bridgeHelper.getUploadsForApp(APP_ID, START_DATE, END_DATE)).thenReturn(uploads);
         
         UploadsReportGenerator generator = new UploadsReportGenerator();
         generator.setBridgeHelper(bridgeHelper);
-        Report report = generator.generate(request, STUDY_ID);
+        Report report = generator.generate(request, APP_ID);
         
-        assertEquals(report.getStudyId(), STUDY_ID);
+        assertEquals(report.getAppId(), APP_ID);
         assertEquals(report.getReportId(), "test-scheduler-daily-signups-report");
         assertEquals(report.getDate().toString(), "2017-06-09");
         Map<String, Integer> map = (Map<String, Integer>)report.getData();
         assertEquals(map.get("requested"), new Integer(1));
         assertEquals(map.get("succeeded"), new Integer(1));
         
-        verify(bridgeHelper).getUploadsForStudy(STUDY_ID, START_DATE, END_DATE);
+        verify(bridgeHelper).getUploadsForApp(APP_ID, START_DATE, END_DATE);
     }
 
     private static Upload mockUpload(String recordId, UploadStatus status) {

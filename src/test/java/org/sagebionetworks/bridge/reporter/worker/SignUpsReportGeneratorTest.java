@@ -25,7 +25,7 @@ import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
 public class SignUpsReportGeneratorTest {
     
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
     private static final DateTime START_DATE = DateTime.parse("2017-06-09T00:00:00.000Z");
     private static final DateTime END_DATE = DateTime.parse("2017-06-09T23:59:59.999Z");
     
@@ -57,11 +57,11 @@ public class SignUpsReportGeneratorTest {
                 .sharingScope(SharingScope.NO_SHARING).roles(new ArrayList<>()));
         participants.add((StudyParticipant) new StudyParticipant().status(AccountStatus.ENABLED)
                 .sharingScope(SharingScope.SPONSORS_AND_PARTNERS).roles(new ArrayList<>()));
-        when(bridgeHelper.getParticipantsForStudy(STUDY_ID, START_DATE, END_DATE)).thenReturn(participants);
+        when(bridgeHelper.getParticipantsForApp(APP_ID, START_DATE, END_DATE)).thenReturn(participants);
         
-        Report report = generator.generate(REQUEST, STUDY_ID);
+        Report report = generator.generate(REQUEST, APP_ID);
         
-        assertEquals(report.getStudyId(), STUDY_ID);
+        assertEquals(report.getAppId(), APP_ID);
         assertEquals(report.getReportId(), "test-scheduler-daily-signups-report");
         assertEquals(report.getDate().toString(), "2017-06-09");
         
@@ -70,7 +70,7 @@ public class SignUpsReportGeneratorTest {
         assertEquals(map.get("bySharing").get("no_sharing"), new Integer(1));
         assertEquals(map.get("bySharing").get("sponsors_and_partners"), new Integer(1));
         
-        verify(bridgeHelper).getParticipantsForStudy(STUDY_ID, START_DATE, END_DATE);
+        verify(bridgeHelper).getParticipantsForApp(APP_ID, START_DATE, END_DATE);
     }
     
     @SuppressWarnings("unchecked")
@@ -85,11 +85,11 @@ public class SignUpsReportGeneratorTest {
                 .sharingScope(SharingScope.ALL_QUALIFIED_RESEARCHERS).roles(new ArrayList<>()));
         participants.add((StudyParticipant) new StudyParticipant().status(AccountStatus.UNVERIFIED)
                 .sharingScope(SharingScope.NO_SHARING).roles(new ArrayList<>()));
-        when(bridgeHelper.getParticipantsForStudy(STUDY_ID, START_DATE, END_DATE)).thenReturn(participants);
+        when(bridgeHelper.getParticipantsForApp(APP_ID, START_DATE, END_DATE)).thenReturn(participants);
         
-        Report report = generator.generate(REQUEST, STUDY_ID);
+        Report report = generator.generate(REQUEST, APP_ID);
         
-        assertEquals(report.getStudyId(), STUDY_ID);
+        assertEquals(report.getAppId(), APP_ID);
         assertEquals(report.getReportId(), "test-scheduler-daily-signups-report");
         assertEquals(report.getDate().toString(), "2017-06-09");
         
@@ -114,11 +114,11 @@ public class SignUpsReportGeneratorTest {
         List<StudyParticipant> participants = new ArrayList<>();
         participants.add((StudyParticipant) new StudyParticipant().status(AccountStatus.ENABLED)
                 .sharingScope(SharingScope.NO_SHARING).roles(roles));
-        when(bridgeHelper.getParticipantsForStudy(STUDY_ID, START_DATE, END_DATE)).thenReturn(participants);
+        when(bridgeHelper.getParticipantsForApp(APP_ID, START_DATE, END_DATE)).thenReturn(participants);
         
-        Report report = generator.generate(REQUEST, STUDY_ID);
+        Report report = generator.generate(REQUEST, APP_ID);
         
-        assertEquals(report.getStudyId(), STUDY_ID);
+        assertEquals(report.getAppId(), APP_ID);
         assertEquals(report.getReportId(), "test-scheduler-daily-signups-report");
         assertEquals(report.getDate().toString(), "2017-06-09");
         

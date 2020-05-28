@@ -20,8 +20,8 @@ public class SynapseDownloadFromTableParametersTest {
     private static final String TEST_HEALTH_CODE = "test-health-code";
     private static final String TEST_TABLE_ID = "test-table";
 
-    private static final String TEST_STUDY_ID = "test-study";
-    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(TEST_STUDY_ID)
+    private static final String TEST_APP_ID = "test-app";
+    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(TEST_APP_ID)
             .withSchemaId("test-schema").withRevision(42).build();
     private static final UploadSchema TEST_SCHEMA = new UploadSchema.Builder().withKey(TEST_SCHEMA_KEY)
             .addField("foo", "STRING").build();
@@ -76,19 +76,19 @@ public class SynapseDownloadFromTableParametersTest {
         makeValidParamBuilder().withTempDir(null).build();
     }
 
-    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = ".*studyId.*")
-    public void nullStudyId() {
-        makeValidParamBuilder().withStudyId(null).build();
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = ".*appId.*")
+    public void nullAppId() {
+        makeValidParamBuilder().withAppId(null).build();
     }
 
-    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = ".*studyId.*")
-    public void emptyStudyId() {
-        makeValidParamBuilder().withStudyId("").build();
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = ".*appId.*")
+    public void emptyAppId() {
+        makeValidParamBuilder().withAppId("").build();
     }
 
-    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = ".*studyId.*")
-    public void blankStudyId() {
-        makeValidParamBuilder().withStudyId("   ").build();
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = ".*appId.*")
+    public void blankAppId() {
+        makeValidParamBuilder().withAppId("   ").build();
     }
 
     @Test
@@ -101,7 +101,7 @@ public class SynapseDownloadFromTableParametersTest {
         assertEquals(param.getEndDate(), TEST_END_DATE);
         assertSame(param.getTempDir(), DUMMY_FILE);
         assertNull(param.getSchema());
-        assertEquals(param.getStudyId(), TEST_STUDY_ID);
+        assertEquals(param.getAppId(), TEST_APP_ID);
     }
 
     @Test
@@ -125,6 +125,6 @@ public class SynapseDownloadFromTableParametersTest {
     private static SynapseDownloadFromTableParameters.Builder makeValidParamBuilder() {
         return new SynapseDownloadFromTableParameters.Builder()
                 .withSynapseTableId(TEST_TABLE_ID).withHealthCode(TEST_HEALTH_CODE).withStartDate(TEST_START_DATE)
-                .withEndDate(TEST_END_DATE).withTempDir(DUMMY_FILE).withStudyId(TEST_STUDY_ID);
+                .withEndDate(TEST_END_DATE).withTempDir(DUMMY_FILE).withAppId(TEST_APP_ID);
     }
 }

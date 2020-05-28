@@ -22,11 +22,11 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
-import org.sagebionetworks.bridge.workerPlatform.dynamodb.StudyInfo;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.AppInfo;
 
 public class SesHelperTest {
     private SesHelper sesHelper;
-    private StudyInfo studyInfo;
+    private AppInfo appInfo;
     private AccountInfo accountInfo;
     private ArgumentCaptor<SendEmailRequest> sesRequestCaptor;
 
@@ -43,7 +43,7 @@ public class SesHelperTest {
         sesHelper.setSesClient(mockSesClient);
 
         // set up common inputs
-        studyInfo = new StudyInfo.Builder().withName("Test Study").withStudyId("test-study")
+        appInfo = new AppInfo.Builder().withName("Test App").withAppId("test-app")
                 .withSupportEmail("support@sagebase.org").build();
         accountInfo = new AccountInfo.Builder().withEmailAddress("dummy-email@example.com")
                 .withHealthCode("dummy-health-code").withUserId("dummy-user-id").build();
@@ -52,7 +52,7 @@ public class SesHelperTest {
     @Test
     public void testSendNoData() {
         //execute
-        sesHelper.sendNoDataMessageToAccount(studyInfo, accountInfo);
+        sesHelper.sendNoDataMessageToAccount(appInfo, accountInfo);
 
         // validate - We don't want to overfit, so just check that we have both HTML and text content.
         Body emailBody = validateEmailAndExtractBody();
@@ -75,7 +75,7 @@ public class SesHelperTest {
                 .withExpirationTime(dummyExpirationDate).build();
 
         // execute
-        sesHelper.sendPresignedUrlToAccount(studyInfo, presignedUrlInfo, accountInfo);
+        sesHelper.sendPresignedUrlToAccount(appInfo, presignedUrlInfo, accountInfo);
 
         // for the actual email, just validate that the body (both HTML and text versions) contain the link and the
         // expiration date

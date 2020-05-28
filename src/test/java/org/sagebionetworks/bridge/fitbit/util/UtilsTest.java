@@ -18,8 +18,8 @@ import org.testng.annotations.Test;
 import org.sagebionetworks.bridge.fitbit.schema.ColumnSchema;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
 import org.sagebionetworks.bridge.fitbit.worker.PopulatedTable;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.OAuthProvider;
-import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 public class UtilsTest {
@@ -68,35 +68,35 @@ public class UtilsTest {
 
     @Test
     public void isConfigured() {
-        assertTrue(Utils.isStudyConfigured(makeConfiguredStudy()));
+        assertTrue(Utils.isAppConfigured(makeConfiguredApp()));
     }
 
     @Test
     public void noSynapseProjectId() {
-        Study study = makeConfiguredStudy().synapseProjectId(null);
-        assertFalse(Utils.isStudyConfigured(study));
+        App app = makeConfiguredApp().synapseProjectId(null);
+        assertFalse(Utils.isAppConfigured(app));
     }
 
     @Test
     public void noDataAccessTeam() {
-        Study study = makeConfiguredStudy().synapseDataAccessTeamId(null);
-        assertFalse(Utils.isStudyConfigured(study));
+        App app = makeConfiguredApp().synapseDataAccessTeamId(null);
+        assertFalse(Utils.isAppConfigured(app));
     }
 
     @Test
     public void noOAuthProviders() {
-        Study study = makeConfiguredStudy().oAuthProviders(null);
-        assertFalse(Utils.isStudyConfigured(study));
+        App app = makeConfiguredApp().oAuthProviders(null);
+        assertFalse(Utils.isAppConfigured(app));
     }
 
     @Test
     public void oAuthProvidersDontContainFitBit() {
-        Study study = makeConfiguredStudy().oAuthProviders(ImmutableMap.of());
-        assertFalse(Utils.isStudyConfigured(study));
+        App app = makeConfiguredApp().oAuthProviders(ImmutableMap.of());
+        assertFalse(Utils.isAppConfigured(app));
     }
 
-    private static Study makeConfiguredStudy() {
-        return new Study().synapseProjectId(PROJECT_ID).synapseDataAccessTeamId(DATA_ACCESS_TEAM_ID)
+    private static App makeConfiguredApp() {
+        return new App().synapseProjectId(PROJECT_ID).synapseDataAccessTeamId(DATA_ACCESS_TEAM_ID)
                 .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
     }
 

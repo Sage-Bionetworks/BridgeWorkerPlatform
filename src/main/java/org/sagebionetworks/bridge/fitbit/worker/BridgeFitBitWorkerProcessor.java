@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.fitbit.schema.EndpointSchema;
 import org.sagebionetworks.bridge.fitbit.util.Utils;
-import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
@@ -41,9 +41,10 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
     private static final int REPORTING_INTERVAL = 10;
     static final String REQUEST_PARAM_DATE = "date";
     static final String REQUEST_PARAM_HEALTH_CODE_WHITELIST = "healthCodeWhitelist";
+    static final String REQUEST_PARAM_APP_WHITELIST = "appWhitelist";
     static final String REQUEST_PARAM_STUDY_WHITELIST = "studyWhitelist";
 
-    private final RateLimiter perStudyRateLimiter = RateLimiter.create(1.0);
+    private final RateLimiter perAppRateLimiter = RateLimiter.create(1.0);
     private final RateLimiter perUserRateLimiter = RateLimiter.create(1.0);
 
     private BridgeHelper bridgeHelper;
@@ -71,9 +72,9 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
         this.fileHelper = fileHelper;
     }
 
-    /** Set rate limit, in studies per second. */
-    public final void setPerStudyRateLimit(double rate) {
-        perStudyRateLimiter.setRate(rate);
+    /** Set rate limit, in apps per second. */
+    public final void setPerAppRateLimit(double rate) {
+        perAppRateLimiter.setRate(rate);
     }
 
     /** Set rate limit, in users per second. */
@@ -110,46 +111,48 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
 
         // Optional params.
         List<String> healthCodeWhitelist = JsonUtils.asStringList(jsonNode, REQUEST_PARAM_HEALTH_CODE_WHITELIST);
-        List<String> studyWhitelist = JsonUtils.asStringList(jsonNode, REQUEST_PARAM_STUDY_WHITELIST);
-
+        List<String> appWhitelist = JsonUtils.asStringList(jsonNode, REQUEST_PARAM_APP_WHITELIST);
+        if (appWhitelist == null) {
+            appWhitelist = JsonUtils.asStringList(jsonNode, REQUEST_PARAM_STUDY_WHITELIST);
+        }
         LOG.info("Received request for date " + dateString);
         if (healthCodeWhitelist != null) {
             LOG.info("With healthCodeWhitelist=" + COMMA_JOINER.join(healthCodeWhitelist));
         }
-        if (studyWhitelist != null) {
-            LOG.info("With studyWhitelist=" + COMMA_JOINER.join(studyWhitelist));
+        if (appWhitelist != null) {
+            LOG.info("With appWhitelist=" + COMMA_JOINER.join(appWhitelist));
         }
         Stopwatch requestStopwatch = Stopwatch.createStarted();
 
-        List<String> studyIdList;
-        if (studyWhitelist != null && !studyWhitelist.isEmpty()) {
-            // If the study whitelist is specified, use it.
-            studyIdList = studyWhitelist;
+        List<String> appIdList;
+        if (appWhitelist != null && !appWhitelist.isEmpty()) {
+            // If the app whitelist is specified, use it.
+            appIdList = appWhitelist;
         } else {
-            // Otherwise, call Bridge to get all study summaries.
-            List<Study> studySummaryList = bridgeHelper.getAllStudies();
-            studyIdList = studySummaryList.stream().map(Study::getIdentifier).collect(Collectors.toList());
+            // Otherwise, call Bridge to get all app summaries.
+            List<App> appSummaryList = bridgeHelper.getAllApps();
+            appIdList = appSummaryList.stream().map(App::getIdentifier).collect(Collectors.toList());
         }
 
-        for (String studyId : studyIdList) {
-            perStudyRateLimiter.acquire();
+        for (String appId : appIdList) {
+            perAppRateLimiter.acquire();
 
-            Stopwatch studyStopwatch = Stopwatch.createStarted();
+            Stopwatch appStopwatch = Stopwatch.createStarted();
             try {
-                // Study summary only contains ID. Get full study summary from details.
-                Study study = bridgeHelper.getStudy(studyId);
+                // App summary only contains ID. Get full app summary from details.
+                App app = bridgeHelper.getApp(appId);
 
-                if (Utils.isStudyConfigured(study)) {
-                    LOG.info("Processing study " + studyId);
-                    processStudy(dateString, study, healthCodeWhitelist);
+                if (Utils.isAppConfigured(app)) {
+                    LOG.info("Processing app " + appId);
+                    processApp(dateString, app, healthCodeWhitelist);
                 } else {
-                    LOG.info("Skipping study " + studyId);
+                    LOG.info("Skipping app " + appId);
                 }
             } catch (Exception ex) {
-                LOG.error("Error processing study " + studyId + ": " + ex.getMessage(), ex);
+                LOG.error("Error processing app " + appId + ": " + ex.getMessage(), ex);
             } finally {
-                LOG.info("Finished processing study " + studyId + " in " +
-                        studyStopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
+                LOG.info("Finished processing app " + appId + " in " +
+                        appStopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
             }
         }
         LOG.info("Finished processing request for date " + dateString + " in " +
@@ -157,13 +160,13 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
     }
 
     // Visible for testing
-    void processStudy(String dateString, Study study, List<String> healthCodeWhitelist) throws WorkerException {
-        String studyId = study.getIdentifier();
+    void processApp(String dateString, App app, List<String> healthCodeWhitelist) throws WorkerException {
+        String appId = app.getIdentifier();
 
         // Set up request context
         File tmpDir = fileHelper.createTempDir();
         try {
-            RequestContext ctx = new RequestContext(dateString, study, tmpDir);
+            RequestContext ctx = new RequestContext(dateString, app, tmpDir);
 
             // Get list of users (and their keys)
             Iterator<FitBitUser> fitBitUserIter;
@@ -171,7 +174,7 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
                 fitBitUserIter = healthCodeWhitelist.stream()
                         .map(healthCode -> {
                             try {
-                                return bridgeHelper.getFitBitUserForStudyAndHealthCode(studyId, healthCode);
+                                return bridgeHelper.getFitBitUserForAppAndHealthCode(appId, healthCode);
                             } catch (IOException | RuntimeException ex) {
                                 LOG.error("Error getting FitBit auth for health code " + healthCode + ": " +
                                         ex.getMessage(), ex);
@@ -181,10 +184,10 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
                         .filter(Objects::nonNull)
                         .iterator();
             } else {
-                fitBitUserIter = bridgeHelper.getFitBitUsersForStudy(study.getIdentifier());
+                fitBitUserIter = bridgeHelper.getFitBitUsersForApp(app.getIdentifier());
             }
 
-            LOG.info("Processing users in study " + studyId);
+            LOG.info("Processing users in app " + appId);
             int numErrors = 0;
             int numUsers = 0;
             Stopwatch userStopwatch = Stopwatch.createStarted();
@@ -196,7 +199,7 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
                     // Call and process endpoints.
                     for (EndpointSchema oneEndpointSchema : endpointSchemas) {
                         if (!oneUser.getScopeSet().contains(oneEndpointSchema.getScopeName())) {
-                            // This is normal, as not all studies have the same scopes. Skip silently.
+                            // This is normal, as not all apps have the same scopes. Skip silently.
                             continue;
                         }
 
@@ -220,7 +223,7 @@ public class BridgeFitBitWorkerProcessor implements ThrowingConsumer<JsonNode> {
                     // exception up the call stack.
                     numErrors++;
                     if (numErrors >= userErrorLimit) {
-                        throw new WorkerException("User error limit reached, aborting for study " + studyId);
+                        throw new WorkerException("User error limit reached, aborting for app " + appId);
                     }
                 }
 

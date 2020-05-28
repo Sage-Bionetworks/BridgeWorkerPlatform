@@ -31,7 +31,7 @@ import org.testng.annotations.Test;
 
 public class RetentionReportGeneratorTest {
     
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
     private static final String USER_ID_1 = "test-user1";
     private static final String USER_ID_2 = "test-user2";
     private static final String USER_ID_3 = "test-user3";
@@ -76,17 +76,17 @@ public class RetentionReportGeneratorTest {
         List<AccountSummary> accountSummaries = new ArrayList<>();
         accountSummaries.add(accountSummary);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(APP_ID, false)).thenReturn(accountSummaryIter);
         
         mockStudyParticipant(bridgeHelper, USER_ID_1, new ArrayList<>());
         
         mockActivityEventList(bridgeHelper, accountSummary, mockStudyStateDateEvent(STUDY_START_DATE_1));
         
         RequestInfo requestInfo = mockRequestInfo(SIGN_IN_ON, UPLOADED_ON);
-        when(bridgeHelper.getRequestInfoForParticipant(STUDY_ID, accountSummary.getId())).thenReturn(requestInfo);
+        when(bridgeHelper.getRequestInfoForParticipant(APP_ID, accountSummary.getId())).thenReturn(requestInfo);
         
-        Report report = generator.generate(REQUEST, STUDY_ID);
-        assertEquals(report.getStudyId(), STUDY_ID);
+        Report report = generator.generate(REQUEST, APP_ID);
+        assertEquals(report.getAppId(), APP_ID);
         assertEquals(report.getReportId(), "-daily-retention-report");
         assertEquals(report.getDate().toString(), "2017-06-09");
         
@@ -94,10 +94,10 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("bySignIn").get(4), new Integer(1));
         assertEquals(map.get("byUploadedOn").get(3), new Integer(1)); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
-        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
-        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary.getId());
-        verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary.getId());
+        verify(bridgeHelper).getAllAccountSummaries(APP_ID, false);
+        verify(bridgeHelper).getParticipant(APP_ID, USER_ID_1, false);
+        verify(bridgeHelper).getActivityEvents(APP_ID, accountSummary.getId());
+        verify(bridgeHelper).getRequestInfoForParticipant(APP_ID, accountSummary.getId());
     }
     
     @SuppressWarnings("unchecked")
@@ -107,17 +107,17 @@ public class RetentionReportGeneratorTest {
         List<AccountSummary> accountSummaries = new ArrayList<>();
         accountSummaries.add(accountSummary);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(APP_ID, false)).thenReturn(accountSummaryIter);
         
         mockStudyParticipant(bridgeHelper, USER_ID_1, new ArrayList<>());
         
         mockActivityEventList(bridgeHelper, accountSummary, mockStudyStateDateEvent(STUDY_START_DATE_1));
         
         RequestInfo requestInfo = mockRequestInfo(SIGN_IN_ON_TIMEZONE, UPLOADED_ON_TIMEZONE);
-        when(bridgeHelper.getRequestInfoForParticipant(STUDY_ID, accountSummary.getId())).thenReturn(requestInfo);
+        when(bridgeHelper.getRequestInfoForParticipant(APP_ID, accountSummary.getId())).thenReturn(requestInfo);
         
-        Report report = generator.generate(REQUEST, STUDY_ID);
-        assertEquals(report.getStudyId(), STUDY_ID);
+        Report report = generator.generate(REQUEST, APP_ID);
+        assertEquals(report.getAppId(), APP_ID);
         assertEquals(report.getReportId(), "-daily-retention-report");
         assertEquals(report.getDate().toString(), "2017-06-09");
         
@@ -125,10 +125,10 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("bySignIn").get(0), new Integer(1));
         assertEquals(map.get("byUploadedOn").get(4), new Integer(1)); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
-        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
-        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary.getId());
-        verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary.getId());
+        verify(bridgeHelper).getAllAccountSummaries(APP_ID, false);
+        verify(bridgeHelper).getParticipant(APP_ID, USER_ID_1, false);
+        verify(bridgeHelper).getActivityEvents(APP_ID, accountSummary.getId());
+        verify(bridgeHelper).getRequestInfoForParticipant(APP_ID, accountSummary.getId());
     }
     
     @SuppressWarnings("unchecked")
@@ -142,7 +142,7 @@ public class RetentionReportGeneratorTest {
         accountSummaries.add(accountSummary2);
         accountSummaries.add(accountSummary3);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(APP_ID, false)).thenReturn(accountSummaryIter);
         
         mockStudyParticipant(bridgeHelper, USER_ID_1, new ArrayList<>());
         mockStudyParticipant(bridgeHelper, USER_ID_2, new ArrayList<>());
@@ -153,12 +153,12 @@ public class RetentionReportGeneratorTest {
         mockActivityEventList(bridgeHelper, accountSummary3, mockStudyStateDateEvent(STUDY_START_DATE_2));
         
         RequestInfo requestInfo = mockRequestInfo(SIGN_IN_ON, UPLOADED_ON);
-        when(bridgeHelper.getRequestInfoForParticipant(STUDY_ID, accountSummary.getId())).thenReturn(requestInfo);
-        when(bridgeHelper.getRequestInfoForParticipant(STUDY_ID, accountSummary2.getId())).thenReturn(requestInfo);
-        when(bridgeHelper.getRequestInfoForParticipant(STUDY_ID, accountSummary3.getId())).thenReturn(requestInfo);
+        when(bridgeHelper.getRequestInfoForParticipant(APP_ID, accountSummary.getId())).thenReturn(requestInfo);
+        when(bridgeHelper.getRequestInfoForParticipant(APP_ID, accountSummary2.getId())).thenReturn(requestInfo);
+        when(bridgeHelper.getRequestInfoForParticipant(APP_ID, accountSummary3.getId())).thenReturn(requestInfo);
         
-        Report report = generator.generate(REQUEST, STUDY_ID);
-        assertEquals(report.getStudyId(), STUDY_ID);
+        Report report = generator.generate(REQUEST, APP_ID);
+        assertEquals(report.getAppId(), APP_ID);
         assertEquals(report.getReportId(), "-daily-retention-report");
         assertEquals(report.getDate().toString(), "2017-06-09");
         
@@ -168,18 +168,18 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("byUploadedOn").get(3), new Integer(3)); 
         assertEquals(map.get("byUploadedOn").get(4), new Integer(2)); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
-        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
-        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_2, false);
-        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_3, false);
+        verify(bridgeHelper).getAllAccountSummaries(APP_ID, false);
+        verify(bridgeHelper).getParticipant(APP_ID, USER_ID_1, false);
+        verify(bridgeHelper).getParticipant(APP_ID, USER_ID_2, false);
+        verify(bridgeHelper).getParticipant(APP_ID, USER_ID_3, false);
         
-        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary.getId());
-        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary2.getId());
-        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary3.getId());
+        verify(bridgeHelper).getActivityEvents(APP_ID, accountSummary.getId());
+        verify(bridgeHelper).getActivityEvents(APP_ID, accountSummary2.getId());
+        verify(bridgeHelper).getActivityEvents(APP_ID, accountSummary3.getId());
         
-        verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary.getId());
-        verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary2.getId());
-        verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary3.getId());
+        verify(bridgeHelper).getRequestInfoForParticipant(APP_ID, accountSummary.getId());
+        verify(bridgeHelper).getRequestInfoForParticipant(APP_ID, accountSummary2.getId());
+        verify(bridgeHelper).getRequestInfoForParticipant(APP_ID, accountSummary3.getId());
     }
     
     @SuppressWarnings("unchecked")
@@ -189,14 +189,14 @@ public class RetentionReportGeneratorTest {
         List<AccountSummary> accountSummaries = new ArrayList<>();
         accountSummaries.add(accountSummary);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(APP_ID, false)).thenReturn(accountSummaryIter);
         
         mockStudyParticipant(bridgeHelper, USER_ID_1, new ArrayList<>());
         
         mockActivityEventList(bridgeHelper, accountSummary, new ArrayList<>());
         
-        Report report = generator.generate(REQUEST, STUDY_ID);
-        assertEquals(report.getStudyId(), STUDY_ID);
+        Report report = generator.generate(REQUEST, APP_ID);
+        assertEquals(report.getAppId(), APP_ID);
         assertEquals(report.getReportId(), "-daily-retention-report");
         assertEquals(report.getDate().toString(), "2017-06-09");
         
@@ -204,9 +204,9 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("bySignIn").size(), 0);
         assertEquals(map.get("byUploadedOn").size(), 0); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
-        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
-        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary.getId());
+        verify(bridgeHelper).getAllAccountSummaries(APP_ID, false);
+        verify(bridgeHelper).getParticipant(APP_ID, USER_ID_1, false);
+        verify(bridgeHelper).getActivityEvents(APP_ID, accountSummary.getId());
         verify(bridgeHelper, never()).getRequestInfoForParticipant(anyString(), anyString());
     }
     
@@ -217,14 +217,14 @@ public class RetentionReportGeneratorTest {
         List<AccountSummary> accountSummaries = new ArrayList<>();
         accountSummaries.add(accountSummary);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(APP_ID, false)).thenReturn(accountSummaryIter);
         
         List<Role> roles = new ArrayList<>();
         roles.add(Role.DEVELOPER);
         mockStudyParticipant(bridgeHelper, USER_ID_1, roles);
         
-        Report report = generator.generate(REQUEST, STUDY_ID);
-        assertEquals(report.getStudyId(), STUDY_ID);
+        Report report = generator.generate(REQUEST, APP_ID);
+        assertEquals(report.getAppId(), APP_ID);
         assertEquals(report.getReportId(), "-daily-retention-report");
         assertEquals(report.getDate().toString(), "2017-06-09");
         
@@ -232,8 +232,8 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("bySignIn").size(), 0);
         assertEquals(map.get("byUploadedOn").size(), 0); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
-        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
+        verify(bridgeHelper).getAllAccountSummaries(APP_ID, false);
+        verify(bridgeHelper).getParticipant(APP_ID, USER_ID_1, false);
         verify(bridgeHelper, never()).getActivityEvents(anyString(), anyString());
         verify(bridgeHelper, never()).getRequestInfoForParticipant(anyString(), anyString());
     }
@@ -245,17 +245,17 @@ public class RetentionReportGeneratorTest {
         List<AccountSummary> accountSummaries = new ArrayList<>();
         accountSummaries.add(accountSummary);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(APP_ID, false)).thenReturn(accountSummaryIter);
         
         mockStudyParticipant(bridgeHelper, USER_ID_1, new ArrayList<>());
         
         mockActivityEventList(bridgeHelper, accountSummary, mockStudyStateDateEvent(STUDY_START_DATE_1));
         
         RequestInfo requestInfo = mockRequestInfo(SIGN_IN_ON_INVALID, UPLOADED_ON);
-        when(bridgeHelper.getRequestInfoForParticipant(STUDY_ID, accountSummary.getId())).thenReturn(requestInfo);
+        when(bridgeHelper.getRequestInfoForParticipant(APP_ID, accountSummary.getId())).thenReturn(requestInfo);
         
-        Report report = generator.generate(REQUEST, STUDY_ID);
-        assertEquals(report.getStudyId(), STUDY_ID);
+        Report report = generator.generate(REQUEST, APP_ID);
+        assertEquals(report.getAppId(), APP_ID);
         assertEquals(report.getReportId(), "-daily-retention-report");
         assertEquals(report.getDate().toString(), "2017-06-09");
         
@@ -263,10 +263,10 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("bySignIn").size(), 0);
         assertEquals(map.get("byUploadedOn").size(), 0); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
-        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
-        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary.getId());
-        verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary.getId());
+        verify(bridgeHelper).getAllAccountSummaries(APP_ID, false);
+        verify(bridgeHelper).getParticipant(APP_ID, USER_ID_1, false);
+        verify(bridgeHelper).getActivityEvents(APP_ID, accountSummary.getId());
+        verify(bridgeHelper).getRequestInfoForParticipant(APP_ID, accountSummary.getId());
     }
     
     @SuppressWarnings("unchecked")
@@ -276,17 +276,17 @@ public class RetentionReportGeneratorTest {
         List<AccountSummary> accountSummaries = new ArrayList<>();
         accountSummaries.add(accountSummary);
         Iterator<AccountSummary> accountSummaryIter = accountSummaries.iterator();
-        when(bridgeHelper.getAllAccountSummaries(STUDY_ID, false)).thenReturn(accountSummaryIter);
+        when(bridgeHelper.getAllAccountSummaries(APP_ID, false)).thenReturn(accountSummaryIter);
         
         mockStudyParticipant(bridgeHelper, USER_ID_1, new ArrayList<>());
         
         mockActivityEventList(bridgeHelper, accountSummary, mockStudyStateDateEvent(STUDY_START_DATE_1));
         
         RequestInfo requestInfo = mockRequestInfo(SIGN_IN_ON, UPLOADED_ON_INVALID);
-        when(bridgeHelper.getRequestInfoForParticipant(STUDY_ID, accountSummary.getId())).thenReturn(requestInfo);
+        when(bridgeHelper.getRequestInfoForParticipant(APP_ID, accountSummary.getId())).thenReturn(requestInfo);
         
-        Report report = generator.generate(REQUEST, STUDY_ID);
-        assertEquals(report.getStudyId(), STUDY_ID);
+        Report report = generator.generate(REQUEST, APP_ID);
+        assertEquals(report.getAppId(), APP_ID);
         assertEquals(report.getReportId(), "-daily-retention-report");
         assertEquals(report.getDate().toString(), "2017-06-09");
         
@@ -295,10 +295,10 @@ public class RetentionReportGeneratorTest {
         assertEquals(map.get("bySignIn").get(4), new Integer(1));
         assertEquals(map.get("byUploadedOn").size(), 0); 
         
-        verify(bridgeHelper).getAllAccountSummaries(STUDY_ID, false);
-        verify(bridgeHelper).getParticipant(STUDY_ID, USER_ID_1, false);
-        verify(bridgeHelper).getActivityEvents(STUDY_ID, accountSummary.getId());
-        verify(bridgeHelper).getRequestInfoForParticipant(STUDY_ID, accountSummary.getId());
+        verify(bridgeHelper).getAllAccountSummaries(APP_ID, false);
+        verify(bridgeHelper).getParticipant(APP_ID, USER_ID_1, false);
+        verify(bridgeHelper).getActivityEvents(APP_ID, accountSummary.getId());
+        verify(bridgeHelper).getRequestInfoForParticipant(APP_ID, accountSummary.getId());
     }
     
     private static AccountSummary mockAccountSummary(String userId) {
@@ -311,7 +311,7 @@ public class RetentionReportGeneratorTest {
             String userId, List<Role> roles) throws IOException {
         StudyParticipant mockStudyParticipant = mock(StudyParticipant.class);
         when(mockStudyParticipant.getRoles()).thenReturn(roles);
-        when(bridgeHelper.getParticipant(STUDY_ID, userId, false)).thenReturn(mockStudyParticipant);
+        when(bridgeHelper.getParticipant(APP_ID, userId, false)).thenReturn(mockStudyParticipant);
     }
     
     private static List<ActivityEvent> mockStudyStateDateEvent(DateTime studyStateDate) {
@@ -323,7 +323,7 @@ public class RetentionReportGeneratorTest {
     
     private static void mockActivityEventList(BridgeHelper bridgeHelper, AccountSummary accountSummary, 
             List<ActivityEvent> activityEvents) throws IOException {
-        when(bridgeHelper.getActivityEvents(STUDY_ID,
+        when(bridgeHelper.getActivityEvents(APP_ID,
                 accountSummary.getId())).thenReturn(activityEvents);
     }
     

@@ -47,18 +47,18 @@ public class TemplateVariableHelper {
     }
 
     /**
-     * Resolves template variables in the given message string, for the given study and participant, and returns the
+     * Resolves template variables in the given message string, for the given app and participant, and returns the
      * result.
      */
-    public String resolveTemplateVariables(String studyId, StudyParticipant participant, String message)
+    public String resolveTemplateVariables(String appId, StudyParticipant participant, String message)
             throws IOException, UserNotConfiguredException {
-        message = resolveStudyCommitmentVariable(studyId, participant, message);
-        message = resolveUrlVariable(studyId, message);
+        message = resolveStudyCommitmentVariable(appId, participant, message);
+        message = resolveUrlVariable(appId, message);
         return message;
     }
 
     // Helper method that resolve ${studyCommitment}.
-    private String resolveStudyCommitmentVariable(String studyId, StudyParticipant participant, String message)
+    private String resolveStudyCommitmentVariable(String appId, StudyParticipant participant, String message)
             throws IOException, UserNotConfiguredException {
         // Short-cut: No template variable to resolve.
         if (!message.contains(TEMPLATE_VAR_STUDY_COMMITMENT)) {
@@ -67,7 +67,7 @@ public class TemplateVariableHelper {
 
         // Replace value.
         String userId = participant.getId();
-        String studyCommitment = getStudyCommitment(studyId, userId);
+        String studyCommitment = getStudyCommitment(appId, userId);
         if (studyCommitment == null) {
             throw new UserNotConfiguredException("User " + userId + " does not have a study commitment");
         }
@@ -80,16 +80,16 @@ public class TemplateVariableHelper {
      */
     @SuppressWarnings("DefaultAnnotationParam")
     @Cacheable(lifetime = 5, unit = TimeUnit.MINUTES)
-    public String getStudyCommitment(String studyId, String userId) throws IOException {
-        return getStudyCommitmentUncached(studyId, userId);
+    public String getStudyCommitment(String appId, String userId) throws IOException {
+        return getStudyCommitmentUncached(appId, userId);
     }
 
     // Package-scoped for unit tests. This bypasses the caching, which does weird things with unit tests.
-    String getStudyCommitmentUncached(String studyId, String userId) throws IOException {
+    String getStudyCommitmentUncached(String appId, String userId) throws IOException {
         // Get the study commitment. This is stored in the Engagement report for date 2000-12-31 (an arbitrary constant
         // meaning "global"). This report is a flat map where keys are the survey question IDs and values are the
         // answers. The question we're looking for is "benefits".
-        List<ReportData> reportDataList = bridgeHelper.getParticipantReports(studyId, userId, REPORT_ID_ENGAGEMENT,
+        List<ReportData> reportDataList = bridgeHelper.getParticipantReports(appId, userId, REPORT_ID_ENGAGEMENT,
                 GLOBAL_REPORT_DATE, GLOBAL_REPORT_DATE);
         if (reportDataList.isEmpty()) {
             return null;
@@ -128,14 +128,14 @@ public class TemplateVariableHelper {
     }
 
     // Helper method that resolve ${url}.
-    private String resolveUrlVariable(String studyId, String message) {
+    private String resolveUrlVariable(String appId, String message) {
         // Short-cut: No template variable to resolve.
         if (!message.contains(TEMPLATE_VAR_URL)) {
             return message;
         }
 
         // Replace value.
-        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
+        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForApp(appId);
         return message.replace(TEMPLATE_VAR_URL, workerConfig.getAppUrl());
     }
 }

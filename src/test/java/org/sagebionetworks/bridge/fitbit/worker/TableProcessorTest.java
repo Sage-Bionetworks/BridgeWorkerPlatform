@@ -32,7 +32,7 @@ import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.fitbit.schema.ColumnSchema;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
-import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
@@ -45,7 +45,7 @@ public class TableProcessorTest {
     private static final String DATE_STRING = "2017-12-11";
     private static final String HEALTH_CODE = "my-health-code";
     private static final String RAW_DATA_FILEHANDLE_ID = "raw-data-filehandle";
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
     private static final long SYNAPSE_DATA_ACCESS_TEAM_ID = 7777L;
     private static final long SYNAPSE_PRINCIPAL_ID = 1234567890L;
     private static final String SYNAPSE_PROJECT_ID = "my-synapse-project";
@@ -53,7 +53,7 @@ public class TableProcessorTest {
     private static final String TABLE_ID = "my-table";
     private static final String TABLE_KEY = "table-key";
 
-    private static final Study STUDY = new Study().identifier(STUDY_ID)
+    private static final App APP = new App().identifier(APP_ID)
             .synapseDataAccessTeamId(SYNAPSE_DATA_ACCESS_TEAM_ID).synapseProjectId(SYNAPSE_PROJECT_ID);
 
     private static final TableSchema TABLE_SCHEMA;
@@ -114,7 +114,7 @@ public class TableProcessorTest {
 
         // Make request context
         tmpDir = inMemoryFileHelper.createTempDir();
-        ctx = new RequestContext(DATE_STRING, STUDY, tmpDir);
+        ctx = new RequestContext(DATE_STRING, APP, tmpDir);
 
         // Make populated table
         populatedTable = new PopulatedTable(TABLE_ID, TABLE_SCHEMA);
@@ -183,7 +183,7 @@ public class TableProcessorTest {
         verify(mockDdbTablesMap).putItem(itemCaptor.capture());
 
         Item item = itemCaptor.getValue();
-        assertEquals(item.getString(TableProcessor.DDB_KEY_STUDY_ID), STUDY_ID);
+        assertEquals(item.getString(TableProcessor.DDB_KEY_APP_ID), APP_ID);
         assertEquals(item.getString(TableProcessor.DDB_KEY_TABLE_ID), TABLE_ID);
         assertEquals(item.getString(TableProcessor.DDB_KEY_SYNAPSE_TABLE_ID), SYNAPSE_TABLE_ID);
     }
@@ -198,10 +198,10 @@ public class TableProcessorTest {
     }
 
     private void mockDdbWithTable() {
-        Item tableMapItem = new Item().withString(TableProcessor.DDB_KEY_STUDY_ID, STUDY_ID)
+        Item tableMapItem = new Item().withString(TableProcessor.DDB_KEY_APP_ID, APP_ID)
                 .withString(TableProcessor.DDB_KEY_TABLE_ID, TABLE_ID)
                 .withString(TableProcessor.DDB_KEY_SYNAPSE_TABLE_ID, SYNAPSE_TABLE_ID);
-        when(mockDdbTablesMap.getItem(TableProcessor.DDB_KEY_STUDY_ID, STUDY_ID, TableProcessor.DDB_KEY_TABLE_ID,
+        when(mockDdbTablesMap.getItem(TableProcessor.DDB_KEY_APP_ID, APP_ID, TableProcessor.DDB_KEY_TABLE_ID,
                 TABLE_ID)).thenReturn(tableMapItem);
     }
 

@@ -30,10 +30,10 @@ public class SchemaBasedTableTaskTest {
     private static final String HEALTH_CODE = "test-health-code";
     private static final String SCHEMA_ID = "test-schema";
     private static final int SCHEMA_REV = 42;
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
     private static final String TABLE_ID = "test-table-id";
 
-    private static final UploadSchemaKey SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(STUDY_ID)
+    private static final UploadSchemaKey SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(APP_ID)
             .withSchemaId(SCHEMA_ID).withRevision(SCHEMA_REV).build();
     private static final UploadSchema SCHEMA = new UploadSchema.Builder().withKey(SCHEMA_KEY)
             .addField("foo", "INT")
@@ -59,7 +59,7 @@ public class SchemaBasedTableTaskTest {
         // Set up params and task.
         SynapseDownloadFromTableParameters params = new SynapseDownloadFromTableParameters.Builder()
                 .withSynapseTableId(TABLE_ID).withHealthCode(HEALTH_CODE).withStartDate(START_DATE)
-                .withEndDate(END_DATE).withTempDir(tmpDir).withSchema(SCHEMA).withStudyId(STUDY_ID).build();
+                .withEndDate(END_DATE).withTempDir(tmpDir).withSchema(SCHEMA).withAppId(APP_ID).build();
 
         task = new SchemaBasedTableTask(params);
         task.setDynamoHelper(mockDynamoHelper);
@@ -72,7 +72,7 @@ public class SchemaBasedTableTaskTest {
     public void paramsMustHaveSchema() {
         SynapseDownloadFromTableParameters params = new SynapseDownloadFromTableParameters.Builder()
                 .withSynapseTableId(TABLE_ID).withHealthCode(HEALTH_CODE).withStartDate(START_DATE)
-                .withEndDate(END_DATE).withTempDir(tmpDir).withSchema(null).withStudyId(STUDY_ID).build();
+                .withEndDate(END_DATE).withTempDir(tmpDir).withSchema(null).withAppId(APP_ID).build();
         new SchemaBasedTableTask(params);
     }
 

@@ -90,7 +90,7 @@ public class SynapseDownloadSurveyTask implements Callable<File> {
             table = synapseHelper.getTable(synapseTableId);
         } catch (SynapseNotFoundException ex) {
             // Clean this table from the table mapping to prevent future errors.
-            dynamoHelper.deleteSynapseSurveyTableMapping(params.getStudyId(), synapseTableId);
+            dynamoHelper.deleteSynapseSurveyTableMapping(params.getAppId(), synapseTableId);
             throw new AsyncTaskExecutionException("Survey table " + synapseTableId + " no longer exists");
         }
 

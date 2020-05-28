@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
-import org.sagebionetworks.bridge.workerPlatform.dynamodb.StudyInfo;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.AppInfo;
 
 /** Helper class to format and send the presigned URL as an email through SES. */
 @Component
@@ -61,28 +61,28 @@ public class SesHelper {
      * Sends a notice to the given account that no data could be found. This notice also gives basic instructions on
      * how they could enable data.
      *
-     * @param studyInfo
-     *         study info, used to construct the email message, must be non-null
+     * @param appInfo
+     *         app info, used to construct the email message, must be non-null
      * @param accountInfo
      *         account to send the notice to, must be non-null
      */
-    public void sendNoDataMessageToAccount(StudyInfo studyInfo, AccountInfo accountInfo) {
+    public void sendNoDataMessageToAccount(AppInfo appInfo, AccountInfo accountInfo) {
         Body body = new Body().withHtml(new Content(NO_DATA_BODY_HTML)).withText(new Content(NO_DATA_BODY_TEXT));
-        sendEmailToAccount(studyInfo, accountInfo, body);
+        sendEmailToAccount(appInfo, accountInfo, body);
     }
 
     /**
-     * Sends the presigned URL to the specified account. This also uses the study info to construct the email message.
+     * Sends the presigned URL to the specified account. This also uses the app info to construct the email message.
      *
-     * @param studyInfo
-     *         study info, used to construct the email message, must be non-null
+     * @param appInfo
+     *         app info, used to construct the email message, must be non-null
      * @param presignedUrlInfo
      *         presigned URL info (URL and expiration date), which should be sent to the specified account, must be
      *         non-null
      * @param accountInfo
      *         account to send the presigned URL to, must be non-null
      */
-    public void sendPresignedUrlToAccount(StudyInfo studyInfo, PresignedUrlInfo presignedUrlInfo,
+    public void sendPresignedUrlToAccount(AppInfo appInfo, PresignedUrlInfo presignedUrlInfo,
             AccountInfo accountInfo) {
         String presignedUrlStr = presignedUrlInfo.getUrl().toString();
         String expirationTimeStr = presignedUrlInfo.getExpirationTime().toString();
@@ -90,29 +90,29 @@ public class SesHelper {
         String bodyTextStr = String.format(BODY_TEMPLATE_TEXT, presignedUrlStr, expirationTimeStr);
         Body body = new Body().withHtml(new Content(bodyHtmlStr)).withText(new Content(bodyTextStr));
 
-        sendEmailToAccount(studyInfo, accountInfo, body);
+        sendEmailToAccount(appInfo, accountInfo, body);
     }
 
     /**
      * Helper method, which sends the given email message body to the given account
      *
-     * @param studyInfo
-     *         study info, used to construct the email message, must be non-null
+     * @param appInfo
+     *         app info, used to construct the email message, must be non-null
      * @param accountInfo
      *         account to send the email to, must be non-null
      * @param body
      *         email message body
      */
-    private void sendEmailToAccount(StudyInfo studyInfo, AccountInfo accountInfo, Body body) {
+    private void sendEmailToAccount(AppInfo appInfo, AccountInfo accountInfo, Body body) {
         // from address
-        String fromAddress = studyInfo.getSupportEmail();
+        String fromAddress = appInfo.getSupportEmail();
 
         // to address
         Destination destination = new Destination().withToAddresses(accountInfo.getEmailAddress());
 
         // subject
-        String studyName = studyInfo.getName();
-        String subjectStr = String.format(SUBJECT_TEMPLATE, studyName);
+        String appName = appInfo.getName();
+        String subjectStr = String.format(SUBJECT_TEMPLATE, appName);
         Content subject = new Content(subjectStr);
 
         // send message

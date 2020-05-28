@@ -16,7 +16,7 @@ public class AccountSummaryIterator implements Iterator<AccountSummary> {
     // Instance invariants
     private final ClientManager clientManager;
     private final boolean phoneOnly;
-    private final String studyId;
+    private final String appId;
 
     // Instance state tracking
     private AccountSummaryList accountSummaryList;
@@ -24,13 +24,13 @@ public class AccountSummaryIterator implements Iterator<AccountSummary> {
     private int numAccounts = 0;
 
     /**
-     * Constructs a AccountSummaryIterator for the given Bridge client and study. This kicks off requests to load the
+     * Constructs a AccountSummaryIterator for the given Bridge client and app. This kicks off requests to load the
      * first page.
      */
-    public AccountSummaryIterator(ClientManager clientManager, String studyId, boolean phoneOnly) {
+    public AccountSummaryIterator(ClientManager clientManager, String appId, boolean phoneOnly) {
         this.clientManager = clientManager;
         this.phoneOnly = phoneOnly;
-        this.studyId = studyId;
+        this.appId = appId;
 
         // Load first page.
         loadNextPage();
@@ -46,11 +46,11 @@ public class AccountSummaryIterator implements Iterator<AccountSummary> {
             String phoneFilter = phoneOnly ? "1" : null;
 
             // The offset into the next page is equal to the number of accounts that we have seen.
-            accountSummaryList = clientManager.getClient(ForWorkersApi.class).getParticipantsForStudy(studyId, numAccounts,
+            accountSummaryList = clientManager.getClient(ForWorkersApi.class).getParticipantsForApp(appId, numAccounts,
                     PAGE_SIZE, null, phoneFilter, null, null).execute().body();
         } catch (IOException ex) {
             // Iterator can't throw exceptions. Wrap in a RuntimeException.
-            throw new RuntimeException("Error getting next page for study " + studyId + ": " + ex.getMessage(), ex);
+            throw new RuntimeException("Error getting next page for app " + appId + ": " + ex.getMessage(), ex);
         }
 
         // Reset nextIndex.
@@ -82,7 +82,7 @@ public class AccountSummaryIterator implements Iterator<AccountSummary> {
             loadNextPage();
             return getNextAccountSummary();
         } else {
-            throw new IllegalStateException("No more accounts left for study " + studyId);
+            throw new IllegalStateException("No more accounts left for app " + appId);
         }
     }
 

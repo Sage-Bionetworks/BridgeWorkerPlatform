@@ -21,25 +21,25 @@ public class DefaultTableTask extends SynapseDownloadFromTableTask {
 
     @Override
     protected String getDownloadFilenamePrefix() {
-        return getParameters().getStudyId() + "-default";
+        return getParameters().getAppId() + "-default";
     }
 
     @Override
     protected void verifySynapseTableExists() throws AsyncTaskExecutionException {
         SynapseDownloadFromTableParameters params = getParameters();
-        String studyId = params.getStudyId();
+        String appId = params.getAppId();
         String synapseTableId = params.getSynapseTableId();
 
         try {
             getSynapseHelper().getTable(synapseTableId);
         } catch (SynapseNotFoundException ex) {
             // Clean this table from the table mapping to prevent future errors.
-            getDynamoHelper().deleteDefaultSynapseTableForStudy(studyId);
-            throw new AsyncTaskExecutionException("Synapse table " + synapseTableId + " for default schema for study " +
-                    studyId + " no longer exists");
+            getDynamoHelper().deleteDefaultSynapseTableForApp(appId);
+            throw new AsyncTaskExecutionException("Synapse table " + synapseTableId + " for default schema for app " +
+                    appId + " no longer exists");
         } catch (SynapseException ex) {
             throw new AsyncTaskExecutionException("Error verifying synapse table " + synapseTableId +
-                    " for default schema for study " + studyId + ": " + ex.getMessage(), ex);
+                    " for default schema for app " + appId + ": " + ex.getMessage(), ex);
         }
     }
 }

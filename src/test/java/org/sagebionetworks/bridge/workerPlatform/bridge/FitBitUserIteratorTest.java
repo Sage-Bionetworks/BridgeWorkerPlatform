@@ -33,7 +33,7 @@ import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 public class FitBitUserIteratorTest {
     private static final String ACCESS_TOKEN_PREFIX = "dummy-access-token-";
     private static final String HEALTH_CODE_PREFIX = "dummy-health-code-";
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
     private static final String USER_ID_PREFIX = "dummy-user-id-";
 
     private static final List<String> SCOPE_LIST = ImmutableList.of("foo", "bar", "baz");
@@ -57,7 +57,7 @@ public class FitBitUserIteratorTest {
                 FitBitUserIterator.DEFAULT_PAGESIZE);
 
         // Verify iterator has no users
-        FitBitUserIterator iter = new FitBitUserIterator(mockClientManager, STUDY_ID);
+        FitBitUserIterator iter = new FitBitUserIterator(mockClientManager, APP_ID);
         assertFalse(iter.hasNext());
     }
 
@@ -97,8 +97,8 @@ public class FitBitUserIteratorTest {
         mockApiWithPage(null, 0, 1, null, FitBitUserIterator.DEFAULT_PAGESIZE);
 
         // Create iterator. Verify initial call to server.
-        FitBitUserIterator iter = new FitBitUserIterator(mockClientManager, STUDY_ID);
-        verify(mockApi).getHealthCodesGrantingOAuthAccess(STUDY_ID, Constants.FITBIT_VENDOR_ID,
+        FitBitUserIterator iter = new FitBitUserIterator(mockClientManager, APP_ID);
+        verify(mockApi).getHealthCodesGrantingOAuthAccess(APP_ID, Constants.FITBIT_VENDOR_ID,
                 FitBitUserIterator.DEFAULT_PAGESIZE, null);
 
         // Make a few extra calls to hasNext(). Verify that no server calls are made
@@ -118,11 +118,11 @@ public class FitBitUserIteratorTest {
         Call<ForwardCursorStringList> mockPageCall = mock(Call.class);
         when(mockPageCall.execute()).thenThrow(IOException.class);
 
-        when(mockApi.getHealthCodesGrantingOAuthAccess(STUDY_ID, Constants.FITBIT_VENDOR_ID,
+        when(mockApi.getHealthCodesGrantingOAuthAccess(APP_ID, Constants.FITBIT_VENDOR_ID,
                 FitBitUserIterator.DEFAULT_PAGESIZE, null)).thenReturn(mockPageCall);
 
         // Execute
-        new FitBitUserIterator(mockClientManager, STUDY_ID);
+        new FitBitUserIterator(mockClientManager, APP_ID);
     }
 
     @Test
@@ -134,13 +134,13 @@ public class FitBitUserIteratorTest {
                 "page3");
         Call<ForwardCursorStringList> mockSecondPageCall = mock(Call.class);
         when(mockSecondPageCall.execute()).thenThrow(IOException.class).thenReturn(secondPageResponse);
-        when(mockApi.getHealthCodesGrantingOAuthAccess(STUDY_ID, Constants.FITBIT_VENDOR_ID, 1, "page2"))
+        when(mockApi.getHealthCodesGrantingOAuthAccess(APP_ID, Constants.FITBIT_VENDOR_ID, 1, "page2"))
                 .thenReturn(mockSecondPageCall);
 
         Response<OAuthAccessToken> token1Response = makeTokenResponse(1);
         Call<OAuthAccessToken> mockToken1Call = mock(Call.class);
         when(mockToken1Call.execute()).thenReturn(token1Response);
-        when(mockApi.getOAuthAccessToken(STUDY_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE_PREFIX + 1))
+        when(mockApi.getOAuthAccessToken(APP_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE_PREFIX + 1))
                 .thenReturn(mockToken1Call);
 
         mockApiWithPage("page3", 2, 2, null, 1);
@@ -179,25 +179,25 @@ public class FitBitUserIteratorTest {
         Response<ForwardCursorStringList> pageResponse = makePageResponse(0, 2, null);
         Call<ForwardCursorStringList> mockPageCall = mock(Call.class);
         when(mockPageCall.execute()).thenReturn(pageResponse);
-        when(mockApi.getHealthCodesGrantingOAuthAccess(STUDY_ID, Constants.FITBIT_VENDOR_ID, 3, null))
+        when(mockApi.getHealthCodesGrantingOAuthAccess(APP_ID, Constants.FITBIT_VENDOR_ID, 3, null))
                 .thenReturn(mockPageCall);
 
         Response<OAuthAccessToken> token0Response = makeTokenResponse(0);
         Call<OAuthAccessToken> mockToken0Call = mock(Call.class);
         when(mockToken0Call.execute()).thenReturn(token0Response);
-        when(mockApi.getOAuthAccessToken(STUDY_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE_PREFIX + 0))
+        when(mockApi.getOAuthAccessToken(APP_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE_PREFIX + 0))
                 .thenReturn(mockToken0Call);
 
         Response<OAuthAccessToken> token1Response = makeTokenResponse(1);
         Call<OAuthAccessToken> mockToken1Call = mock(Call.class);
         when(mockToken1Call.execute()).thenThrow(ex).thenReturn(token1Response);
-        when(mockApi.getOAuthAccessToken(STUDY_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE_PREFIX + 1))
+        when(mockApi.getOAuthAccessToken(APP_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE_PREFIX + 1))
                 .thenReturn(mockToken1Call);
 
         Response<OAuthAccessToken> token2Response = makeTokenResponse(2);
         Call<OAuthAccessToken> mockToken2Call = mock(Call.class);
         when(mockToken2Call.execute()).thenReturn(token2Response);
-        when(mockApi.getOAuthAccessToken(STUDY_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE_PREFIX + 2))
+        when(mockApi.getOAuthAccessToken(APP_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE_PREFIX + 2))
                 .thenReturn(mockToken2Call);
     }
 
@@ -205,7 +205,7 @@ public class FitBitUserIteratorTest {
         // User 1 always fails. Depending on test setup, we might retry on the next loop, or we might skip.
 
         // Create iterator
-        FitBitUserIterator iter = new FitBitUserIterator(mockClientManager, STUDY_ID, pageSize);
+        FitBitUserIterator iter = new FitBitUserIterator(mockClientManager, APP_ID, pageSize);
 
         // User 0
         assertTrue(iter.hasNext());
@@ -240,13 +240,13 @@ public class FitBitUserIteratorTest {
 
     // branch coverage
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp =
-            "No more tokens left for study " + STUDY_ID)
+            "No more tokens left for app " + APP_ID)
     public void extraCallToNextThrows() throws Exception {
         // Mock page with just 1 item
         mockApiWithPage(null, 0, 0, null, FitBitUserIterator.DEFAULT_PAGESIZE);
 
         // next() twice throws
-        FitBitUserIterator iter = new FitBitUserIterator(mockClientManager, STUDY_ID);
+        FitBitUserIterator iter = new FitBitUserIterator(mockClientManager, APP_ID);
         iter.next();
         iter.next();
     }
@@ -257,7 +257,7 @@ public class FitBitUserIteratorTest {
         Response<ForwardCursorStringList> pageResponse = makePageResponse(start, end, nextPageOffsetKey);
         Call<ForwardCursorStringList> mockPageCall = mock(Call.class);
         when(mockPageCall.execute()).thenReturn(pageResponse);
-        when(mockApi.getHealthCodesGrantingOAuthAccess(STUDY_ID, Constants.FITBIT_VENDOR_ID, pageSize, curOffsetKey))
+        when(mockApi.getHealthCodesGrantingOAuthAccess(APP_ID, Constants.FITBIT_VENDOR_ID, pageSize, curOffsetKey))
                 .thenReturn(mockPageCall);
 
         // Mock token calls
@@ -265,7 +265,7 @@ public class FitBitUserIteratorTest {
             Response<OAuthAccessToken> tokenResponse = makeTokenResponse(i);
             Call<OAuthAccessToken> mockTokenCall = mock(Call.class);
             when(mockTokenCall.execute()).thenReturn(tokenResponse);
-            when(mockApi.getOAuthAccessToken(STUDY_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE_PREFIX + i))
+            when(mockApi.getOAuthAccessToken(APP_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE_PREFIX + i))
                     .thenReturn(mockTokenCall);
         }
     }
@@ -302,7 +302,7 @@ public class FitBitUserIteratorTest {
     }
 
     private void testIterator(int expectedCount) {
-        FitBitUserIterator iter = new FitBitUserIterator(mockClientManager, STUDY_ID);
+        FitBitUserIterator iter = new FitBitUserIterator(mockClientManager, APP_ID);
 
         int numUsers = 0;
         while (iter.hasNext()) {
