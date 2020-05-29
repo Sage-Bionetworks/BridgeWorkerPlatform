@@ -84,10 +84,7 @@ public class SpringConfig {
     public ClientManager bridgeClientManager() {
         // sign-in credentials
         Config config = bridgeConfig();
-        String appId = config.get("bridge.worker.study");
-        if (appId == null) {
-            appId = config.get("bridge.worker.appId");
-        }
+        String appId = config.get("bridge.worker.appId");
         String email = config.get("bridge.worker.email");
         String password = config.get("bridge.worker.password");
         SignIn signIn = new SignIn().appId(appId).email(email).password(password);
