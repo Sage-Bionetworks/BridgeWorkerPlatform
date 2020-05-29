@@ -36,7 +36,7 @@ import org.sagebionetworks.bridge.schema.UploadSchemaKey;
 @Component("DynamoHelper")
 public class DynamoHelper {
     // DDB column names. Package-scoped for unit tests.
-    static final String ATTR_STUDY_ID = "studyId";
+    static final String ATTR_APP_ID = "studyId";
     static final String ATTR_TABLE_ID = "tableId";
     static final String ATTR_TABLE_ID_SET = "tableIdSet";
     static final String ATTR_TABLE_NAME = "tableName";
@@ -61,7 +61,7 @@ public class DynamoHelper {
     static final String KEY_NUM_MISSED_DAYS_TO_NOTIFY = "numMissedDaysToNotify";
     static final String KEY_NUM_MISSED_CONSECUTIVE_DAYS_TO_NOTIFY = "numMissedConsecutiveDaysToNotify";
     static final String KEY_PREBURST_MESSAGES = "preburstMessagesByDataGroup";
-    static final String KEY_STUDY_ID = "studyId";
+    static final String KEY_APP_ID = "studyId";
     static final String KEY_TAG = "tag";
     static final String KEY_USER_ID = "userId";
     static final String KEY_WORKER_ID = "workerId";
@@ -69,12 +69,12 @@ public class DynamoHelper {
 
     private Table ddbNotificationConfigTable;
     private Table ddbNotificationLogTable;
-    private Table ddbStudyTable;
+    private Table ddbAppTable;
     private Table ddbSynapseMapTable;
     private Table ddbSynapseMetaTable;
     private Table ddbSynapseSurveyTablesTable;
     private Table ddbUploadSchemaTable;
-    private Index ddbUploadSchemaStudyIndex;
+    private Index ddbUploadSchemaAppIndex;
     private Table ddbWorkerLogTable;
     private DynamoQueryHelper dynamoQueryHelper;
 
@@ -90,10 +90,10 @@ public class DynamoHelper {
         this.ddbNotificationLogTable = ddbNotificationLogTable;
     }
 
-    /** Study table. */
-    @Resource(name = "ddbStudyTable")
-    public final void setDdbStudyTable(Table ddbStudyTable) {
-        this.ddbStudyTable = ddbStudyTable;
+    /** App table. */
+    @Resource(name = "ddbAppTable")
+    public final void setDdbAppTable(Table ddbAppTable) {
+        this.ddbAppTable = ddbAppTable;
     }
 
     /** DDB table that maps upload schemas to Synapse table IDs. */
@@ -109,7 +109,7 @@ public class DynamoHelper {
     }
 
     /**
-     * DDB table that gets the list of all survey tables for a given study. Naming note: This is a DDB table containing
+     * DDB table that gets the list of all survey tables for a given app. Naming note: This is a DDB table containing
      * references to a set of Synapse tables. The name is a bit confusing,  but I'm not sure how to make it less
      * confusing.
      */
@@ -124,10 +124,11 @@ public class DynamoHelper {
         this.ddbUploadSchemaTable = ddbUploadSchemaTable;
     }
 
-    /** UploadSchema studyId-index. */
-    @Resource(name = "ddbUploadSchemaStudyIndex")
-    public final void setDdbUploadSchemaStudyIndex(Index ddbUploadSchemaStudyIndex) {
-        this.ddbUploadSchemaStudyIndex = ddbUploadSchemaStudyIndex;
+    /** UploadSchema studyId-index. For legacy reasons the App table was named Study 
+     * and so it is referenced as studyId in many tables. Equivalent to appId. */
+    @Resource(name = "ddbUploadSchemaAppIndex")
+    public final void setDdbUploadSchemaAppIndex(Index ddbUploadSchemaAppIndex) {
+        this.ddbUploadSchemaAppIndex = ddbUploadSchemaAppIndex;
     }
 
     /**
@@ -146,10 +147,10 @@ public class DynamoHelper {
     }
 
     /**
-     * Gets the ID for the default (schemaless) record table for the study. If the table doesn't exist, returns null.
+     * Gets the ID for the default (schemaless) record table for the app. If the table doesn't exist, returns null.
      */
-    public String getDefaultSynapseTableForStudy(String studyId) {
-        Item item = ddbSynapseMetaTable.getItem(ATTR_TABLE_NAME, studyId + SUFFIX_DEFAULT);
+    public String getDefaultSynapseTableForApp(String appId) {
+        Item item = ddbSynapseMetaTable.getItem(ATTR_TABLE_NAME, appId + SUFFIX_DEFAULT);
         if (item == null) {
             // Schemaless table hasn't been created yet. Skip.
             return null;
@@ -161,15 +162,15 @@ public class DynamoHelper {
      * Deletes the ID for the default (schemaless) record table from the meta table. This is generally used for when
      * the table is already deleted and we want to clean up.
      */
-    public void deleteDefaultSynapseTableForStudy(String studyId) {
-        ddbSynapseMetaTable.deleteItem(ATTR_TABLE_NAME, studyId + SUFFIX_DEFAULT);
+    public void deleteDefaultSynapseTableForApp(String appId) {
+        ddbSynapseMetaTable.deleteItem(ATTR_TABLE_NAME, appId + SUFFIX_DEFAULT);
     }
 
-    /** Gets the notification config for the given study. This method caches results for 5 minutes. */
+    /** Gets the notification config for the given app. This method caches results for 5 minutes. */
     @SuppressWarnings("DefaultAnnotationParam")
     @Cacheable(lifetime = 5, unit = TimeUnit.MINUTES)
-    public WorkerConfig getNotificationConfigForStudy(String studyId) {
-        Item item = ddbNotificationConfigTable.getItem(KEY_STUDY_ID, studyId);
+    public WorkerConfig getNotificationConfigForApp(String appId) {
+        Item item = ddbNotificationConfigTable.getItem(KEY_APP_ID, appId);
         WorkerConfig workerConfig = new WorkerConfig();
         workerConfig.setAppUrl(item.getString(KEY_APP_URL));
         workerConfig.setBurstDurationDays(item.getInt(KEY_BURST_DURATION_DAYS));
@@ -232,32 +233,32 @@ public class DynamoHelper {
     }
 
     /**
-     * Gets study info for the given study ID.
+     * Gets app info for the given app ID.
      *
-     * @param studyId
-     *         ID of study to fetch
-     * @return the requested study
+     * @param appId
+     *         ID of app to fetch
+     * @return the requested app
      */
-    public StudyInfo getStudy(String studyId) {
-        Item study = ddbStudyTable.getItem("identifier", studyId);
+    public AppInfo getApp(String appId) {
+        Item app = ddbAppTable.getItem("identifier", appId);
 
-        String studyName = study.getString("name");
-        String studyShortName = study.getString("shortName");
-        String supportEmail = study.getString("supportEmail");
+        String appName = app.getString("name");
+        String appShortName = app.getString("shortName");
+        String supportEmail = app.getString("supportEmail");
 
-        return new StudyInfo.Builder().withName(studyName).withShortName(studyShortName).withStudyId(studyId)
+        return new AppInfo.Builder().withName(appName).withShortName(appShortName).withAppId(appId)
                 .withSupportEmail(supportEmail).build();
     }
 
     /**
-     * Gets the set of survey table IDs for a given study.
+     * Gets the set of survey table IDs for a given app.
      *
-     * @param studyId
-     *         ID of study to get survey tables
+     * @param appId
+     *         ID of app to get survey tables
      * @return set of survey table IDs, may be empty, but will never be null
      */
-    public Set<String> getSynapseSurveyTablesForStudy(String studyId) {
-        Item item = ddbSynapseSurveyTablesTable.getItem(ATTR_STUDY_ID, studyId);
+    public Set<String> getSynapseSurveyTablesForApp(String appId) {
+        Item item = ddbSynapseSurveyTablesTable.getItem(ATTR_APP_ID, appId);
         if (item == null) {
             return ImmutableSet.of();
         }
@@ -279,16 +280,16 @@ public class DynamoHelper {
      * Synchronized, because different survey tasks are executed in parallel, so we want to avoid race conditions.
      * </p>
      */
-    public synchronized void deleteSynapseSurveyTableMapping(String studyId, String tableId) {
-        Item item = ddbSynapseSurveyTablesTable.getItem(ATTR_STUDY_ID, studyId);
+    public synchronized void deleteSynapseSurveyTableMapping(String appId, String tableId) {
+        Item item = ddbSynapseSurveyTablesTable.getItem(ATTR_APP_ID, appId);
         if (item == null) {
-            // Somehow, the study doesn't exist in the survey table mapping anymore. Nothing to delete.
+            // Somehow, the app doesn't exist in the survey table mapping anymore. Nothing to delete.
             return;
         }
 
         Set<String> tableIdSet = item.getStringSet(ATTR_TABLE_ID_SET);
         if (tableIdSet == null || !tableIdSet.contains(tableId)) {
-            // Somehow, the study doesn't contain the specified table ID anymore. Nothing to delete.
+            // Somehow, the app doesn't contain the specified table ID anymore. Nothing to delete.
             return;
         }
 
@@ -299,26 +300,26 @@ public class DynamoHelper {
             tableIdSet = null;
         }
         UpdateItemSpec updateItemSpec = new UpdateItemSpec()
-                .withPrimaryKey(ATTR_STUDY_ID, studyId)
+                .withPrimaryKey(ATTR_APP_ID, appId)
                 .withUpdateExpression("set " + ATTR_TABLE_ID_SET + "=:s")
                 .withValueMap(new ValueMap().withStringSet(":s", tableIdSet));
         ddbSynapseSurveyTablesTable.updateItem(updateItemSpec);
     }
 
     /**
-     * Gets the Synapse table IDs associated with this study. The results are returned as a map from the Synapse table
+     * Gets the Synapse table IDs associated with this app. The results are returned as a map from the Synapse table
      * IDs to the Bridge upload schemas.
      *
-     * @param studyId
-     *         ID of the study to query on
+     * @param appId
+     *         ID of the app to query on
      * @return map from the Synapse table IDs to the Bridge upload schema keys, may be empty, but will never be null
      */
-    public Map<String, UploadSchema> getSynapseTableIdsForStudy(String studyId) throws IOException {
+    public Map<String, UploadSchema> getSynapseTableIdsForApp(String appId) throws IOException {
         // query and iterate
         List<UploadSchema> schemaList = new ArrayList<>();
-        Iterable<Item> schemaItemIter = dynamoQueryHelper.query(ddbUploadSchemaStudyIndex, ATTR_STUDY_ID, studyId);
+        Iterable<Item> schemaItemIter = dynamoQueryHelper.query(ddbUploadSchemaAppIndex, ATTR_APP_ID, appId);
         for (Item oneSchemaItem : schemaItemIter) {
-            // Index only contains study ID, key, and revision. Re-query the table to get all fields.
+            // Index only contains app ID, key, and revision. Re-query the table to get all fields.
             String key = oneSchemaItem.getString("key");
             int rev = oneSchemaItem.getInt("revision");
             Item fullSchemaItem = ddbUploadSchemaTable.getItem("key", key, "revision", rev);
@@ -329,7 +330,7 @@ public class DynamoHelper {
 
         // Now query the SynapseTables table to get the Synapse table IDs for the schema. We use a reverse map from
         // Synapse table ID to upload schema, because multiple upload schemas can map to a single Synapse table. (This
-        // is due to some early day hacks in the original studies.)
+        // is due to some early day hacks in the original apps.)
         Multimap<String, UploadSchema> synapseToSchemaMultimap = HashMultimap.create();
         for (UploadSchema oneSchema : schemaList) {
             Item synapseMapRecord = ddbSynapseMapTable.getItem("schemaKey", oneSchema.getKey().toString());

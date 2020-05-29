@@ -31,18 +31,18 @@ import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.fitbit.schema.EndpointSchema;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.OAuthAccessToken;
-import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.FitBitUser;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 
 @SuppressWarnings({ "ResultOfMethodCallIgnored", "unchecked" })
-public class BridgeFitBitWorkerProcessorProcessStudyTest {
+public class BridgeFitBitWorkerProcessorProcessAppTest {
     private static final String DATE_STRING = "2017-12-11";
     private static final List<String> SCOPE_LIST = ImmutableList.of("ENDPOINT_0", "ENDPOINT_1", "ENDPOINT_2");
-    private static final String STUDY_ID = "test-study";
-    private static final Study STUDY = new Study().identifier(STUDY_ID);
+    private static final String APP_ID = "test-app";
+    private static final App APP = new App().identifier(APP_ID);
 
     private InMemoryFileHelper fileHelper;
     private BridgeHelper mockBridgeHelper;
@@ -77,7 +77,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         FitBitUser user0 = makeUser(0);
         FitBitUser user1 = makeUser(1);
         FitBitUser user2 = makeUser(2);
-        when(mockBridgeHelper.getFitBitUsersForStudy(STUDY_ID)).thenReturn(Iterators.forArray(user0, user1, user2));
+        when(mockBridgeHelper.getFitBitUsersForApp(APP_ID)).thenReturn(Iterators.forArray(user0, user1, user2));
 
         // Mock endpoint schema, so we don't have to construct the whole thing.
 
@@ -104,7 +104,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         }).when(mockUserProcessor).processEndpointForUser(any(), any(), any());
 
         // Execute
-        processor.processStudy(DATE_STRING, STUDY, null);
+        processor.processApp(DATE_STRING, APP, null);
 
         // Verify User Processor
         ArgumentCaptor<RequestContext> contextCaptor = ArgumentCaptor.forClass(RequestContext.class);
@@ -112,14 +112,14 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         verify(mockUserProcessor, times(3)).processEndpointForUser(contextCaptor.capture(),
                 userCaptor.capture(), same(mockEndpointSchema0));
 
-        // RequestContext contains date and studyID
+        // RequestContext contains date and appID
         List<RequestContext> contextList = contextCaptor.getAllValues();
         assertEquals(contextList.size(), 3);
         RequestContext context0 = contextList.get(0);
         assertEquals(context0.getDate(), DATE_STRING);
-        assertSame(context0.getStudy(), STUDY);
+        assertSame(context0.getApp(), APP);
 
-        // All contexts within the study are the same context.
+        // All contexts within the app are the same context.
         assertSame(contextList.get(1), context0);
         assertSame(contextList.get(2), context0);
 
@@ -145,18 +145,18 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         // Test cases: First user throws on getting the FitBitUser. Second and third users succeed.
 
         // Mock BridgeHelper to return users.
-        when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-0"))
+        when(mockBridgeHelper.getFitBitUserForAppAndHealthCode(APP_ID, "health-code-0"))
                 .thenThrow(IOException.class);
 
-        when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-1"))
+        when(mockBridgeHelper.getFitBitUserForAppAndHealthCode(APP_ID, "health-code-1"))
                 .thenThrow(RuntimeException.class);
 
         FitBitUser user2 = makeUser(2);
-        when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-2"))
+        when(mockBridgeHelper.getFitBitUserForAppAndHealthCode(APP_ID, "health-code-2"))
                 .thenReturn(user2);
 
         FitBitUser user3 = makeUser(3);
-        when(mockBridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, "health-code-3"))
+        when(mockBridgeHelper.getFitBitUserForAppAndHealthCode(APP_ID, "health-code-3"))
                 .thenReturn(user3);
 
         // Mock endpoint schema, so we don't have to construct the whole thing.
@@ -167,7 +167,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         doNothing().when(mockUserProcessor).processEndpointForUser(any(), any(), any());
 
         // Execute.
-        processor.processStudy(DATE_STRING, STUDY, ImmutableList.of("health-code-0", "health-code-1",
+        processor.processApp(DATE_STRING, APP, ImmutableList.of("health-code-0", "health-code-1",
                 "health-code-2", "health-code-3"));
 
         // Verify User Processor. Because user-0 and user-2 throws while trying to get a FitBitUser, we never call the
@@ -190,7 +190,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
     public void emptyHealthCodeWhitelist() throws Exception {
         // Mock BridgeHelper to return users.
         FitBitUser user3 = makeUser(3);
-        when(mockBridgeHelper.getFitBitUsersForStudy(STUDY_ID)).thenReturn(Iterators.forArray(user3));
+        when(mockBridgeHelper.getFitBitUsersForApp(APP_ID)).thenReturn(Iterators.forArray(user3));
 
         // Mock endpoint schema, so we don't have to construct the whole thing.
         EndpointSchema mockEndpointSchema0 = mockEndpointSchema(0);
@@ -200,7 +200,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         doNothing().when(mockUserProcessor).processEndpointForUser(any(), any(), any());
 
         // Execute.
-        processor.processStudy(DATE_STRING, STUDY, ImmutableList.of());
+        processor.processApp(DATE_STRING, APP, ImmutableList.of());
 
         // Verify User Processor.
         ArgumentCaptor<FitBitUser> userCaptor = ArgumentCaptor.forClass(FitBitUser.class);
@@ -219,7 +219,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
 
         // Mock BridgeHelper to return users.
         FitBitUser user0 = makeUser(0);
-        when(mockBridgeHelper.getFitBitUsersForStudy(STUDY_ID)).thenReturn(Iterators.forArray(user0));
+        when(mockBridgeHelper.getFitBitUsersForApp(APP_ID)).thenReturn(Iterators.forArray(user0));
 
         // Mock endpoint schemas, so we don't have to construct the whole thing. Note that we have 4 endpoints, but the
         // user is configured with only endpoints 0-2.
@@ -273,7 +273,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         }).when(mockTableProcessor).processTable(any(), any());
 
         // Execute
-        processor.processStudy(DATE_STRING, STUDY, null);
+        processor.processApp(DATE_STRING, APP, null);
 
         // Verify User Processor
         ArgumentCaptor<RequestContext> contextCaptor = ArgumentCaptor.forClass(RequestContext.class);
@@ -281,14 +281,14 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         verify(mockUserProcessor, times(3)).processEndpointForUser(contextCaptor.capture(),
                 same(user0), endpointSchemaCaptor.capture());
 
-        // RequestContext contains date and studyID
+        // RequestContext contains date and appId
         List<RequestContext> contextList = contextCaptor.getAllValues();
         assertEquals(contextList.size(), 3);
         RequestContext context0 = contextList.get(0);
         assertEquals(context0.getDate(), DATE_STRING);
-        assertSame(context0.getStudy(), STUDY);
+        assertSame(context0.getApp(), APP);
 
-        // All contexts within the study are the same context.
+        // All contexts within the app are the same context.
         assertSame(contextList.get(1), context0);
         assertSame(contextList.get(2), context0);
 
@@ -326,7 +326,7 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
         Iterator<FitBitUser> mockIterator = mock(Iterator.class);
         when(mockIterator.hasNext()).thenReturn(true);
         when(mockIterator.next()).thenThrow(new BridgeSDKException("mock Bridge down", 503));
-        when(mockBridgeHelper.getFitBitUsersForStudy(STUDY_ID)).thenReturn(mockIterator);
+        when(mockBridgeHelper.getFitBitUsersForApp(APP_ID)).thenReturn(mockIterator);
 
         // Mock endpoint schema. We're never going to use this, but if for some reason the test fails, we want there
         // to be an inner loop that we can verify is never called.
@@ -335,10 +335,10 @@ public class BridgeFitBitWorkerProcessorProcessStudyTest {
 
         // Execute (throws exception).
         try {
-            processor.processStudy(DATE_STRING, STUDY, null);
+            processor.processApp(DATE_STRING, APP, null);
             fail("expected exception");
         } catch (WorkerException ex) {
-            assertEquals(ex.getMessage(), "User error limit reached, aborting for study " + STUDY_ID);
+            assertEquals(ex.getMessage(), "User error limit reached, aborting for app " + APP_ID);
         }
 
         // We call the iterator exactly 3 times.

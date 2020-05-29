@@ -13,7 +13,7 @@ import org.mockito.ArgumentCaptor;
 import org.sagebionetworks.bridge.rest.model.Phone;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
-import org.sagebionetworks.bridge.workerPlatform.dynamodb.StudyInfo;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.AppInfo;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -25,7 +25,7 @@ import com.google.common.base.Strings;
 public class SnsHelperTest {
     private static final Phone PHONE = new Phone().regionCode("US").number("4082588569");
     private SnsHelper snsHelper;
-    private StudyInfo studyInfo;
+    private AppInfo appInfo;
     private AccountInfo accountInfo;
     private ArgumentCaptor<PublishRequest> publishRequestCaptor;
 
@@ -42,7 +42,7 @@ public class SnsHelperTest {
         snsHelper.setSnsClient(mockSnsClient);
 
         // set up common inputs
-        studyInfo = new StudyInfo.Builder().withShortName("Short").withName("Test Study").withStudyId("test-study")
+        appInfo = new AppInfo.Builder().withShortName("Short").withName("Test App").withAppId("test-app")
                 .withSupportEmail("support@sagebase.org").build();
         accountInfo = new AccountInfo.Builder().withPhone(PHONE)
                 .withHealthCode("dummy-health-code").withUserId("dummy-user-id").build();
@@ -51,7 +51,7 @@ public class SnsHelperTest {
     @Test
     public void testSendNoData() {
         //execute
-        snsHelper.sendNoDataMessageToAccount(studyInfo, accountInfo);
+        snsHelper.sendNoDataMessageToAccount(appInfo, accountInfo);
 
         // validate - We don't want to overfit, so just check that we have both HTML and text content.
         String message = validateMessageAndExtractBody();
@@ -67,7 +67,7 @@ public class SnsHelperTest {
                 .withExpirationTime(dummyExpirationDate).build();
 
         // execute
-        snsHelper.sendPresignedUrlToAccount(studyInfo, presignedUrlInfo, accountInfo);
+        snsHelper.sendPresignedUrlToAccount(appInfo, presignedUrlInfo, accountInfo);
 
         // validate that the message containes the URL
         String message = validateMessageAndExtractBody();
@@ -76,17 +76,17 @@ public class SnsHelperTest {
     
     @Test
     public void useShortNameWhenPresent() {
-        // The default studyInfo object has a shortName, so that's what we should get back.
-        assertEquals("Short", snsHelper.getStudyName(studyInfo));
+        // The default appInfo object has a shortName, so that's what we should get back.
+        assertEquals("Short", snsHelper.getAppName(appInfo));
     }
     
     @Test
     public void useLongNameWhenPresent() {
         // This object does not have a short name, so we use the fuller name
-        studyInfo = new StudyInfo.Builder().withName("Test Study").withStudyId("test-study")
+        appInfo = new AppInfo.Builder().withName("Test App").withAppId("test-app")
                 .withSupportEmail("support@sagebase.org").build();
 
-        assertEquals("Test Study", snsHelper.getStudyName(studyInfo));
+        assertEquals("Test App", snsHelper.getAppName(appInfo));
     }
     
     private String validateMessageAndExtractBody() {

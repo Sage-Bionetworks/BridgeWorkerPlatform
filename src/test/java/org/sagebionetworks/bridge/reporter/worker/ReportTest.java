@@ -13,11 +13,11 @@ public class ReportTest {
         Object data = new Object();
         
         Report report = new Report.Builder()
-                .withStudyId("studyId")
+                .withAppId("appId")
                 .withReportId("reportId")
                 .withDate(date)
                 .withReportData(data).build();
-        assertEquals(report.getStudyId(), "studyId");
+        assertEquals(report.getAppId(), "appId");
         assertEquals(report.getReportId(), "reportId");
         assertEquals(report.getDate(), date);
         assertEquals(report.getData(), data);

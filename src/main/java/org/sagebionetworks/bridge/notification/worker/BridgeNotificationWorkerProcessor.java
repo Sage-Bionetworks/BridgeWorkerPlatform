@@ -52,6 +52,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     private static final int MIN_TIMEZONE_OFFSET_MILLIS = -11 * 60 * 60 * 1000;
     private static final int MAX_TIMEZONE_OFFSET_MILLIS = -1 * 60 * 60 * 1000;
     static final String REQUEST_PARAM_DATE = "date";
+    static final String REQUEST_PARAM_APP_ID = "appId";
     static final String REQUEST_PARAM_STUDY_ID = "studyId";
     static final String REQUEST_PARAM_USER_LIST = "userList";
     static final String REQUEST_PARAM_TAG = "tag";
@@ -98,15 +99,18 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     @Override
     public void accept(JsonNode jsonNode) throws PollSqsWorkerBadRequestException {
         // Get request args
-        // studyId
-        JsonNode studyIdNode = jsonNode.get(REQUEST_PARAM_STUDY_ID);
-        if (studyIdNode == null || studyIdNode.isNull()) {
-            throw new PollSqsWorkerBadRequestException("studyId must be specified");
+        // appId
+        JsonNode appIdNode = jsonNode.get(REQUEST_PARAM_APP_ID);
+        if (appIdNode == null || appIdNode.isNull()) {
+            appIdNode = jsonNode.get(REQUEST_PARAM_STUDY_ID);
         }
-        if (!studyIdNode.isTextual()) {
-            throw new PollSqsWorkerBadRequestException("studyId must be a string");
+        if (appIdNode == null || appIdNode.isNull()) {
+            throw new PollSqsWorkerBadRequestException("appId must be specified");
         }
-        String studyId = studyIdNode.textValue();
+        if (!appIdNode.isTextual()) {
+            throw new PollSqsWorkerBadRequestException("appId must be a string");
+        }
+        String appId = appIdNode.textValue();
 
         // date
         JsonNode dateNode = jsonNode.get(REQUEST_PARAM_DATE);
@@ -132,7 +136,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
             tag = tagNode.textValue();
         }
 
-        LOG.info("Received request for study=" + studyId + ", date=" + dateString + ", tag=" + tag);
+        LOG.info("Received request for app=" + appId + ", date=" + dateString + ", tag=" + tag);
 
         // Iterate over each user. All we care about is the userID, so transform the iterator.
         Iterator<String> userIdIterator;
@@ -141,7 +145,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
             userIdIterator = Iterators.transform(userListNode.elements(), JsonNode::textValue);
             LOG.info("Custom user list received, " + userListNode.size() + " users");
         } else {
-            userIdIterator = Iterators.transform(bridgeHelper.getAllAccountSummaries(studyId, true), AccountSummary::getId);
+            userIdIterator = Iterators.transform(bridgeHelper.getAllAccountSummaries(appId, true), AccountSummary::getId);
         }
 
         int numUsers = 0;
@@ -155,7 +159,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
                 String userId = userIdIterator.next();
 
                 try {
-                    processAccountForDate(studyId, date, userId);
+                    processAccountForDate(appId, date, userId);
                 } catch (UserNotConfiguredException ex) {
                     // Users not being configured properly is a fairly common occurence. Log a warning instead of an
                     // error.
@@ -180,23 +184,23 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
         LOG.info("Finished processing users: " + numUsers + " users in " + stopwatch.elapsed(TimeUnit.SECONDS) +
                 " seconds");
-        LOG.info("Finished processing request for study " + studyId + " and date " + dateString);
+        LOG.info("Finished processing request for app " + appId + " and date " + dateString);
     }
 
     // Processes a single user for the given date. Package-scoped for unit tests.
-    void processAccountForDate(String studyId, LocalDate date, String userId)
+    void processAccountForDate(String appId, LocalDate date, String userId)
             throws IOException, UserNotConfiguredException {
         // Get participant. We'll need some attributes.
-        StudyParticipant participant = bridgeHelper.getParticipant(studyId, userId, true);
+        StudyParticipant participant = bridgeHelper.getParticipant(appId, userId, true);
 
         // Exclude users who are not eligible for notifications.
-        if (shouldExcludeUser(studyId, participant)) {
+        if (shouldExcludeUser(appId, participant)) {
             return;
         }
 
         // Get user's activity events. Filter events that aren't study burst starts.
-        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
-        List<ActivityEvent> activityEventList = bridgeHelper.getActivityEvents(studyId, participant.getId());
+        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForApp(appId);
+        List<ActivityEvent> activityEventList = bridgeHelper.getActivityEvents(appId, participant.getId());
         List<ActivityEvent> filteredActivityEventList = activityEventList.stream()
                 .filter(activityEvent -> workerConfig.getBurstStartEventIdSet().contains(activityEvent.getEventId()))
                 .collect(Collectors.toList());
@@ -206,14 +210,14 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
                 filteredActivityEventList);
         if (upcomingBurstEvent != null) {
             // Notify user of upcoming burst.
-            notifyUser(studyId, participant, NotificationType.PRE_BURST);
+            notifyUser(appId, participant, NotificationType.PRE_BURST);
 
             // If the burst starts tomorrow, no need to check if the user is in the middle of a burst.
             return;
         }
 
         // Find the current activity burst.
-        ActivityEvent burstEvent = findCurrentActivityBurstEventForParticipant(studyId, date, participant,
+        ActivityEvent burstEvent = findCurrentActivityBurstEventForParticipant(appId, date, participant,
                 filteredActivityEventList);
         if (burstEvent == null) {
              // We're not currently in an activity burst. (Or we are, but we're in the blackout period.) Skip
@@ -222,15 +226,15 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         }
 
         // Determine if we need to notify the user.
-        NotificationType notificationType = getNotificationTypeForUser(studyId, date, participant, burstEvent);
+        NotificationType notificationType = getNotificationTypeForUser(appId, date, participant, burstEvent);
         if (notificationType != null) {
-            notifyUser(studyId, participant, notificationType);
+            notifyUser(appId, participant, notificationType);
         }
     }
 
     // Helper method to determine if a user is ineligible for receiving notifications.
-    private boolean shouldExcludeUser(String studyId, StudyParticipant participant) {
-        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
+    private boolean shouldExcludeUser(String appId, StudyParticipant participant) {
+        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForApp(appId);
         Set<String> excludedDataGroupSet = workerConfig.getExcludedDataGroupSet();
 
         // Unverified phone numbers can't be notified
@@ -252,7 +256,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         }
 
         // Unconsented users can't be notified
-        if (!isUserConsented(studyId, participant)) {
+        if (!isUserConsented(appId, participant)) {
             return true;
         }
 
@@ -280,7 +284,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
     // Hardcode consent logic based on specific data groups. We do this because RequestInfo is volatile, so we need
     // calculate consent status in the Worker.
-    private boolean isUserConsented(String studyId, StudyParticipant participant) {
+    private boolean isUserConsented(String appId, StudyParticipant participant) {
         // Some data groups put the user in a subpop that doesn't require e-consent. If the user is in one of these
         // data groups, treat the user as consented.
         Set<String> userDataGroupSet = ImmutableSet.copyOf(participant.getDataGroups());
@@ -288,9 +292,9 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
             return true;
         }
 
-        // Otherwise, the user is in the default subpop (matches the study ID). Consents are already sorted in
+        // Otherwise, the user is in the default subpop (matches the app ID). Consents are already sorted in
         // increasing signedOn. Last one is the active (latest) consent.
-        List<UserConsentHistory> consentList = participant.getConsentHistories().get(studyId);
+        List<UserConsentHistory> consentList = participant.getConsentHistories().get(appId);
         if (consentList == null || consentList.isEmpty()) {
             // No consents in a required subpop means not consented.
             return false;
@@ -319,9 +323,9 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     }
 
     // Helper method to determine the study burst event that we should be processing for this user.
-    private ActivityEvent findCurrentActivityBurstEventForParticipant(String studyId, LocalDate date,
+    private ActivityEvent findCurrentActivityBurstEventForParticipant(String appId, LocalDate date,
             StudyParticipant participant, List<ActivityEvent> activityEventList) {
-        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
+        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForApp(appId);
         for (ActivityEvent oneActivityEvent : activityEventList) {
             // Calculate burst bounds. End date is start + period - 1. Skip if the current day is not within the burst
             // period (inclusive).
@@ -352,11 +356,11 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
 
     // Helper method which looks at the participant's activities to determine if we should send a notification.
     // Returns the notification type (or null if we shouldn't send a notification).
-    private NotificationType getNotificationTypeForUser(String studyId, LocalDate date, StudyParticipant participant,
+    private NotificationType getNotificationTypeForUser(String appId, LocalDate date, StudyParticipant participant,
             ActivityEvent burstEvent) {
         String userId = participant.getId();
 
-        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
+        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForApp(appId);
         String taskId = workerConfig.getBurstTaskId();
         int numMissedDaysToNotify = workerConfig.getNumMissedDaysToNotify();
         int numMissedConsecutiveDaysToNotify = workerConfig.getNumMissedConsecutiveDaysToNotify();
@@ -367,7 +371,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         LocalDate burstStartDate = burstEvent.getTimestamp().withZone(timeZone).toLocalDate();
         DateTime activityRangeStart = burstStartDate.toDateTimeAtStartOfDay(timeZone);
         DateTime activityRangeEnd = date.plusDays(1).toDateTimeAtStartOfDay(timeZone);
-        Iterator<ScheduledActivity> activityIterator = bridgeHelper.getTaskHistory(studyId, userId, taskId,
+        Iterator<ScheduledActivity> activityIterator = bridgeHelper.getTaskHistory(appId, userId, taskId,
                 activityRangeStart, activityRangeEnd);
 
         // Map the events by scheduled date so it's easier to work with.
@@ -431,10 +435,10 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
     }
 
     // Encapsulates sending an SMS notification to the user.
-    private void notifyUser(String studyId, StudyParticipant participant, NotificationType notificationType)
+    private void notifyUser(String appId, StudyParticipant participant, NotificationType notificationType)
             throws IOException, UserNotConfiguredException {
         String userId = participant.getId();
-        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForStudy(studyId);
+        WorkerConfig workerConfig = dynamoHelper.getNotificationConfigForApp(appId);
 
         // Get notification messages for type.
         List<String> messageList;
@@ -453,7 +457,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
                 messageList = ImmutableList.of(workerConfig.getDefaultPreburstMessage());
 
                 // Pre-burst requires a study commitment.
-                String studyCommitment = templateVariableHelper.getStudyCommitment(studyId, userId);
+                String studyCommitment = templateVariableHelper.getStudyCommitment(appId, userId);
                 if (studyCommitment == null) {
                     // Break and fall back to the default.
                     break;
@@ -482,7 +486,7 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         String message = messageList.get(randomIndex);
 
         // Resolve template variables.
-        message = templateVariableHelper.resolveTemplateVariables(studyId, participant, message);
+        message = templateVariableHelper.resolveTemplateVariables(appId, participant, message);
 
         LOG.info("Sending " + notificationType.name() + " notification to user " + userId);
 
@@ -495,6 +499,6 @@ public class BridgeNotificationWorkerProcessor implements ThrowingConsumer<JsonN
         dynamoHelper.setLastNotificationTimeForUser(userNotification);
 
         // Send SMS
-        bridgeHelper.sendSmsToUser(studyId, userId, message);
+        bridgeHelper.sendSmsToUser(appId, userId, message);
     }
 }

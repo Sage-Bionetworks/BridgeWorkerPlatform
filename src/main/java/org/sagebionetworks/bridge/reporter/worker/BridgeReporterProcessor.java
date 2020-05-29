@@ -16,12 +16,11 @@ import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.reporter.request.ReportType;
-import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
@@ -61,22 +60,22 @@ public class BridgeReporterProcessor {
 
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         try {
-            List<String> studyIdList;
-            if (!request.getStudyWhitelist().isEmpty()) {
-                // Use study whitelist as list of study IDs.
-                studyIdList = request.getStudyWhitelist();
+            List<String> appIdList;
+            if (!request.getAppWhitelist().isEmpty()) {
+                // Use app whitelist as list of app IDs.
+                appIdList = request.getAppWhitelist();
             } else {
-                // Otherwise, call Bridge server to get a list of studies.
-                List<Study> studySummaries = bridgeHelper.getAllStudies();
-                studyIdList = studySummaries.stream().map(Study::getIdentifier).collect(Collectors.toList());
+                // Otherwise, call Bridge server to get a list of apps.
+                List<App> appSummaries = bridgeHelper.getAllApps();
+                appIdList = appSummaries.stream().map(App::getIdentifier).collect(Collectors.toList());
             }
 
-            for (String studyId : studyIdList) {
-                Report report = generator.generate(request, studyId);
+            for (String appId : appIdList) {
+                Report report = generator.generate(request, appId);
                 
-                bridgeHelper.saveReportForStudy(report);
+                bridgeHelper.saveReportForApp(report);
                 
-                LOG.info("Saved uploads report for hash[studyId]=" + report.getStudyId() + ", scheduleType=" + scheduleType
+                LOG.info("Saved uploads report for hash[appId]=" + report.getAppId() + ", scheduleType=" + scheduleType
                         + ", startDate=" + startDateTime + ",endDate=" + endDateTime + ", reportId=" + report.getReportId()
                         + ", reportData=" + report.getData().toString());
             }

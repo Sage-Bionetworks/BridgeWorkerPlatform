@@ -24,7 +24,7 @@ import org.sagebionetworks.bridge.workerPlatform.exceptions.UserNotConfiguredExc
 
 public class TemplateVariableHelperTest {
     private static final String APP_URL = "http://example.com/app-url";
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
 
     private ReportData engagementReport;
     private BridgeHelper mockBridgeHelper;
@@ -41,7 +41,7 @@ public class TemplateVariableHelperTest {
         // Mock Engagement report. All we care about is Data, which is different for each test.
         engagementReport = new ReportData();
         mockBridgeHelper = mock(BridgeHelper.class);
-        when(mockBridgeHelper.getParticipantReports(STUDY_ID, userId, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
+        when(mockBridgeHelper.getParticipantReports(APP_ID, userId, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
                 TemplateVariableHelper.GLOBAL_REPORT_DATE, TemplateVariableHelper.GLOBAL_REPORT_DATE))
                 .thenReturn(ImmutableList.of(engagementReport));
 
@@ -50,7 +50,7 @@ public class TemplateVariableHelperTest {
         workerConfig.setAppUrl(APP_URL);
 
         mockDynamoHelper = mock(DynamoHelper.class);
-        when(mockDynamoHelper.getNotificationConfigForStudy(STUDY_ID)).thenReturn(workerConfig);
+        when(mockDynamoHelper.getNotificationConfigForApp(APP_ID)).thenReturn(workerConfig);
 
         // Make Template Variable Helper.
         templateVariableHelper = new TemplateVariableHelper();
@@ -66,7 +66,7 @@ public class TemplateVariableHelperTest {
     public void resolveNoVars() throws Exception {
         // Base case. Test that no vars means the string is returned as is and none of the dependent services are
         // called.
-        String result = templateVariableHelper.resolveTemplateVariables(STUDY_ID, mockParticipant,
+        String result = templateVariableHelper.resolveTemplateVariables(APP_ID, mockParticipant,
                 "no variables");
         assertEquals(result, "no variables");
 
@@ -84,7 +84,7 @@ public class TemplateVariableHelperTest {
         engagementReport.setData(reportDataObj);
 
         // Execute test. Include the variables in the message string twice to make sure that we replace all.
-        String result = templateVariableHelper.resolveTemplateVariables(STUDY_ID, mockParticipant,
+        String result = templateVariableHelper.resolveTemplateVariables(APP_ID, mockParticipant,
                 "url=${url} ${url}, studyCommitment=${studyCommitment} ${studyCommitment}");
         assertEquals(result, "url=http://example.com/app-url http://example.com/app-url, " +
                 "studyCommitment=dummy answer dummy answer");
@@ -93,13 +93,13 @@ public class TemplateVariableHelperTest {
     @Test
     public void resolve_noStudyCommitment() throws Exception {
         // Mock getParticipantReports to return no results.
-        when(mockBridgeHelper.getParticipantReports(STUDY_ID, userId, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
+        when(mockBridgeHelper.getParticipantReports(APP_ID, userId, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
                 TemplateVariableHelper.GLOBAL_REPORT_DATE, TemplateVariableHelper.GLOBAL_REPORT_DATE))
                 .thenReturn(ImmutableList.of());
 
         // Execute test.
         try {
-            templateVariableHelper.resolveTemplateVariables(STUDY_ID, mockParticipant,
+            templateVariableHelper.resolveTemplateVariables(APP_ID, mockParticipant,
                     "studyCommitment=${studyCommitment}");
             fail();
         } catch (UserNotConfiguredException ex) {
@@ -111,12 +111,12 @@ public class TemplateVariableHelperTest {
     @Test
     public void studyCommitment_noEngagementReport() throws Exception {
         // Mock getParticipantReports to return no results.
-        when(mockBridgeHelper.getParticipantReports(STUDY_ID, userId, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
+        when(mockBridgeHelper.getParticipantReports(APP_ID, userId, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
                 TemplateVariableHelper.GLOBAL_REPORT_DATE, TemplateVariableHelper.GLOBAL_REPORT_DATE))
                 .thenReturn(ImmutableList.of());
 
         // Execute test.
-        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        String result = templateVariableHelper.getStudyCommitmentUncached(APP_ID, userId);
         assertNull(result);
     }
 
@@ -136,12 +136,12 @@ public class TemplateVariableHelperTest {
         Object reportDataObj2 = RestUtils.GSON.fromJson(reportDataJson2, Map.class);
         ReportData report2 = new ReportData().data(reportDataObj2);
 
-        when(mockBridgeHelper.getParticipantReports(STUDY_ID, userId, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
+        when(mockBridgeHelper.getParticipantReports(APP_ID, userId, TemplateVariableHelper.REPORT_ID_ENGAGEMENT,
                 TemplateVariableHelper.GLOBAL_REPORT_DATE, TemplateVariableHelper.GLOBAL_REPORT_DATE))
                 .thenReturn(ImmutableList.of(report1, report2));
 
         // Execute test.
-        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        String result = templateVariableHelper.getStudyCommitmentUncached(APP_ID, userId);
         assertEquals(result, "answer 1");
     }
 
@@ -151,7 +151,7 @@ public class TemplateVariableHelperTest {
         // By default, engagement report contains no client data.
 
         // Execute test.
-        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        String result = templateVariableHelper.getStudyCommitmentUncached(APP_ID, userId);
         assertNull(result);
     }
 
@@ -164,7 +164,7 @@ public class TemplateVariableHelperTest {
         engagementReport.setData(reportDataObj);
 
         // Execute test.
-        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        String result = templateVariableHelper.getStudyCommitmentUncached(APP_ID, userId);
         assertNull(result);
     }
 
@@ -179,7 +179,7 @@ public class TemplateVariableHelperTest {
         engagementReport.setData(reportDataObj);
 
         // Execute test.
-        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        String result = templateVariableHelper.getStudyCommitmentUncached(APP_ID, userId);
         assertNull(result);
     }
 
@@ -193,7 +193,7 @@ public class TemplateVariableHelperTest {
         engagementReport.setData(reportDataObj);
 
         // Execute test.
-        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        String result = templateVariableHelper.getStudyCommitmentUncached(APP_ID, userId);
         assertEquals(result, "foobarbaz");
     }
 
@@ -208,7 +208,7 @@ public class TemplateVariableHelperTest {
         engagementReport.setData(reportDataObj);
 
         // Execute test.
-        String result = templateVariableHelper.getStudyCommitmentUncached(STUDY_ID, userId);
+        String result = templateVariableHelper.getStudyCommitmentUncached(APP_ID, userId);
         assertEquals(result, "true");
     }
 }

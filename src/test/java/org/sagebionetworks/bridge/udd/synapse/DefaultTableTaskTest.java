@@ -26,7 +26,7 @@ public class DefaultTableTaskTest {
     private static final LocalDate START_DATE = LocalDate.parse("2015-03-09");
     private static final LocalDate END_DATE = LocalDate.parse("2015-09-16");
     private static final String HEALTH_CODE = "test-health-code";
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
     private static final String TABLE_ID = "test-table-id";
 
     private InMemoryFileHelper inMemoryFileHelper;
@@ -48,7 +48,7 @@ public class DefaultTableTaskTest {
         // Set up params and task.
         SynapseDownloadFromTableParameters params = new SynapseDownloadFromTableParameters.Builder()
                 .withSynapseTableId(TABLE_ID).withHealthCode(HEALTH_CODE).withStartDate(START_DATE)
-                .withEndDate(END_DATE).withTempDir(tmpDir).withStudyId(STUDY_ID).build();
+                .withEndDate(END_DATE).withTempDir(tmpDir).withAppId(APP_ID).build();
 
         task = new DefaultTableTask(params);
         task.setDynamoHelper(mockDynamoHelper);
@@ -65,7 +65,7 @@ public class DefaultTableTaskTest {
     @Test
     public void getDownloadFilenamePrefix() {
         String filePrefix = task.getDownloadFilenamePrefix();
-        assertEquals(filePrefix, STUDY_ID + "-default");
+        assertEquals(filePrefix, APP_ID + "-default");
     }
 
     @Test
@@ -78,12 +78,12 @@ public class DefaultTableTaskTest {
             task.call();
             fail("expected exception");
         } catch (AsyncTaskExecutionException ex) {
-            assertEquals(ex.getMessage(), "Synapse table " + TABLE_ID + " for default schema for study " +
-                    STUDY_ID + " no longer exists");
+            assertEquals(ex.getMessage(), "Synapse table " + TABLE_ID + " for default schema for app " +
+                    APP_ID + " no longer exists");
         }
 
         // Verify we delete the table from the table mapping.
-        verify(mockDynamoHelper).deleteDefaultSynapseTableForStudy(STUDY_ID);
+        verify(mockDynamoHelper).deleteDefaultSynapseTableForApp(APP_ID);
 
         // Since we never download the CSV, we don't create any files other than the temp dir. Delete the temp dir and
         // then verify that the filehelper is empty.
@@ -103,12 +103,12 @@ public class DefaultTableTaskTest {
             fail("expected exception");
         } catch (AsyncTaskExecutionException ex) {
             assertEquals(ex.getMessage(), "Error verifying synapse table " + TABLE_ID +
-                    " for default schema for study " + STUDY_ID + ": test exception");
+                    " for default schema for app " + APP_ID + ": test exception");
             assertSame(ex.getCause(), originalEx);
         }
 
         // Verify we _didn't_ delete the table mapping.
-        verify(mockDynamoHelper, never()).deleteDefaultSynapseTableForStudy(STUDY_ID);
+        verify(mockDynamoHelper, never()).deleteDefaultSynapseTableForApp(APP_ID);
 
         // Since we never download the CSV, we don't create any files other than the temp dir. Delete the temp dir and
         // then verify that the filehelper is empty.

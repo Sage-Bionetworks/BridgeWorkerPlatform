@@ -25,7 +25,7 @@ import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 public class BridgeWorkerPlatformSqsCallbackTest {
     // simple strings for test
     private static final String TEST_SCHEDULER = "test-scheduler";
-    private static final String TEST_STUDY_ID = "api";
+    private static final String TEST_APP_ID = "api";
     private static final String TEST_EMAIL = "zhizhen.lin@sagebase.org";
     private static final ReportType TEST_SCHEDULE_TYPE = ReportType.DAILY;
 
@@ -38,11 +38,11 @@ public class BridgeWorkerPlatformSqsCallbackTest {
             "       \"endDateTime\":\"2016-10-20T23:59:59.000Z\"\n" +
             "   }\n" +
             "}";
-
+    
     private static final String REQUEST_JSON_UDD_MSG = "{\n" +
             "   \"service\":\"UDD\",\n" +
             "   \"body\":" + "{\n" +
-            "       \"studyId\":\"" + TEST_STUDY_ID +"\",\n" +
+            "       \"appId\":\"" + TEST_APP_ID +"\",\n" +
             "       \"username\":\"" + TEST_EMAIL + "\",\n" +
             "       \"startDate\":\"2015-03-09\",\n" +
             "       \"endDate\":\"2015-03-31\"\n" +
@@ -57,7 +57,7 @@ public class BridgeWorkerPlatformSqsCallbackTest {
             "}";
 
     private static final String UDD_REQUEST = "{\n" +
-            "   \"studyId\":\"" + TEST_STUDY_ID +"\",\n" +
+            "   \"appId\":\"" + TEST_APP_ID +"\",\n" +
             "   \"username\":\"" + TEST_EMAIL + "\",\n" +
             "   \"startDate\":\"2015-03-09\",\n" +
             "   \"endDate\":\"2015-03-31\"\n" +
@@ -112,7 +112,7 @@ public class BridgeWorkerPlatformSqsCallbackTest {
         callback.callback(REQUEST_JSON_UDD_MSG);
         verify(mockUddProcessor).process(eq(uddRequestJson));
     }
-
+    
     @Test(expectedExceptions = TestException.class)
     public void testBridgeUddException() throws Exception {
         doThrow(TestException.class).when(mockUddProcessor).process(any());

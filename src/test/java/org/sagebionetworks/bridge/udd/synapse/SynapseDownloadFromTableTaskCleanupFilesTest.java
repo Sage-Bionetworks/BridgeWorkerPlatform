@@ -16,7 +16,7 @@ import org.sagebionetworks.bridge.schema.UploadSchemaKey;
 // Deep tests for SynapseDownloadFromTableTask.cleanupFiles()
 public class SynapseDownloadFromTableTaskCleanupFilesTest {
     private static final byte[] EMPTY_FILE_CONTENT = new byte[0];
-    private static final String TEST_STUDY_ID = "test-study";
+    private static final String TEST_STUDY_ID = "test-app";
     private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(TEST_STUDY_ID)
             .withSchemaId("test-schema").withRevision(42).build();
     private static final UploadSchema TEST_SCHEMA = new UploadSchema.Builder().withKey(TEST_SCHEMA_KEY)
@@ -35,7 +35,7 @@ public class SynapseDownloadFromTableTaskCleanupFilesTest {
         SynapseDownloadFromTableParameters params = new SynapseDownloadFromTableParameters.Builder()
                 .withSynapseTableId("test-table-id").withHealthCode("test-health-code")
                 .withStartDate(LocalDate.parse("2015-03-09")).withEndDate(LocalDate.parse("2015-09-16"))
-                .withTempDir(tmpDir).withSchema(TEST_SCHEMA).withStudyId(TEST_STUDY_ID).build();
+                .withTempDir(tmpDir).withSchema(TEST_SCHEMA).withAppId(TEST_STUDY_ID).build();
         task = new SchemaBasedTableTask(params);
         task.setFileHelper(inMemoryFileHelper);
     }

@@ -55,7 +55,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     private static final String PREBURST_GROUP_1 = "preburst-group-1";
     private static final String PREBURST_GROUP_2 = "preburst-group-2";
     private static final String STUDY_COMMITMENT = "dummy study commitment";
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
     private static final String TASK_ID = "study-burst-task";
     private static final String TEST_NO_CONSENT_GROUP = "test_no_consent";
     private static final String USER_ID = "test-user";
@@ -96,7 +96,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
                 .plusDays(6));
         ActivityEvent studyBurst2StartEvent = new ActivityEvent().eventId(EVENT_ID_BURST_2_START)
                 .timestamp(STUDY_BURST_2_START_TIME);
-        when(mockBridgeHelper.getActivityEvents(STUDY_ID, USER_ID)).thenReturn(ImmutableList.of(enrollmentEvent,
+        when(mockBridgeHelper.getActivityEvents(APP_ID, USER_ID)).thenReturn(ImmutableList.of(enrollmentEvent,
                 unrelatedEvent, studyBurst2StartEvent));
 
         // Participant needs to be mocked because we can't set ID
@@ -106,11 +106,11 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         when(mockParticipant.getPhone()).thenReturn(PHONE);
         when(mockParticipant.isPhoneVerified()).thenReturn(true);
         when(mockParticipant.getTimeZone()).thenReturn("-07:00");
-        when(mockBridgeHelper.getParticipant(STUDY_ID, USER_ID, true)).thenReturn(mockParticipant);
+        when(mockBridgeHelper.getParticipant(APP_ID, USER_ID, true)).thenReturn(mockParticipant);
 
         // Similarly, mock consent.
         mockConsent = mock(UserConsentHistory.class);
-        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of(STUDY_ID,
+        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of(APP_ID,
                 ImmutableList.of(mockConsent)));
 
         // Mock getTaskHistory - We only ask for events between the burst start and the current date, but for the sake
@@ -127,7 +127,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
 
             activityList.add(activity);
         }
-        when(mockBridgeHelper.getTaskHistory(eq(STUDY_ID), eq(USER_ID), eq(TASK_ID), any(), any())).thenReturn(
+        when(mockBridgeHelper.getTaskHistory(eq(APP_ID), eq(USER_ID), eq(TASK_ID), any(), any())).thenReturn(
                 activityList.iterator());
 
         // Mock last notification time
@@ -157,13 +157,13 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         config.setNumMissedConsecutiveDaysToNotify(2);
         config.setNumMissedDaysToNotify(3);
         config.setPreburstMessagesByDataGroup(preburstMessageMap);
-        when(mockDynamoHelper.getNotificationConfigForStudy(STUDY_ID)).thenReturn(config);
+        when(mockDynamoHelper.getNotificationConfigForApp(APP_ID)).thenReturn(config);
 
         // Mock template variable helper. For this test, just append a string. Actually template variable logic is
         // tested somewhere else.
         mockTemplateVariableHelper = mock(TemplateVariableHelper.class);
-        when(mockTemplateVariableHelper.getStudyCommitment(STUDY_ID, USER_ID)).thenReturn(STUDY_COMMITMENT);
-        when(mockTemplateVariableHelper.resolveTemplateVariables(eq(STUDY_ID), any(), any()))
+        when(mockTemplateVariableHelper.getStudyCommitment(APP_ID, USER_ID)).thenReturn(STUDY_COMMITMENT);
+        when(mockTemplateVariableHelper.resolveTemplateVariables(eq(APP_ID), any(), any()))
                 .thenAnswer(invocation -> {
                     String message = invocation.getArgumentAt(2, String.class);
                     return message + RESOLVED_TEMPLATE_VAR_SUFFIX;
@@ -179,49 +179,49 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     @Test
     public void unverifiedPhone() throws Exception {
         when(mockParticipant.isPhoneVerified()).thenReturn(false);
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
     @Test
     public void noTimezone() throws Exception {
         when(mockParticipant.getTimeZone()).thenReturn(null);
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
     @Test
     public void timezoneTooLow() throws Exception {
         when(mockParticipant.getTimeZone()).thenReturn("-12:00");
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
     @Test
     public void timezoneTooHigh() throws Exception {
         when(mockParticipant.getTimeZone()).thenReturn("+00:00");
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
     @Test
     public void nullConsentList() throws Exception {
         when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of());
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
     @Test
     public void emptyConsentList() throws Exception {
-        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of(STUDY_ID, ImmutableList.of()));
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of(APP_ID, ImmutableList.of()));
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
     @Test
     public void withdrawnConsent() throws Exception {
         when(mockConsent.getWithdrewOn()).thenReturn(DateTime.parse("2019-07-23T16:47:43.715-0700"));
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
@@ -229,41 +229,41 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     public void excludedByDataGroup() throws Exception {
         when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group",
                 EXCLUDED_DATA_GROUP_2));
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
     @Test
     public void beforeBurst() throws Exception {
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(2), USER_ID);
+        processor.processAccountForDate(APP_ID, ENROLLMENT_DATE.minusDays(2), USER_ID);
         verifyNoNotification();
     }
 
     @Test
     public void betweenBursts() throws Exception {
         // Next burst starts on enrollment + 14 days
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.plusDays(12), USER_ID);
+        processor.processAccountForDate(APP_ID, ENROLLMENT_DATE.plusDays(12), USER_ID);
         verifyNoNotification();
     }
 
     @Test
     public void afterBurst() throws Exception {
         // Next burst starts on enrollment + 14 and lasts 9 days. Enrollment + 23 is the first day after the bursts.
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.plusDays(23), USER_ID);
+        processor.processAccountForDate(APP_ID, ENROLLMENT_DATE.plusDays(23), USER_ID);
         verifyNoNotification();
     }
 
     @Test
     public void blackoutHead() throws Exception {
         // First three days (0, 1, 2) are blackout days
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.plusDays(2), USER_ID);
+        processor.processAccountForDate(APP_ID, ENROLLMENT_DATE.plusDays(2), USER_ID);
         verifyNoNotification();
     }
 
     @Test
     public void blackoutTail() throws Exception {
         // Last days (8) is a blackout days
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.plusDays(8), USER_ID);
+        processor.processAccountForDate(APP_ID, ENROLLMENT_DATE.plusDays(8), USER_ID);
         verifyNoNotification();
     }
 
@@ -271,7 +271,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     public void didTodaysActivities() throws Exception {
         // Today is enrollment + 3. Do that activity.
         activityList.get(3).setStatus(ScheduleStatus.FINISHED);
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
@@ -281,7 +281,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         activityList.get(0).setStatus(ScheduleStatus.FINISHED);
         activityList.get(1).setStatus(ScheduleStatus.FINISHED);
         activityList.get(2).setStatus(ScheduleStatus.FINISHED);
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
@@ -294,7 +294,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         activityList.get(3).setStatus(ScheduleStatus.FINISHED);
         activityList.get(4).setStatus(ScheduleStatus.FINISHED);
         activityList.get(5).setStatus(ScheduleStatus.FINISHED);
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.plusDays(7), USER_ID);
+        processor.processAccountForDate(APP_ID, ENROLLMENT_DATE.plusDays(7), USER_ID);
         verifyNoNotification();
     }
 
@@ -310,15 +310,15 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         when(mockDynamoHelper.getLastNotificationTimeForUser(USER_ID)).thenReturn(userNotification);
 
         // Execute and verify
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
     // branch coverage
     @Test
     public void noActivityEvents() throws Exception {
-        when(mockBridgeHelper.getActivityEvents(STUDY_ID, USER_ID)).thenReturn(ImmutableList.of());
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        when(mockBridgeHelper.getActivityEvents(APP_ID, USER_ID)).thenReturn(ImmutableList.of());
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifyNoNotification();
     }
 
@@ -332,7 +332,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
     public void didNoActivities() throws Exception {
         // This is the "base case" for our tests. Since the majority of our tests do no send notifications, we wanted
         // the basic configuration to send a notification, to help ensure that our tests are working properly.
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
     }
 
@@ -342,7 +342,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         // did not engage with the last 2 study bursts. If this happens, we should still act like the user has
         // activities, and they were simply not completed.
         activityList.clear();
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
     }
 
@@ -351,7 +351,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of());
         when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group",
                 CLINICAL_CONSENT_GROUP));
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
     }
 
@@ -360,7 +360,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         when(mockParticipant.getConsentHistories()).thenReturn(ImmutableMap.of());
         when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group",
                 TEST_NO_CONSENT_GROUP));
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
     }
 
@@ -369,7 +369,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         // We did days 1 and 3, but missed 0, 2, and 4
         activityList.get(1).setStatus(ScheduleStatus.FINISHED);
         activityList.get(3).setStatus(ScheduleStatus.FINISHED);
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.plusDays(4), USER_ID);
+        processor.processAccountForDate(APP_ID, ENROLLMENT_DATE.plusDays(4), USER_ID);
         verifySentNotification(NotificationType.CUMULATIVE, MESSAGE_CUMULATIVE);
     }
 
@@ -381,7 +381,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
 
         // Technically, the notification worker will never process a user _before_ they're enrolled. But for the
         // purposes of this test, this represents sending the pre-burst notification a day before the start of burst.
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
+        processor.processAccountForDate(APP_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
         verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_1);
     }
 
@@ -392,17 +392,17 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
                 PREBURST_GROUP_2));
 
         // Execute test.
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
+        processor.processAccountForDate(APP_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
         verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_2);
     }
 
     @Test
     public void preburstNotificationWithNoStudyCommitment() throws Exception {
         // Mock template variable helper to not have a study commitment.
-        when(mockTemplateVariableHelper.getStudyCommitment(STUDY_ID, USER_ID)).thenReturn(null);
+        when(mockTemplateVariableHelper.getStudyCommitment(APP_ID, USER_ID)).thenReturn(null);
 
         // Execute test.
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
+        processor.processAccountForDate(APP_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
         verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_DEFAULT);
     }
 
@@ -412,7 +412,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of("irrelevant-other-group"));
 
         // Execute test.
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
+        processor.processAccountForDate(APP_ID, ENROLLMENT_DATE.minusDays(1), USER_ID);
         verifySentNotification(NotificationType.PRE_BURST, MESSAGE_PRE_BURST_DEFAULT);
     }
 
@@ -427,7 +427,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         when(mockDynamoHelper.getLastNotificationTimeForUser(USER_ID)).thenReturn(userNotification);
 
         // User should still get a notification.
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
     }
 
@@ -436,7 +436,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         // Mark day 0 and 1 as finished. We missed days 2 and days 3, and we send a notification.
         activityList.get(0).setStatus(ScheduleStatus.FINISHED);
         activityList.get(1).setStatus(ScheduleStatus.FINISHED);
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
     }
 
@@ -453,7 +453,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         // Mark day 0 and 1 as finished. We missed days 2 and days 3, and we send a notification.
         activityList.get(0).setStatus(ScheduleStatus.FINISHED);
         activityList.get(1).setStatus(ScheduleStatus.FINISHED);
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifySentNotification(NotificationType.EARLY, "message-1");
     }
 
@@ -464,7 +464,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         activityList.get(1).setStatus(ScheduleStatus.FINISHED);
         activityList.get(2).setStatus(ScheduleStatus.FINISHED);
         activityList.get(3).setStatus(ScheduleStatus.FINISHED);
-        processor.processAccountForDate(STUDY_ID, ENROLLMENT_DATE.plusDays(5), USER_ID);
+        processor.processAccountForDate(APP_ID, ENROLLMENT_DATE.plusDays(5), USER_ID);
         verifySentNotification(NotificationType.LATE, MESSAGE_LATE);
     }
 
@@ -481,7 +481,7 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         when(mockDynamoHelper.getLastNotificationTimeForUser(USER_ID)).thenReturn(userNotification);
 
         // Execute and verify
-        processor.processAccountForDate(STUDY_ID, TEST_DATE, USER_ID);
+        processor.processAccountForDate(APP_ID, TEST_DATE, USER_ID);
         verifySentNotification(NotificationType.EARLY, MESSAGE_EARLY);
     }
 
@@ -497,6 +497,6 @@ public class BridgeNotificationWorkerProcessorProcessAccountTest {
         assertEquals(userNotification.getUserId(), USER_ID);
 
         // Verify SMS message
-        verify(mockBridgeHelper).sendSmsToUser(STUDY_ID, USER_ID, message + RESOLVED_TEMPLATE_VAR_SUFFIX);
+        verify(mockBridgeHelper).sendSmsToUser(APP_ID, USER_ID, message + RESOLVED_TEMPLATE_VAR_SUFFIX);
     }
 }

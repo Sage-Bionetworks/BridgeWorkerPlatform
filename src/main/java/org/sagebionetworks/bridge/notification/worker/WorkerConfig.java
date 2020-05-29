@@ -29,7 +29,7 @@ public class WorkerConfig {
     private Map<String, List<String>> preburstMessagesByDataGroup = ImmutableMap.of();
 
     /**
-     * URL that links back to the app (or to the study website, if for some reason the app is not installed).
+     * URL that links back to the app (or to the app website, if for some reason the app is not installed).
      * Example: http://mpower.sagebridge.org/
      */
     public String getAppUrl() {

@@ -29,7 +29,7 @@ import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionEx
 
 @SuppressWarnings("unchecked")
 public class SynapseDownloadSurveyTaskTest {
-    private static final String STUDY_ID = "my-study";
+    private static final String APP_ID = "my-app";
     private static final String TEST_FILE_HANDLE = "test-file-handle";
     private static final String TEST_SYNAPSE_TABLE_ID = "test-table";
     private static final String TEST_SYNAPSE_TABLE_NAME = "Test Table";
@@ -61,7 +61,7 @@ public class SynapseDownloadSurveyTaskTest {
         tmpDir = fileHelper.createTempDir();
 
         // create params
-        SynapseDownloadSurveyParameters params = new SynapseDownloadSurveyParameters.Builder().withStudyId(STUDY_ID)
+        SynapseDownloadSurveyParameters params = new SynapseDownloadSurveyParameters.Builder().withAppId(APP_ID)
                 .withSynapseTableId(TEST_SYNAPSE_TABLE_ID).withTempDir(tmpDir).build();
 
         // create task
@@ -85,7 +85,7 @@ public class SynapseDownloadSurveyTaskTest {
         }
 
         // Verify we delete the schema from the table mapping.
-        verify(dynamoHelper).deleteSynapseSurveyTableMapping(STUDY_ID, TEST_SYNAPSE_TABLE_ID);
+        verify(dynamoHelper).deleteSynapseSurveyTableMapping(APP_ID, TEST_SYNAPSE_TABLE_ID);
 
         // Verify file helper is clean.
         postValidation();

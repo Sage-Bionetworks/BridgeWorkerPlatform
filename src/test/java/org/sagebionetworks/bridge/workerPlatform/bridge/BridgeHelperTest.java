@@ -43,6 +43,8 @@ import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.AccountSummaryList;
 import org.sagebionetworks.bridge.rest.model.ActivityEvent;
 import org.sagebionetworks.bridge.rest.model.ActivityEventList;
+import org.sagebionetworks.bridge.rest.model.App;
+import org.sagebionetworks.bridge.rest.model.AppList;
 import org.sagebionetworks.bridge.rest.model.ForwardCursorScheduledActivityList;
 import org.sagebionetworks.bridge.rest.model.Message;
 import org.sagebionetworks.bridge.rest.model.Phone;
@@ -57,12 +59,10 @@ import org.sagebionetworks.bridge.rest.model.UploadList;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 import org.sagebionetworks.bridge.rest.ClientManager;
+import org.sagebionetworks.bridge.rest.api.AppsApi;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
-import org.sagebionetworks.bridge.rest.api.StudiesApi;
 import org.sagebionetworks.bridge.rest.model.ForwardCursorStringList;
 import org.sagebionetworks.bridge.rest.model.OAuthAccessToken;
-import org.sagebionetworks.bridge.rest.model.Study;
-import org.sagebionetworks.bridge.rest.model.StudyList;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.rest.model.UploadStatus;
 import org.sagebionetworks.bridge.rest.model.UploadValidationStatus;
@@ -83,7 +83,7 @@ public class BridgeHelperTest {
     private static final String REPORT_ID = "test-report";
     private static final DateTime SCHEDULED_ON_START = DateTime.parse("2018-04-27T00:00-0700");
     private static final DateTime SCHEDULED_ON_END = DateTime.parse("2018-04-28T23:59:59.999-0700");
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
     private static final String SURVEY_GUID = "survey-guid";
     private static final String TASK_ID = "test-task";
     private static final String UPLOAD_ID = "dummy-upload";
@@ -146,10 +146,10 @@ public class BridgeHelperTest {
         when(mockParticipant.getHealthCode()).thenReturn(HEALTH_CODE);
 
         Call<StudyParticipant> mockCall = mockCallForValue(mockParticipant);
-        when(mockWorkerApi.getParticipantByIdForStudy(STUDY_ID, USER_ID, false)).thenReturn(mockCall);
+        when(mockWorkerApi.getParticipantByIdForApp(APP_ID, USER_ID, false)).thenReturn(mockCall);
 
         // execute and validate
-        AccountInfo accountInfo = bridgeHelper.getAccountInfo(STUDY_ID, USER_ID);
+        AccountInfo accountInfo = bridgeHelper.getAccountInfo(APP_ID, USER_ID);
         assertEquals(accountInfo.getEmailAddress(), EMAIL);
         assertEquals(accountInfo.getHealthCode(), HEALTH_CODE);
         assertEquals(accountInfo.getUserId(), USER_ID);
@@ -166,10 +166,10 @@ public class BridgeHelperTest {
         when(mockParticipant.getHealthCode()).thenReturn(HEALTH_CODE);
 
         Call<StudyParticipant> mockCall = mockCallForValue(mockParticipant);
-        when(mockWorkerApi.getParticipantByIdForStudy(STUDY_ID, USER_ID, false)).thenReturn(mockCall);
+        when(mockWorkerApi.getParticipantByIdForApp(APP_ID, USER_ID, false)).thenReturn(mockCall);
 
         // execute and validate
-        AccountInfo accountInfo = bridgeHelper.getAccountInfo(STUDY_ID, USER_ID);
+        AccountInfo accountInfo = bridgeHelper.getAccountInfo(APP_ID, USER_ID);
         assertNull(accountInfo.getEmailAddress());
         assertEquals(accountInfo.getPhone(), PHONE);
         assertEquals(accountInfo.getHealthCode(), HEALTH_CODE);
@@ -188,9 +188,9 @@ public class BridgeHelperTest {
         when(mockParticipant.getHealthCode()).thenReturn(HEALTH_CODE);
 
         Call<StudyParticipant> mockCall = mockCallForValue(mockParticipant);
-        when(mockWorkerApi.getParticipantByIdForStudy(STUDY_ID, USER_ID, false)).thenReturn(mockCall);
+        when(mockWorkerApi.getParticipantByIdForApp(APP_ID, USER_ID, false)).thenReturn(mockCall);
 
-        bridgeHelper.getAccountInfo(STUDY_ID, USER_ID);
+        bridgeHelper.getAccountInfo(APP_ID, USER_ID);
     }
 
     @Test
@@ -208,14 +208,14 @@ public class BridgeHelperTest {
         Call<AccountSummaryList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        when(mockWorkerApi.getParticipantsForStudy(eq(STUDY_ID), any(), any(), any(), any(), any(), any())).thenReturn(
+        when(mockWorkerApi.getParticipantsForApp(eq(APP_ID), any(), any(), any(), any(), any(), any())).thenReturn(
                 mockCall);
 
         // Execute and validate
-        Iterator<AccountSummary> accountSummaryIterator = bridgeHelper.getAllAccountSummaries(STUDY_ID, true);
+        Iterator<AccountSummary> accountSummaryIterator = bridgeHelper.getAllAccountSummaries(APP_ID, true);
         assertNotNull(accountSummaryIterator);
 
-        verify(mockWorkerApi).getParticipantsForStudy(eq(STUDY_ID), any(), any(), any(), any(), any(), any());
+        verify(mockWorkerApi).getParticipantsForApp(eq(APP_ID), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -229,18 +229,18 @@ public class BridgeHelperTest {
         Call<ActivityEventList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        when(mockWorkerApi.getActivityEventsForParticipantAndStudy(STUDY_ID, USER_ID)).thenReturn(mockCall);
+        when(mockWorkerApi.getActivityEventsForParticipantAndApp(APP_ID, USER_ID)).thenReturn(mockCall);
 
         // Execute and validate
-        List<ActivityEvent> outputList = bridgeHelper.getActivityEvents(STUDY_ID, USER_ID);
+        List<ActivityEvent> outputList = bridgeHelper.getActivityEvents(APP_ID, USER_ID);
         assertEquals(outputList.size(), 1);
         assertEquals(outputList.get(0), activityEvent);
 
-        verify(mockWorkerApi).getActivityEventsForParticipantAndStudy(STUDY_ID, USER_ID);
+        verify(mockWorkerApi).getActivityEventsForParticipantAndApp(APP_ID, USER_ID);
     }
 
     @Test
-    public void getFitBitUserForStudyAndHealthCode() throws Exception {
+    public void getFitBitUserForAppAndHealthCode() throws Exception {
         // Mock client manager.
         ForWorkersApi mockApi = mock(ForWorkersApi.class);
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockApi);
@@ -250,10 +250,10 @@ public class BridgeHelperTest {
         when(mockToken.getProviderUserId()).thenReturn(USER_ID);
         when(mockToken.getScopes()).thenReturn(SCOPE_LIST);
         Call<OAuthAccessToken> mockCall = mockCallForValue(mockToken);
-        when(mockApi.getOAuthAccessToken(STUDY_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE)).thenReturn(mockCall);
+        when(mockApi.getOAuthAccessToken(APP_ID, Constants.FITBIT_VENDOR_ID, HEALTH_CODE)).thenReturn(mockCall);
 
         // Execute and validate.
-        FitBitUser fitBitUser = bridgeHelper.getFitBitUserForStudyAndHealthCode(STUDY_ID, HEALTH_CODE);
+        FitBitUser fitBitUser = bridgeHelper.getFitBitUserForAppAndHealthCode(APP_ID, HEALTH_CODE);
         assertEquals(fitBitUser.getAccessToken(), ACCESS_TOKEN);
         assertEquals(fitBitUser.getHealthCode(), HEALTH_CODE);
         assertEquals(fitBitUser.getScopeSet(), SCOPE_SET);
@@ -261,7 +261,7 @@ public class BridgeHelperTest {
     }
 
     @Test
-    public void getFitBitUsersForStudy() throws Exception {
+    public void getFitBitUsersForApp() throws Exception {
         // Mock client manager call to getHealthCodesGrantingOAuthAccess(). We don't care about the result. This is
         // tested in FitBitUserIterator.
         ForWorkersApi mockApi = mock(ForWorkersApi.class);
@@ -271,11 +271,11 @@ public class BridgeHelperTest {
         when(mockApi.getHealthCodesGrantingOAuthAccess(any(), any(), any(), any())).thenReturn(mockCall);
 
         // Execute
-        Iterator<FitBitUser> fitBitUserIter = bridgeHelper.getFitBitUsersForStudy(STUDY_ID);
+        Iterator<FitBitUser> fitBitUserIter = bridgeHelper.getFitBitUsersForApp(APP_ID);
 
-        // Verify basics, like return value is not null, and we called the API with the right study ID.
+        // Verify basics, like return value is not null, and we called the API with the right app ID.
         assertNotNull(fitBitUserIter);
-        verify(mockApi).getHealthCodesGrantingOAuthAccess(eq(STUDY_ID), any(), any(), any());
+        verify(mockApi).getHealthCodesGrantingOAuthAccess(eq(APP_ID), any(), any(), any());
     }
 
     @Test
@@ -289,31 +289,31 @@ public class BridgeHelperTest {
         Call<StudyParticipant> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        when(mockWorkerApi.getParticipantByIdForStudy(STUDY_ID, USER_ID, true)).thenReturn(mockCall);
+        when(mockWorkerApi.getParticipantByIdForApp(APP_ID, USER_ID, true)).thenReturn(mockCall);
 
         // Execute and validate
-        StudyParticipant output = bridgeHelper.getParticipant(STUDY_ID, USER_ID, true);
+        StudyParticipant output = bridgeHelper.getParticipant(APP_ID, USER_ID, true);
         assertEquals(output.getId(), USER_ID);
 
-        verify(mockWorkerApi).getParticipantByIdForStudy(STUDY_ID, USER_ID, true);
+        verify(mockWorkerApi).getParticipantByIdForApp(APP_ID, USER_ID, true);
     }
 
     @Test
-    public void testGetParticipantsForStudy() throws Exception {
+    public void testGetParticipantsForApp() throws Exception {
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
 
         AccountSummary summary1 = mockAccountSummary(USER_ID_1, USER_EMAIL_1);
         AccountSummary summary2 = mockAccountSummary(USER_ID_2, USER_EMAIL_2);
 
         Call<AccountSummaryList> mockCall1 = createResponseForOffset(0, summary1, summary2);
-        when(mockWorkerApi.getParticipantsForStudy(STUDY_ID, 0, 100, null, null, START_DATETIME,
+        when(mockWorkerApi.getParticipantsForApp(APP_ID, 0, 100, null, null, START_DATETIME,
                 END_DATETIME)).thenReturn(mockCall1);
 
         AccountSummary summary3 = mockAccountSummary(USER_ID_3, USER_EMAIL_3);
         AccountSummary summary4 = mockAccountSummary(USER_ID_4, USER_EMAIL_4);
 
         Call<AccountSummaryList> mockCall2 = createResponseForOffset(100, summary3, summary4);
-        when(mockWorkerApi.getParticipantsForStudy(STUDY_ID, 100, 100, null, null, START_DATETIME,
+        when(mockWorkerApi.getParticipantsForApp(APP_ID, 100, 100, null, null, START_DATETIME,
                 END_DATETIME)).thenReturn(mockCall2);
 
         List<StudyParticipant> stubParticipants = newArrayList();
@@ -322,7 +322,7 @@ public class BridgeHelperTest {
         stubParticipants.add(mockCallForParticipant(mockWorkerApi, USER_ID_3));
         stubParticipants.add(mockCallForParticipant(mockWorkerApi, USER_ID_4));
 
-        List<StudyParticipant> participants = bridgeHelper.getParticipantsForStudy(STUDY_ID, START_DATETIME,
+        List<StudyParticipant> participants = bridgeHelper.getParticipantsForApp(APP_ID, START_DATETIME,
                 END_DATETIME);
         // All four participants are returned from two pages of records
         assertEquals(participants.get(0), stubParticipants.get(0));
@@ -330,14 +330,14 @@ public class BridgeHelperTest {
         assertEquals(participants.get(2), stubParticipants.get(2));
         assertEquals(participants.get(3), stubParticipants.get(3));
 
-        verify(mockWorkerApi).getParticipantsForStudy(STUDY_ID, 0, 100, null, null, START_DATETIME,
+        verify(mockWorkerApi).getParticipantsForApp(APP_ID, 0, 100, null, null, START_DATETIME,
                 END_DATETIME);
-        verify(mockWorkerApi).getParticipantsForStudy(STUDY_ID, 100, 100, null, null, START_DATETIME,
+        verify(mockWorkerApi).getParticipantsForApp(APP_ID, 100, 100, null, null, START_DATETIME,
                 END_DATETIME);
-        verify(mockWorkerApi).getParticipantByIdForStudy(STUDY_ID, USER_ID_1, false);
-        verify(mockWorkerApi).getParticipantByIdForStudy(STUDY_ID, USER_ID_2, false);
-        verify(mockWorkerApi).getParticipantByIdForStudy(STUDY_ID, USER_ID_3, false);
-        verify(mockWorkerApi).getParticipantByIdForStudy(STUDY_ID, USER_ID_4, false);
+        verify(mockWorkerApi).getParticipantByIdForApp(APP_ID, USER_ID_1, false);
+        verify(mockWorkerApi).getParticipantByIdForApp(APP_ID, USER_ID_2, false);
+        verify(mockWorkerApi).getParticipantByIdForApp(APP_ID, USER_ID_3, false);
+        verify(mockWorkerApi).getParticipantByIdForApp(APP_ID, USER_ID_4, false);
     }
 
     @Test
@@ -351,31 +351,31 @@ public class BridgeHelperTest {
         Call<ReportDataList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        when(mockWorkerApi.getParticipantReportsForParticipant(STUDY_ID, USER_ID, REPORT_ID, START_DATE, END_DATE))
+        when(mockWorkerApi.getParticipantReportsForParticipant(APP_ID, USER_ID, REPORT_ID, START_DATE, END_DATE))
                 .thenReturn(mockCall);
 
         // Execute and validate.
-        List<ReportData> outputReportDataList = bridgeHelper.getParticipantReports(STUDY_ID, USER_ID, REPORT_ID,
+        List<ReportData> outputReportDataList = bridgeHelper.getParticipantReports(APP_ID, USER_ID, REPORT_ID,
                 START_DATE, END_DATE);
         assertEquals(outputReportDataList.size(), 1);
         assertSame(outputReportDataList.get(0), dummyReport);
 
-        verify(mockWorkerApi).getParticipantReportsForParticipant(STUDY_ID, USER_ID, REPORT_ID, START_DATE, END_DATE);
+        verify(mockWorkerApi).getParticipantReportsForParticipant(APP_ID, USER_ID, REPORT_ID, START_DATE, END_DATE);
     }
 
     @Test
-    public void testSaveReportForStudy() throws Exception {
+    public void testSaveReportForApp() throws Exception {
         // mock SDK save report call
         Call<Message> mockCall = mock(Call.class);
-        when(mockWorkerApi.saveReport(STUDY_ID, REPORT_ID, REPORT)).thenReturn(mockCall);
+        when(mockWorkerApi.saveReport(APP_ID, REPORT_ID, REPORT)).thenReturn(mockCall);
 
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
 
-        Report report = new Report.Builder().withStudyId(STUDY_ID)
+        Report report = new Report.Builder().withAppId(APP_ID)
                 .withReportId(REPORT_ID).withDate(LocalDate.parse(REPORT.getDate()))
                 .withReportData(REPORT.getData()).build();
 
-        bridgeHelper.saveReportForStudy(report);
+        bridgeHelper.saveReportForApp(report);
         verify(mockCall).execute();
     }
 
@@ -384,23 +384,23 @@ public class BridgeHelperTest {
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
         RequestInfo mockRequestInfo = mockCallForRequestInfo(mockWorkerApi, USER_ID_1);
 
-        RequestInfo requestInfo = bridgeHelper.getRequestInfoForParticipant(STUDY_ID, USER_ID_1);
+        RequestInfo requestInfo = bridgeHelper.getRequestInfoForParticipant(APP_ID, USER_ID_1);
 
         assertSame(requestInfo.getUserId(), mockRequestInfo.getUserId());
-        verify(mockWorkerApi).getRequestInfoForWorker(STUDY_ID, USER_ID_1);
+        verify(mockWorkerApi).getRequestInfoForWorker(APP_ID, USER_ID_1);
     }
 
     @Test
     public void sendSmsToUser() throws Exception {
         // Set up mocks
         Call<Message> mockCall = mock(Call.class);
-        when(mockWorkerApi.sendSmsMessageToParticipantForStudy(eq(STUDY_ID), eq(USER_ID), any())).thenReturn(mockCall);
+        when(mockWorkerApi.sendSmsMessageToParticipantForApp(eq(APP_ID), eq(USER_ID), any())).thenReturn(mockCall);
 
         // Execute and validate
-        bridgeHelper.sendSmsToUser(STUDY_ID, USER_ID, "dummy message");
+        bridgeHelper.sendSmsToUser(APP_ID, USER_ID, "dummy message");
 
         ArgumentCaptor<SmsTemplate> smsTemplateCaptor = ArgumentCaptor.forClass(SmsTemplate.class);
-        verify(mockWorkerApi).sendSmsMessageToParticipantForStudy(eq(STUDY_ID), eq(USER_ID), smsTemplateCaptor.capture());
+        verify(mockWorkerApi).sendSmsMessageToParticipantForApp(eq(APP_ID), eq(USER_ID), smsTemplateCaptor.capture());
         SmsTemplate smsTemplate = smsTemplateCaptor.getValue();
         assertEquals(smsTemplate.getMessage(), "dummy message");
 
@@ -408,37 +408,37 @@ public class BridgeHelperTest {
     }
 
     @Test
-    public void getAllStudies() throws Exception {
-        // Mock client manager call to getAllStudies(). Note that study summaries only include study ID.
-        StudiesApi mockApi = mock(StudiesApi.class);
-        when(mockClientManager.getClient(StudiesApi.class)).thenReturn(mockApi);
+    public void getAllApps() throws Exception {
+        // Mock client manager call to getAllStudies(). Note that app summaries only include app ID.
+        AppsApi mockApi = mock(AppsApi.class);
+        when(mockClientManager.getClient(AppsApi.class)).thenReturn(mockApi);
 
-        List<Study> studyListCol = ImmutableList.of(new Study().identifier("foo-study"), new Study().identifier(
-                "bar-study"));
-        StudyList studyListObj = mock(StudyList.class);
-        when(studyListObj.getItems()).thenReturn(studyListCol);
-        Call<StudyList> mockCall = mockCallForValue(studyListObj);
-        when(mockApi.getStudies(true)).thenReturn(mockCall);
+        List<App> appListCol = ImmutableList.of(new App().identifier("foo-app"), new App().identifier(
+                "bar-app"));
+        AppList appListObj = mock(AppList.class);
+        when(appListObj.getItems()).thenReturn(appListCol);
+        Call<AppList> mockCall = mockCallForValue(appListObj);
+        when(mockApi.getApps(true)).thenReturn(mockCall);
 
         // Execute and validate
-        List<Study> retVal = bridgeHelper.getAllStudies();
-        assertEquals(retVal, studyListCol);
+        List<App> retVal = bridgeHelper.getAllApps();
+        assertEquals(retVal, appListCol);
     }
 
     @Test
-    public void getStudy() throws Exception {
-        // Mock client manager call to getStudy. This contains dummy values for Synapse Project ID and Team ID to
-        // "test" that our Study object is complete.
+    public void getApp() throws Exception {
+        // Mock client manager call to getApp. This contains dummy values for Synapse Project ID and Team ID to
+        // "test" that our App object is complete.
         ForWorkersApi mockApi = mock(ForWorkersApi.class);
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockApi);
 
-        Study study = new Study().identifier("my-study").synapseProjectId("my-project").synapseDataAccessTeamId(1111L);
-        Call<Study> mockCall = mockCallForValue(study);
-        when(mockApi.getStudy("my-study")).thenReturn(mockCall);
+        App app = new App().identifier("my-app").synapseProjectId("my-project").synapseDataAccessTeamId(1111L);
+        Call<App> mockCall = mockCallForValue(app);
+        when(mockApi.getApp("my-app")).thenReturn(mockCall);
 
         // Execute and validate
-        Study retVal = bridgeHelper.getStudy("my-study");
-        assertEquals(retVal, study);
+        App retVal = bridgeHelper.getApp("my-app");
+        assertEquals(retVal, app);
     }
 
     @Test
@@ -452,15 +452,15 @@ public class BridgeHelperTest {
         Call<ForwardCursorScheduledActivityList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        when(mockWorkerApi.getParticipantSurveyHistoryForStudy(eq(STUDY_ID), eq(USER_ID), eq(SURVEY_GUID),
+        when(mockWorkerApi.getParticipantSurveyHistoryForApp(eq(APP_ID), eq(USER_ID), eq(SURVEY_GUID),
                 eq(SCHEDULED_ON_START), eq(SCHEDULED_ON_END), any(), any())).thenReturn(mockCall);
 
         // Execute and validate
-        Iterator<ScheduledActivity> surveyHistoryIterator = bridgeHelper.getSurveyHistory(STUDY_ID, USER_ID,
+        Iterator<ScheduledActivity> surveyHistoryIterator = bridgeHelper.getSurveyHistory(APP_ID, USER_ID,
                 SURVEY_GUID, SCHEDULED_ON_START, SCHEDULED_ON_END);
         assertNotNull(surveyHistoryIterator);
 
-        verify(mockWorkerApi).getParticipantSurveyHistoryForStudy(eq(STUDY_ID), eq(USER_ID), eq(SURVEY_GUID),
+        verify(mockWorkerApi).getParticipantSurveyHistoryForApp(eq(APP_ID), eq(USER_ID), eq(SURVEY_GUID),
                 eq(SCHEDULED_ON_START), eq(SCHEDULED_ON_END), any(), any());
     }
 
@@ -475,20 +475,20 @@ public class BridgeHelperTest {
         Call<ForwardCursorScheduledActivityList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        when(mockWorkerApi.getParticipantTaskHistoryForStudy(eq(STUDY_ID), eq(USER_ID), eq(TASK_ID), eq(SCHEDULED_ON_START),
+        when(mockWorkerApi.getParticipantTaskHistoryForApp(eq(APP_ID), eq(USER_ID), eq(TASK_ID), eq(SCHEDULED_ON_START),
                 eq(SCHEDULED_ON_END), any(), any())).thenReturn(mockCall);
 
         // Execute and validate
-        Iterator<ScheduledActivity> taskHistoryIterator = bridgeHelper.getTaskHistory(STUDY_ID, USER_ID, TASK_ID,
+        Iterator<ScheduledActivity> taskHistoryIterator = bridgeHelper.getTaskHistory(APP_ID, USER_ID, TASK_ID,
                 SCHEDULED_ON_START, SCHEDULED_ON_END);
         assertNotNull(taskHistoryIterator);
 
-        verify(mockWorkerApi).getParticipantTaskHistoryForStudy(eq(STUDY_ID), eq(USER_ID), eq(TASK_ID), eq(SCHEDULED_ON_START),
+        verify(mockWorkerApi).getParticipantTaskHistoryForApp(eq(APP_ID), eq(USER_ID), eq(TASK_ID), eq(SCHEDULED_ON_START),
                 eq(SCHEDULED_ON_END), any(), any());
     }
 
     @Test
-    public void testGetUploadsForStudy() throws Exception {
+    public void testGetUploadsForApp() throws Exception {
         // mock SDK get uploads call
         UploadList uploadList = mock(UploadList.class);
         when(uploadList.getItems()).thenReturn(ImmutableList.of(testUpload));
@@ -497,18 +497,18 @@ public class BridgeHelperTest {
         Call<UploadList> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(response);
 
-        when(mockWorkerApi.getUploadsForStudy(STUDY_ID, START_DATETIME, END_DATETIME, BridgeHelper.MAX_PAGE_SIZE,
+        when(mockWorkerApi.getUploadsForApp(APP_ID, START_DATETIME, END_DATETIME, BridgeHelper.MAX_PAGE_SIZE,
                 null)).thenReturn(mockCall);
 
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
 
-        List<Upload> retUploadsForStudy = bridgeHelper.getUploadsForStudy(STUDY_ID, START_DATETIME,
+        List<Upload> retUploadsForApp = bridgeHelper.getUploadsForApp(APP_ID, START_DATETIME,
                 END_DATETIME);
-        assertEquals(retUploadsForStudy, ImmutableList.of(testUpload));
+        assertEquals(retUploadsForApp, ImmutableList.of(testUpload));
     }
 
     @Test
-    public void testGetUploadsForStudyPaginated() throws Exception {
+    public void testGetUploadsForAppPaginated() throws Exception {
         // mock SDK get uploads call
         UploadList uploadList = mock(UploadList.class);
         when(uploadList.getItems()).thenReturn(ImmutableList.of(testUpload));
@@ -524,22 +524,22 @@ public class BridgeHelperTest {
         Call<UploadList> secondMockCall = mock(Call.class);
         when(secondMockCall.execute()).thenReturn(secondResponse);
 
-        when(mockWorkerApi.getUploadsForStudy(STUDY_ID, START_DATETIME, END_DATETIME, BridgeHelper.MAX_PAGE_SIZE,
+        when(mockWorkerApi.getUploadsForApp(APP_ID, START_DATETIME, END_DATETIME, BridgeHelper.MAX_PAGE_SIZE,
                 null)).thenReturn(mockCall);
-        when(mockWorkerApi.getUploadsForStudy(STUDY_ID, START_DATETIME, END_DATETIME, BridgeHelper.MAX_PAGE_SIZE,
+        when(mockWorkerApi.getUploadsForApp(APP_ID, START_DATETIME, END_DATETIME, BridgeHelper.MAX_PAGE_SIZE,
                 "offsetKey")).thenReturn(secondMockCall);
 
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
 
         // execute
-        List<Upload> retUploadsForStudy = bridgeHelper.getUploadsForStudy(STUDY_ID, START_DATETIME,
+        List<Upload> retUploadsForApp = bridgeHelper.getUploadsForApp(APP_ID, START_DATETIME,
                 END_DATETIME);
 
         // verify
         // called twice
-        verify(mockWorkerApi, times(2)).getUploadsForStudy(any(), any(), any(), any(), any());
+        verify(mockWorkerApi, times(2)).getUploadsForApp(any(), any(), any(), any(), any());
         // contain 2 test uploads
-        assertEquals(retUploadsForStudy, ImmutableList.of(testUpload, testUpload));
+        assertEquals(retUploadsForApp, ImmutableList.of(testUpload, testUpload));
     }
 
     @Test
@@ -718,14 +718,14 @@ public class BridgeHelperTest {
     private StudyParticipant mockCallForParticipant(ForWorkersApi client, String userId) throws Exception {
         StudyParticipant studyParticipant = new StudyParticipant();
         Call<StudyParticipant> spCall = mockCallForValue(studyParticipant);
-        when(client.getParticipantByIdForStudy(STUDY_ID, userId, false)).thenReturn(spCall);
+        when(client.getParticipantByIdForApp(APP_ID, userId, false)).thenReturn(spCall);
         return studyParticipant;
     }
 
     private static RequestInfo mockCallForRequestInfo(ForWorkersApi client, String userId) throws Exception {
         RequestInfo requestInfo = new RequestInfo();
         Call<RequestInfo> requestInfoCall = mockCallForValue(requestInfo);
-        when(client.getRequestInfoForWorker(STUDY_ID, userId)).thenReturn(requestInfoCall);
+        when(client.getRequestInfoForWorker(APP_ID, userId)).thenReturn(requestInfoCall);
         return requestInfo;
     }
 

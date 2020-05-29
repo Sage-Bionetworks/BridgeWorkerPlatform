@@ -11,7 +11,7 @@ import org.sagebionetworks.repo.model.table.ColumnType;
 
 import org.sagebionetworks.bridge.fitbit.schema.ColumnSchema;
 import org.sagebionetworks.bridge.fitbit.worker.PopulatedTable;
-import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 /** Utility functions */
@@ -53,15 +53,15 @@ public class Utils {
     }
 
     /**
-     * Returns true if the study is configured for FitBit data export. This means that the study is configured to
+     * Returns true if the app is configured for FitBit data export. This means that the app is configured to
      * export to Synapse (has the synapseProjectId and synapseDataAccessTeamId properties) and is configured for FitBit
      * OAuth (has "fitbit" in its oAuthProviders).
      */
-    public static boolean isStudyConfigured(Study study) {
-        return study.getSynapseProjectId() != null
-                && study.getSynapseDataAccessTeamId() != null
-                && study.getOAuthProviders() != null
-                && study.getOAuthProviders().containsKey(Constants.FITBIT_VENDOR_ID);
+    public static boolean isAppConfigured(App app) {
+        return app.getSynapseProjectId() != null
+                && app.getSynapseDataAccessTeamId() != null
+                && app.getOAuthProviders() != null
+                && app.getOAuthProviders().containsKey(Constants.FITBIT_VENDOR_ID);
     }
 
     /** Helper method, which formats and writes a row of values (represented as a String List) to the given Writer. */

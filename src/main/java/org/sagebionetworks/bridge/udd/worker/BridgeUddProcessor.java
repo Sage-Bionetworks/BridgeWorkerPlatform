@@ -26,7 +26,7 @@ import org.sagebionetworks.bridge.udd.synapse.SynapsePackager;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
-import org.sagebionetworks.bridge.workerPlatform.dynamodb.StudyInfo;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.AppInfo;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.SynapseUnavailableException;
 
 /** SQS callback. Called by the PollSqsWorker. This handles a UDD request. */
@@ -47,7 +47,7 @@ public class BridgeUddProcessor {
         this.bridgeHelper = bridgeHelper;
     }
 
-    /** Dynamo DB helper, used to get study info and uploads. */
+    /** Dynamo DB helper, used to get app info and uploads. */
     @Autowired
     public final void setDynamoHelper(DynamoHelper dynamoHelper) {
         this.dynamoHelper = dynamoHelper;
@@ -87,11 +87,11 @@ public class BridgeUddProcessor {
         }
 
         String userId = request.getUserId();
-        String studyId = request.getStudyId();
+        String appId = request.getAppId();
         String startDateStr = request.getStartDate().toString();
         String endDateStr = request.getEndDate().toString();
-        LOG.info("Received request for userId=" + userId + ", study="
-                + studyId + ", startDate=" + startDateStr + ",endDate=" + endDateStr);
+        LOG.info("Received request for userId=" + userId + ", app="
+                + appId + ", startDate=" + startDateStr + ",endDate=" + endDateStr);
 
         // Check to see that Synapse is up and availabe for read/write. If it isn't, throw an exception, so the
         // PollSqsWorker can re-cycle the request until Synapse is available again.
@@ -107,35 +107,35 @@ public class BridgeUddProcessor {
 
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         try {
-            // We need the study, because accounts and data are partitioned on study.
-            StudyInfo studyInfo = dynamoHelper.getStudy(studyId);
+            // We need the app, because accounts and data are partitioned on app.
+            AppInfo appInfo = dynamoHelper.getApp(appId);
 
-            AccountInfo accountInfo = bridgeHelper.getAccountInfo(studyId, userId);
+            AccountInfo accountInfo = bridgeHelper.getAccountInfo(appId, userId);
             String healthCode = accountInfo.getHealthCode();
             if (healthCode == null) {
                 throw new PollSqsWorkerBadRequestException("Health code not found for account " +
                         accountInfo.getUserId());
             }
 
-            Map<String, UploadSchema> synapseToSchemaMap = dynamoHelper.getSynapseTableIdsForStudy(studyId);
-            String defaultSynapseTableId = dynamoHelper.getDefaultSynapseTableForStudy(studyId);
-            Set<String> surveyTableIdSet = dynamoHelper.getSynapseSurveyTablesForStudy(studyId);
-            PresignedUrlInfo presignedUrlInfo = synapsePackager.packageSynapseData(studyId, synapseToSchemaMap,
+            Map<String, UploadSchema> synapseToSchemaMap = dynamoHelper.getSynapseTableIdsForApp(appId);
+            String defaultSynapseTableId = dynamoHelper.getDefaultSynapseTableForApp(appId);
+            Set<String> surveyTableIdSet = dynamoHelper.getSynapseSurveyTablesForApp(appId);
+            PresignedUrlInfo presignedUrlInfo = synapsePackager.packageSynapseData(appId, synapseToSchemaMap,
                     defaultSynapseTableId, healthCode, request, surveyTableIdSet);
 
             if (presignedUrlInfo == null) {
-                LOG.info("No data for request for account " + accountInfo.getUserId() + ", study=" + studyId
+                LOG.info("No data for request for account " + accountInfo.getUserId() + ", app=" + appId
                         + ", startDate=" + startDateStr + ",endDate=" + endDateStr);
                 if (accountInfo.getEmailAddress() != null) {
-                    sesHelper.sendNoDataMessageToAccount(studyInfo, accountInfo);    
+                    sesHelper.sendNoDataMessageToAccount(appInfo, accountInfo);    
                 } else if (accountInfo.getPhone() != null) {
-                    snsHelper.sendNoDataMessageToAccount(studyInfo, accountInfo);
+                    snsHelper.sendNoDataMessageToAccount(appInfo, accountInfo);
                 }
             } else {
                 if (accountInfo.getEmailAddress() != null) {
-                    sesHelper.sendPresignedUrlToAccount(studyInfo, presignedUrlInfo, accountInfo);    
+                    sesHelper.sendPresignedUrlToAccount(appInfo, presignedUrlInfo, accountInfo);    
                 } else if (accountInfo.getPhone() != null) {
-                    snsHelper.sendPresignedUrlToAccount(studyInfo, presignedUrlInfo, accountInfo);
+                    snsHelper.sendPresignedUrlToAccount(appInfo, presignedUrlInfo, accountInfo);
                 }
             }
         } catch (BridgeSDKException ex) {
@@ -147,7 +147,7 @@ public class BridgeUddProcessor {
             }
         } finally {
             LOG.info("Request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
-                    " seconds for userId=" + userId + ", study=" + studyId +
+                    " seconds for userId=" + userId + ", app=" + appId +
                     ", startDate=" + startDateStr + ",endDate=" + endDateStr);
         }
     }

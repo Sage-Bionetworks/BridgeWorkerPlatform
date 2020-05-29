@@ -10,7 +10,6 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.Days;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import com.google.common.util.concurrent.RateLimiter;
@@ -26,7 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Generate a report of sign ins and uploads by days in study.
+ * Generate a report of sign ins and uploads by days in an app.
  *
  */
 @Component
@@ -41,13 +40,17 @@ public class RetentionReportGenerator implements ReportGenerator {
     }
 
     @Override
-    public Report generate(BridgeReporterRequest request, String studyId) {
+    public Report generate(BridgeReporterRequest request, String appId) {
 
         DateTime startDate = request.getStartDateTime();
         ReportType scheduleType = request.getScheduleType();
+        // For some reason, this report generator does not follow this standard pattern,
+        // and only uses the suffix.
+        // String scheduler = request.getScheduler();        
+        // String reportId = scheduler + scheduleType.getSuffix();
         String reportId = scheduleType.getSuffix();
 
-        Iterator<AccountSummary> accountSummaryIter = bridgeHelper.getAllAccountSummaries(studyId, false);
+        Iterator<AccountSummary> accountSummaryIter = bridgeHelper.getAllAccountSummaries(appId, false);
 
         List<Integer> signInData = new ArrayList<>();
         List<Integer> uploadedOnData = new ArrayList<>();
@@ -58,12 +61,12 @@ public class RetentionReportGenerator implements ReportGenerator {
             
             AccountSummary accountSummary = accountSummaryIter.next();
             try {
-                StudyParticipant studyParticipant = bridgeHelper.getParticipant(studyId, accountSummary.getId(), false);
+                StudyParticipant studyParticipant = bridgeHelper.getParticipant(appId, accountSummary.getId(), false);
                 if (!studyParticipant.getRoles().isEmpty()) {
                     continue;
                 }
                 
-                List<ActivityEvent> activityEventList = bridgeHelper.getActivityEvents(studyId, accountSummary.getId());
+                List<ActivityEvent> activityEventList = bridgeHelper.getActivityEvents(appId, accountSummary.getId());
                 DateTime studyStartDate = null;
 
                 for (ActivityEvent activityEvent : activityEventList) {
@@ -79,7 +82,7 @@ public class RetentionReportGenerator implements ReportGenerator {
                 }
                 
                 RequestInfo requestInfo = bridgeHelper.getRequestInfoForParticipant(
-                        studyId, accountSummary.getId());
+                        appId, accountSummary.getId());
                 if (requestInfo.getSignedInOn() != null) {
                     int sign_in_days = Days.daysBetween(studyStartDate.withZone(DateTimeZone.UTC), 
                             requestInfo.getSignedInOn().withZone(DateTimeZone.UTC)).getDays();
@@ -87,7 +90,6 @@ public class RetentionReportGenerator implements ReportGenerator {
                         LOG.error("study_state_date is negative for id=" + accountSummary.getId());
                         continue;
                     }
-                    
                     while (signInData.size() < (sign_in_days + 1)) {
                         signInData.add(0);
                     }
@@ -122,7 +124,7 @@ public class RetentionReportGenerator implements ReportGenerator {
         reportData.put("bySignIn", signInData);
         reportData.put("byUploadedOn", uploadedOnData);
         
-        return new Report.Builder().withStudyId(studyId).withReportId(reportId).withDate(startDate.toLocalDate())
+        return new Report.Builder().withAppId(appId).withReportId(reportId).withDate(startDate.toLocalDate())
                 .withReportData(reportData).build();
     }
 }

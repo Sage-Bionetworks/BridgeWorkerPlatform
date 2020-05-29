@@ -19,7 +19,7 @@ public abstract class ActivityHistoryIterator implements Iterator<ScheduledActiv
 
     // Instance invariants
     protected final ClientManager clientManager;
-    protected final String studyId;
+    protected final String appId;
     protected final String userId;
     protected final String activityKey;
     protected final DateTime scheduledOnStart;
@@ -30,13 +30,13 @@ public abstract class ActivityHistoryIterator implements Iterator<ScheduledActiv
     private int nextIndex;
 
     /**
-     * Constructs an ActivityHistoryIterator for the given Bridge client, study, user, activity key, and schedule
+     * Constructs an ActivityHistoryIterator for the given Bridge client, app, user, activity key, and schedule
      * bounds. This kicks off requests to load the first page.
      */
-    public ActivityHistoryIterator(ClientManager clientManager, String studyId, String userId, String activityKey,
+    public ActivityHistoryIterator(ClientManager clientManager, String appId, String userId, String activityKey,
             DateTime scheduledOnStart, DateTime scheduledOnEnd) {
         this.clientManager = clientManager;
-        this.studyId = studyId;
+        this.appId = appId;
         this.userId = userId;
         this.activityKey = activityKey;
         this.scheduledOnStart = scheduledOnStart;
@@ -53,7 +53,7 @@ public abstract class ActivityHistoryIterator implements Iterator<ScheduledActiv
             activityList = callServerForNextPage(offsetKey);
         } catch (IOException ex) {
             // Iterator can't throw exceptions. Wrap in a RuntimeException.
-            throw new RuntimeException("Error getting next page for study=" + studyId + ", user=" + userId +
+            throw new RuntimeException("Error getting next page for app=" + appId + ", user=" + userId +
                     ", activity=" + activityKey + ", start=" + scheduledOnStart + ", end=" + scheduledOnEnd + ": " +
                     ex.getMessage(), ex);
         }
@@ -90,7 +90,7 @@ public abstract class ActivityHistoryIterator implements Iterator<ScheduledActiv
             loadNextPage(activityList.getNextPageOffsetKey());
             return getNextActivity();
         } else {
-            throw new IllegalStateException("No more activities left for study=" + studyId + ", user=" + userId +
+            throw new IllegalStateException("No more activities left for app=" + appId + ", user=" + userId +
                     ", activity=" + activityKey + ", start=" + scheduledOnStart + ", end=" + scheduledOnEnd);
         }
     }

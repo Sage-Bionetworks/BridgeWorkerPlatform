@@ -27,8 +27,8 @@ import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.reporter.Tests;
 import org.sagebionetworks.bridge.reporter.request.ReportType;
 import org.sagebionetworks.bridge.rest.RestUtils;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.ReportData;
-import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
@@ -36,8 +36,8 @@ import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
 
 public class BridgeReporterProcessorTest {
-    private static final String TEST_STUDY_ID = "api";
-    private static final String TEST_STUDY_ID_2 = "parkinson";
+    private static final String TEST_APP_ID = "api";
+    private static final String TEST_APP_ID_2 = "parkinson";
     private static final String TEST_SCHEDULER = "test-scheduler";
     private static final ReportType TEST_SCHEDULE_TYPE = ReportType.DAILY;
     private static final ReportType TEST_SCHEDULE_TYPE_WEEKLY = ReportType.WEEKLY;
@@ -58,11 +58,11 @@ public class BridgeReporterProcessorTest {
     private static final ReportData TEST_REPORT_2 = new ReportData().date(TEST_START_DATETIME.toLocalDate().toString()).data(
             TEST_REPORT_DATA_2);
     
-    private static final Study TEST_STUDY_SUMMARY = new Study().identifier(TEST_STUDY_ID).name(TEST_STUDY_ID);
-    private static final Study TEST_STUDY_SUMMARY_2 = new Study().identifier(TEST_STUDY_ID_2).name(TEST_STUDY_ID_2);
-    private static final List<Study> TEST_STUDY_SUMMARY_LIST = ImmutableList.of(TEST_STUDY_SUMMARY);
-    private static final List<Study> TEST_STUDY_SUMMARY_LIST_2 = ImmutableList.of(TEST_STUDY_SUMMARY,
-            TEST_STUDY_SUMMARY_2);
+    private static final App TEST_APP_SUMMARY = new App().identifier(TEST_APP_ID).name(TEST_APP_ID);
+    private static final App TEST_APP_SUMMARY_2 = new App().identifier(TEST_APP_ID_2).name(TEST_APP_ID_2);
+    private static final List<App> TEST_APP_SUMMARY_LIST = ImmutableList.of(TEST_APP_SUMMARY);
+    private static final List<App> TEST_APP_SUMMARY_LIST_2 = ImmutableList.of(TEST_APP_SUMMARY,
+            TEST_APP_SUMMARY_2);
 
     // test request
     private static final String UPLOAD_TEXT = Tests.unescapeJson("{'contentLength':10000,"+
@@ -163,8 +163,8 @@ public class BridgeReporterProcessorTest {
     @BeforeMethod
     public void setup() throws Exception {
         mockBridgeHelper = mock(BridgeHelper.class);
-        when(mockBridgeHelper.getAllStudies()).thenReturn(TEST_STUDY_SUMMARY_LIST);
-        when(mockBridgeHelper.getUploadsForStudy(any(), any(), any())).thenReturn(testUploads);
+        when(mockBridgeHelper.getAllApps()).thenReturn(TEST_APP_SUMMARY_LIST);
+        when(mockBridgeHelper.getUploadsForApp(any(), any(), any())).thenReturn(testUploads);
 
         UploadsReportGenerator uploadsGenerator = new UploadsReportGenerator();
         uploadsGenerator.setBridgeHelper(mockBridgeHelper);
@@ -190,12 +190,12 @@ public class BridgeReporterProcessorTest {
         processor.process(requestJson);
 
         // verify
-        verify(mockBridgeHelper).getAllStudies();
-        verify(mockBridgeHelper).getUploadsForStudy(eq(TEST_STUDY_ID), eq(TEST_START_DATETIME), eq(TEST_END_DATETIME));
+        verify(mockBridgeHelper).getAllApps();
+        verify(mockBridgeHelper).getUploadsForApp(eq(TEST_APP_ID), eq(TEST_START_DATETIME), eq(TEST_END_DATETIME));
         
-        verify(mockBridgeHelper).saveReportForStudy(reportCaptor.capture());
+        verify(mockBridgeHelper).saveReportForApp(reportCaptor.capture());
         Report report = reportCaptor.getValue();
-        assertEquals(report.getStudyId(), TEST_STUDY_ID);
+        assertEquals(report.getAppId(), TEST_APP_ID);
         assertEquals(report.getReportId(), TEST_REPORT_ID);
         assertEquals(report.getDate(), TEST_START_DATETIME.toLocalDate());
         assertEquals(report.getData(), TEST_REPORT.getData());
@@ -209,12 +209,12 @@ public class BridgeReporterProcessorTest {
         processor.process(requestJsonWeekly);
 
         // verify
-        verify(mockBridgeHelper).getAllStudies();
-        verify(mockBridgeHelper, times(1)).getUploadsForStudy(eq(TEST_STUDY_ID), any(), any());
+        verify(mockBridgeHelper).getAllApps();
+        verify(mockBridgeHelper, times(1)).getUploadsForApp(eq(TEST_APP_ID), any(), any());
 
-        verify(mockBridgeHelper).saveReportForStudy(reportCaptor.capture());
+        verify(mockBridgeHelper).saveReportForApp(reportCaptor.capture());
         Report report = reportCaptor.getValue();
-        assertEquals(report.getStudyId(), TEST_STUDY_ID);
+        assertEquals(report.getAppId(), TEST_APP_ID);
         assertEquals(report.getReportId(), TEST_REPORT_ID_WEEKLY);
         assertEquals(report.getDate(), TEST_START_DATETIME.toLocalDate());
         assertEquals(report.getData(), TEST_REPORT_WEEKLY.getData());
@@ -224,26 +224,26 @@ public class BridgeReporterProcessorTest {
     public void testMultipleStudies() throws Exception {
         ArgumentCaptor<Report> reportCaptor = ArgumentCaptor.forClass(Report.class);
 
-        when(mockBridgeHelper.getAllStudies()).thenReturn(TEST_STUDY_SUMMARY_LIST_2);
-        when(mockBridgeHelper.getUploadsForStudy(any(), any(), any())).thenReturn(testUploads);
+        when(mockBridgeHelper.getAllApps()).thenReturn(TEST_APP_SUMMARY_LIST_2);
+        when(mockBridgeHelper.getUploadsForApp(any(), any(), any())).thenReturn(testUploads);
 
         // execute
         processor.process(requestJson);
 
         // verify
-        verify(mockBridgeHelper).getAllStudies();
-        verify(mockBridgeHelper).getUploadsForStudy(eq(TEST_STUDY_ID), eq(TEST_START_DATETIME), eq(TEST_END_DATETIME));
-        verify(mockBridgeHelper).getUploadsForStudy(eq(TEST_STUDY_ID_2), eq(TEST_START_DATETIME), eq(TEST_END_DATETIME));
+        verify(mockBridgeHelper).getAllApps();
+        verify(mockBridgeHelper).getUploadsForApp(eq(TEST_APP_ID), eq(TEST_START_DATETIME), eq(TEST_END_DATETIME));
+        verify(mockBridgeHelper).getUploadsForApp(eq(TEST_APP_ID_2), eq(TEST_START_DATETIME), eq(TEST_END_DATETIME));
         
-        verify(mockBridgeHelper, times(2)).saveReportForStudy(reportCaptor.capture());
+        verify(mockBridgeHelper, times(2)).saveReportForApp(reportCaptor.capture());
         Report report = reportCaptor.getAllValues().get(0);
-        assertEquals(report.getStudyId(), TEST_STUDY_ID);
+        assertEquals(report.getAppId(), TEST_APP_ID);
         assertEquals(report.getReportId(), TEST_REPORT_ID);
         assertEquals(report.getDate(), TEST_START_DATETIME.toLocalDate());
         assertEquals(report.getData(), TEST_REPORT.getData());
         
         report = reportCaptor.getAllValues().get(1);
-        assertEquals(report.getStudyId(), TEST_STUDY_ID_2);
+        assertEquals(report.getAppId(), TEST_APP_ID_2);
         assertEquals(report.getReportId(), TEST_REPORT_ID);
         assertEquals(report.getDate(), TEST_START_DATETIME.toLocalDate());
         assertEquals(report.getData(), TEST_REPORT.getData());
@@ -253,19 +253,19 @@ public class BridgeReporterProcessorTest {
     public void testMultipleUploads() throws Exception {
         ArgumentCaptor<Report> reportCaptor = ArgumentCaptor.forClass(Report.class);
         
-        when(mockBridgeHelper.getAllStudies()).thenReturn(TEST_STUDY_SUMMARY_LIST);
-        when(mockBridgeHelper.getUploadsForStudy(any(), any(), any())).thenReturn(testUploads2);
+        when(mockBridgeHelper.getAllApps()).thenReturn(TEST_APP_SUMMARY_LIST);
+        when(mockBridgeHelper.getUploadsForApp(any(), any(), any())).thenReturn(testUploads2);
 
         // execute
         processor.process(requestJson);
 
         // verify
-        verify(mockBridgeHelper).getAllStudies();
-        verify(mockBridgeHelper).getUploadsForStudy(eq(TEST_STUDY_ID), eq(TEST_START_DATETIME), eq(TEST_END_DATETIME));
-        verify(mockBridgeHelper).saveReportForStudy(reportCaptor.capture());
+        verify(mockBridgeHelper).getAllApps();
+        verify(mockBridgeHelper).getUploadsForApp(eq(TEST_APP_ID), eq(TEST_START_DATETIME), eq(TEST_END_DATETIME));
+        verify(mockBridgeHelper).saveReportForApp(reportCaptor.capture());
         
         Report report = reportCaptor.getValue();
-        assertEquals(report.getStudyId(), TEST_STUDY_ID);
+        assertEquals(report.getAppId(), TEST_APP_ID);
         assertEquals(report.getReportId(), TEST_REPORT_ID);
         assertEquals(report.getDate(), TEST_START_DATETIME.toLocalDate());
         assertEquals(report.getData(), TEST_REPORT_2.getData());
@@ -285,18 +285,18 @@ public class BridgeReporterProcessorTest {
         
         ArgumentCaptor<Report> reportCaptor = ArgumentCaptor.forClass(Report.class);
         
-        when(mockBridgeHelper.getAllStudies()).thenReturn(TEST_STUDY_SUMMARY_LIST);
-        when(mockBridgeHelper.getParticipantsForStudy(TEST_STUDY_ID, startDateTime, endDateTime))
+        when(mockBridgeHelper.getAllApps()).thenReturn(TEST_APP_SUMMARY_LIST);
+        when(mockBridgeHelper.getParticipantsForApp(TEST_APP_ID, startDateTime, endDateTime))
                 .thenReturn(testParticipants);
         
         processor.process(requestJsonDailySignUps);
         
-        verify(mockBridgeHelper).getAllStudies();
-        verify(mockBridgeHelper).getParticipantsForStudy(TEST_STUDY_ID, startDateTime, endDateTime);
-        verify(mockBridgeHelper).saveReportForStudy(reportCaptor.capture());
+        verify(mockBridgeHelper).getAllApps();
+        verify(mockBridgeHelper).getParticipantsForApp(TEST_APP_ID, startDateTime, endDateTime);
+        verify(mockBridgeHelper).saveReportForApp(reportCaptor.capture());
         
         Report report = reportCaptor.getValue();
-        assertEquals(report.getStudyId(), TEST_STUDY_ID);
+        assertEquals(report.getAppId(), TEST_APP_ID);
         assertEquals(report.getReportId(), "test-scheduler-daily-signups-report");
         assertEquals(report.getDate().toString(), "2016-10-19");
         // Verify this is the JSON structure we're expecting

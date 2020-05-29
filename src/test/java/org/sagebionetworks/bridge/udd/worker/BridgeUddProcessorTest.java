@@ -39,14 +39,14 @@ import org.sagebionetworks.bridge.udd.synapse.SynapsePackager;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
-import org.sagebionetworks.bridge.workerPlatform.dynamodb.StudyInfo;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.AppInfo;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.SynapseUnavailableException;
 
 @SuppressWarnings("unchecked")
 public class BridgeUddProcessorTest {
     // mock objects - These are used only as passthroughs between the sub-components. So just create mocks instead
     // of instantiating all the fields.
-    public static final StudyInfo MOCK_STUDY_INFO = mock(StudyInfo.class);
+    public static final AppInfo MOCK_APP_INFO = mock(AppInfo.class);
     public static final Map<String, UploadSchema> MOCK_SYNAPSE_TO_SCHEMA = ImmutableMap.of();
     public static final Set<String> MOCK_SURVEY_TABLE_ID_SET = ImmutableSet.of();
     public static final PresignedUrlInfo MOCK_PRESIGNED_URL_INFO = mock(PresignedUrlInfo.class);
@@ -56,7 +56,7 @@ public class BridgeUddProcessorTest {
     public static final String EMAIL = "test@example.com";
     public static final String HEALTH_CODE = "test-health-code";
     public static final String USER_ID = "test-user-id";
-    public static final String STUDY_ID = "test-study";
+    public static final String APP_ID = "test-app";
 
     // non-mock test objects - We break inside these objects to get data.
     public static final AccountInfo USER_ID_ACCOUNT_INFO = new AccountInfo.Builder().withEmailAddress(EMAIL)
@@ -66,14 +66,14 @@ public class BridgeUddProcessorTest {
 
     // test request
     public static final String USER_ID_REQUEST_JSON_TEXT = "{\n" +
-            "   \"studyId\":\"" + STUDY_ID +"\",\n" +
+            "   \"appId\":\"" + APP_ID +"\",\n" +
             "   \"userId\":\"" + USER_ID + "\",\n" +
             "   \"startDate\":\"2015-03-09\",\n" +
             "   \"endDate\":\"2015-03-31\"\n" +
             "}";
 
     public static final String INVALID_JSON_TEXT = "{\n" +
-            "   \"invalidType\":\"" + STUDY_ID +"\",\n" +
+            "   \"invalidType\":\"" + APP_ID +"\",\n" +
             "   \"userId\":\"" + USER_ID + "\",\n" +
             "   \"startDate\":\"2015-03-09\",\n" +
             "   \"endDate\":\"2015-03-31\"\n" +
@@ -100,14 +100,14 @@ public class BridgeUddProcessorTest {
     public void setup() throws Exception {
         // mock BridgeHelper
         mockBridgeHelper = mock(BridgeHelper.class);
-        when(mockBridgeHelper.getAccountInfo(STUDY_ID, USER_ID)).thenReturn(USER_ID_ACCOUNT_INFO);
+        when(mockBridgeHelper.getAccountInfo(APP_ID, USER_ID)).thenReturn(USER_ID_ACCOUNT_INFO);
 
         // mock dynamo helper
         DynamoHelper mockDynamoHelper = mock(DynamoHelper.class);
-        when(mockDynamoHelper.getDefaultSynapseTableForStudy(STUDY_ID)).thenReturn(DEFAULT_TABLE_ID);
-        when(mockDynamoHelper.getStudy(STUDY_ID)).thenReturn(MOCK_STUDY_INFO);
-        when(mockDynamoHelper.getSynapseTableIdsForStudy(STUDY_ID)).thenReturn(MOCK_SYNAPSE_TO_SCHEMA);
-        when(mockDynamoHelper.getSynapseSurveyTablesForStudy(STUDY_ID)).thenReturn(MOCK_SURVEY_TABLE_ID_SET);
+        when(mockDynamoHelper.getDefaultSynapseTableForApp(APP_ID)).thenReturn(DEFAULT_TABLE_ID);
+        when(mockDynamoHelper.getApp(APP_ID)).thenReturn(MOCK_APP_INFO);
+        when(mockDynamoHelper.getSynapseTableIdsForApp(APP_ID)).thenReturn(MOCK_SYNAPSE_TO_SCHEMA);
+        when(mockDynamoHelper.getSynapseSurveyTablesForApp(APP_ID)).thenReturn(MOCK_SURVEY_TABLE_ID_SET);
 
         // mock SES helper
         mockSesHelper = mock(SesHelper.class);
@@ -137,7 +137,7 @@ public class BridgeUddProcessorTest {
         mockPackagerWithResult(null);
         callback.process(userIdRequestJson);
         verifySesNoData();
-        verify(mockBridgeHelper).getAccountInfo(STUDY_ID, USER_ID);
+        verify(mockBridgeHelper).getAccountInfo(APP_ID, USER_ID);
     }
 
     @Test
@@ -145,14 +145,14 @@ public class BridgeUddProcessorTest {
         mockPackagerWithResult(MOCK_PRESIGNED_URL_INFO);
         callback.process(userIdRequestJson);
         verifySesSendsData();
-        verify(mockBridgeHelper).getAccountInfo(STUDY_ID, USER_ID);
+        verify(mockBridgeHelper).getAccountInfo(APP_ID, USER_ID);
     }
 
     @Test(expectedExceptions = PollSqsWorkerBadRequestException.class)
     public void byUserIdBadRequest() throws Exception {
         // Note: We need to manuall instantiate the exception. Otherwise, mock does something funky and bypasses the
         // constructor that sets the status code.
-        when(mockBridgeHelper.getAccountInfo(STUDY_ID, USER_ID)).thenThrow(new EntityNotFoundException(
+        when(mockBridgeHelper.getAccountInfo(APP_ID, USER_ID)).thenThrow(new EntityNotFoundException(
                 "text exception", null));
         callback.process(userIdRequestJson);
     }
@@ -161,7 +161,7 @@ public class BridgeUddProcessorTest {
     public void byUserIdBridgeInternalError() throws Exception {
         // Note: We need to manuall instantiate the exception. Otherwise, mock does something funky and bypasses the
         // constructor that sets the status code.
-        when(mockBridgeHelper.getAccountInfo(STUDY_ID, USER_ID)).thenThrow(new BridgeSDKException("test exception",
+        when(mockBridgeHelper.getAccountInfo(APP_ID, USER_ID)).thenThrow(new BridgeSDKException("test exception",
                 null));
         callback.process(userIdRequestJson);
     }
@@ -174,7 +174,7 @@ public class BridgeUddProcessorTest {
     @Test
     public void noHealthCode() throws Exception {
         // Mock Bridge helper with an account that's missing health code.
-        when(mockBridgeHelper.getAccountInfo(STUDY_ID, USER_ID)).thenReturn(ACCOUNT_INFO_NO_HEALTH_CODE);
+        when(mockBridgeHelper.getAccountInfo(APP_ID, USER_ID)).thenReturn(ACCOUNT_INFO_NO_HEALTH_CODE);
 
         // Execute (throws exception).
         try {
@@ -224,15 +224,15 @@ public class BridgeUddProcessorTest {
         
         AccountInfo accountInfo = new AccountInfo.Builder().withHealthCode(HEALTH_CODE).withUserId(USER_ID)
                 .withPhone(phone).build();
-        when(mockBridgeHelper.getAccountInfo(STUDY_ID, USER_ID)).thenReturn(accountInfo);
+        when(mockBridgeHelper.getAccountInfo(APP_ID, USER_ID)).thenReturn(accountInfo);
         
         mockPackagerWithResult(MOCK_PRESIGNED_URL_INFO);
         callback.process(userIdRequestJson);
-        verify(mockSnsHelper).sendPresignedUrlToAccount(same(MOCK_STUDY_INFO), same(MOCK_PRESIGNED_URL_INFO),
+        verify(mockSnsHelper).sendPresignedUrlToAccount(same(MOCK_APP_INFO), same(MOCK_PRESIGNED_URL_INFO),
                 same(accountInfo));
         verifyNoMoreInteractions(mockSnsHelper);
         verifyNoMoreInteractions(mockSesHelper);
-        verify(mockBridgeHelper).getAccountInfo(STUDY_ID, USER_ID);
+        verify(mockBridgeHelper).getAccountInfo(APP_ID, USER_ID);
     }
     
     @Test
@@ -241,29 +241,29 @@ public class BridgeUddProcessorTest {
         
         AccountInfo accountInfo = new AccountInfo.Builder().withHealthCode(HEALTH_CODE).withUserId(USER_ID)
                 .withPhone(phone).build();
-        when(mockBridgeHelper.getAccountInfo(STUDY_ID, USER_ID)).thenReturn(accountInfo);
+        when(mockBridgeHelper.getAccountInfo(APP_ID, USER_ID)).thenReturn(accountInfo);
         
         mockPackagerWithResult(null);
         callback.process(userIdRequestJson);
         
-        verify(mockSnsHelper).sendNoDataMessageToAccount(same(MOCK_STUDY_INFO), same(accountInfo));
+        verify(mockSnsHelper).sendNoDataMessageToAccount(same(MOCK_APP_INFO), same(accountInfo));
         verifyNoMoreInteractions(mockSnsHelper);
         verifyNoMoreInteractions(mockSesHelper);
-        verify(mockBridgeHelper).getAccountInfo(STUDY_ID, USER_ID);        
+        verify(mockBridgeHelper).getAccountInfo(APP_ID, USER_ID);        
     }
 
     private void mockPackagerWithResult(PresignedUrlInfo presignedUrlInfo) throws Exception {
-        when(mockPackager.packageSynapseData(eq(STUDY_ID), same(MOCK_SYNAPSE_TO_SCHEMA), eq(DEFAULT_TABLE_ID), eq(HEALTH_CODE),
+        when(mockPackager.packageSynapseData(eq(APP_ID), same(MOCK_SYNAPSE_TO_SCHEMA), eq(DEFAULT_TABLE_ID), eq(HEALTH_CODE),
                 any(BridgeUddRequest.class), same(MOCK_SURVEY_TABLE_ID_SET))).thenReturn(presignedUrlInfo);
     }
 
     private void verifySesNoData() {
-        verify(mockSesHelper).sendNoDataMessageToAccount(same(MOCK_STUDY_INFO), same(USER_ID_ACCOUNT_INFO));
+        verify(mockSesHelper).sendNoDataMessageToAccount(same(MOCK_APP_INFO), same(USER_ID_ACCOUNT_INFO));
         verifyNoMoreInteractions(mockSesHelper);
     }
 
     private void verifySesSendsData() {
-        verify(mockSesHelper).sendPresignedUrlToAccount(same(MOCK_STUDY_INFO), same(MOCK_PRESIGNED_URL_INFO),
+        verify(mockSesHelper).sendPresignedUrlToAccount(same(MOCK_APP_INFO), same(MOCK_PRESIGNED_URL_INFO),
                 same(USER_ID_ACCOUNT_INFO));
         verifyNoMoreInteractions(mockSesHelper);
     }

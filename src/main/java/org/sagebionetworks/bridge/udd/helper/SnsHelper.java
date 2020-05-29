@@ -4,7 +4,7 @@ import java.util.Map;
 
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
-import org.sagebionetworks.bridge.workerPlatform.dynamodb.StudyInfo;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.AppInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,21 +43,21 @@ public class SnsHelper {
         this.snsClient = snsClient;
     }
     
-    public void sendNoDataMessageToAccount(StudyInfo studyInfo, AccountInfo accountInfo) {
-        String body = String.format(NO_DATA_MESSAGE_TEMPLATE, getStudyName(studyInfo));
-        sendSmsToAccount(studyInfo, accountInfo, body);
+    public void sendNoDataMessageToAccount(AppInfo appInfo, AccountInfo accountInfo) {
+        String body = String.format(NO_DATA_MESSAGE_TEMPLATE, getAppName(appInfo));
+        sendSmsToAccount(appInfo, accountInfo, body);
     }
     
-    public void sendPresignedUrlToAccount(StudyInfo studyInfo, PresignedUrlInfo presignedUrlInfo,
+    public void sendPresignedUrlToAccount(AppInfo appInfo, PresignedUrlInfo presignedUrlInfo,
             AccountInfo accountInfo) {
-        String body = String.format(MESSAGE_TEMPLATE, getStudyName(studyInfo), presignedUrlInfo.getUrl().toString());
-        sendSmsToAccount(studyInfo, accountInfo, body);
+        String body = String.format(MESSAGE_TEMPLATE, getAppName(appInfo), presignedUrlInfo.getUrl().toString());
+        sendSmsToAccount(appInfo, accountInfo, body);
     }
     
-    private void sendSmsToAccount(StudyInfo studyInfo, AccountInfo accountInfo, String body) {
+    private void sendSmsToAccount(AppInfo appInfo, AccountInfo accountInfo, String body) {
         Map<String, MessageAttributeValue> smsAttributes = Maps.newHashMap();
         smsAttributes.put(SMS_TYPE, attribute(SMS_TYPE_TRANSACTIONAL));
-        smsAttributes.put(SENDER_ID, attribute(studyInfo.getName()));
+        smsAttributes.put(SENDER_ID, attribute(appInfo.getName()));
 
         PublishRequest request = new PublishRequest()
                 .withPhoneNumber(accountInfo.getPhone().getNumber())
@@ -69,8 +69,8 @@ public class SnsHelper {
         LOG.info("Sent SMS to account " + accountInfo.getUserId() + " with SNS message ID " + result.getMessageId());
     }
     
-    protected String getStudyName(StudyInfo studyInfo) {
-        return (studyInfo.getShortName() != null) ? studyInfo.getShortName() : studyInfo.getName();   
+    protected String getAppName(AppInfo appInfo) {
+        return (appInfo.getShortName() != null) ? appInfo.getShortName() : appInfo.getName();   
     }
     
     private MessageAttributeValue attribute(String value) {

@@ -42,8 +42,8 @@ import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionEx
 // SchemaBasedTableTask. Now, a lot of the tests use SchemaBasedTableTask.
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class SynapseDownloadFromTableTaskTest {
-    private static final String TEST_STUDY_ID = "test-study";
-    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(TEST_STUDY_ID)
+    private static final String TEST_APP_ID = "test-app";
+    private static final UploadSchemaKey TEST_SCHEMA_KEY = new UploadSchemaKey.Builder().withAppId(TEST_APP_ID)
             .withSchemaId("test-schema").withRevision(42).build();
 
     // The default test schema should include at least 2 file handle IDs and a mix of file handles and
@@ -424,7 +424,7 @@ public class SynapseDownloadFromTableTaskTest {
         SynapseDownloadFromTableParameters params = new SynapseDownloadFromTableParameters.Builder()
                 .withSynapseTableId("test-table-id").withHealthCode("test-health-code")
                 .withStartDate(LocalDate.parse("2015-03-09")).withEndDate(LocalDate.parse("2015-09-16"))
-                .withTempDir(tmpDir).withSchema(schema).withStudyId(TEST_STUDY_ID).build();
+                .withTempDir(tmpDir).withSchema(schema).withAppId(TEST_APP_ID).build();
         task = new SchemaBasedTableTask(params);
         task.setFileHelper(inMemoryFileHelper);
 

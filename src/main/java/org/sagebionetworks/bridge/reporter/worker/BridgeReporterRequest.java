@@ -2,6 +2,7 @@ package org.sagebionetworks.bridge.reporter.worker;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
@@ -19,16 +20,16 @@ public class BridgeReporterRequest {
     private final DateTime startDateTime;
     private final DateTime endDateTime;
     private final String scheduler;
-    private final List<String> studyWhitelist;
+    private final List<String> appWhitelist;
     private final ReportType reportType;
 
     /** Private constructor. To build, use Builder. */
     private BridgeReporterRequest(DateTime startDateTime, DateTime endDateTime, String scheduler,
-            List<String> studyWhitelist, ReportType scheduleType) {
+            List<String> appWhitelist, ReportType scheduleType) {
         this.startDateTime = startDateTime;
         this.endDateTime = endDateTime;
         this.scheduler = scheduler;
-        this.studyWhitelist = studyWhitelist;
+        this.appWhitelist = appWhitelist;
         this.reportType = scheduleType;
     }
 
@@ -50,11 +51,11 @@ public class BridgeReporterRequest {
     }
 
     /**
-     * List of studies to generate reports for. If no study is specified (empty list), this will generate reports for
-     * all studies. Will never be null.
+     * List of apps to generate reports for. If no app is specified (empty list), this will generate reports for
+     * all apps. Will never be null.
      */
-    public List<String> getStudyWhitelist() {
-        return studyWhitelist;
+    public List<String> getAppWhitelist() {
+        return appWhitelist;
     }
 
     /** Report type, used to select the report generator. */
@@ -67,7 +68,7 @@ public class BridgeReporterRequest {
         private DateTime startDateTime;
         private DateTime endDateTime;
         private String scheduler;
-        private List<String> studyWhitelist;
+        private List<String> appWhitelist;
         private ReportType reportType;
 
         /** @see BridgeReporterRequest#getStartDateTime */
@@ -90,9 +91,10 @@ public class BridgeReporterRequest {
             return this;
         }
 
-        /** @see BridgeReporterRequest#getStudyWhitelist */
-        public Builder withStudyWhitelist(List<String> studyWhitelist) {
-            this.studyWhitelist = studyWhitelist;
+        /** @see BridgeReporterRequest#getAppWhitelist */
+        @JsonAlias("studyWhitelist")
+        public Builder withAppWhitelist(List<String> appWhitelist) {
+            this.appWhitelist = appWhitelist;
             return this;
         }
 
@@ -125,14 +127,14 @@ public class BridgeReporterRequest {
             }
 
             // Make an immutable copy of the whitelist. If it's null, make an immutable empty list.
-            List<String> studyWhitelistCopy;
-            if (studyWhitelist != null) {
-                studyWhitelistCopy = ImmutableList.copyOf(studyWhitelist);
+            List<String> appWhitelistCopy;
+            if (appWhitelist != null) {
+                appWhitelistCopy = ImmutableList.copyOf(appWhitelist);
             } else {
-                studyWhitelistCopy = ImmutableList.of();
+                appWhitelistCopy = ImmutableList.of();
             }
 
-            return new BridgeReporterRequest(startDateTime, endDateTime, scheduler, studyWhitelistCopy, reportType);
+            return new BridgeReporterRequest(startDateTime, endDateTime, scheduler, appWhitelistCopy, reportType);
         }
     }
 }

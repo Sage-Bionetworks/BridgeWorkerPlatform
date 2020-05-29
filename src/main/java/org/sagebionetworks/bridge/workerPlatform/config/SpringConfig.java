@@ -84,10 +84,13 @@ public class SpringConfig {
     public ClientManager bridgeClientManager() {
         // sign-in credentials
         Config config = bridgeConfig();
-        String study = config.get("bridge.worker.study");
+        String appId = config.get("bridge.worker.study");
+        if (appId == null) {
+            appId = config.get("bridge.worker.appId");
+        }
         String email = config.get("bridge.worker.email");
         String password = config.get("bridge.worker.password");
-        SignIn signIn = new SignIn().study(study).email(email).password(password);
+        SignIn signIn = new SignIn().appId(appId).email(email).password(password);
 
         ClientInfo clientInfo = new ClientInfo().appName("BridgeWorkerPlatform").appVersion(1);
         return new ClientManager.Builder().withClientInfo(clientInfo).withSignIn(signIn).build();
@@ -125,8 +128,8 @@ public class SpringConfig {
         return new DynamoQueryHelper();
     }
 
-    @Bean(name = "ddbStudyTable")
-    public Table ddbStudyTable() {
+    @Bean(name = "ddbAppTable")
+    public Table ddbAppTable() {
         String fullyQualifiedTableName = dynamoNamingHelper().getFullyQualifiedTableName("Study");
         return ddbClient().getTable(fullyQualifiedTableName);
     }
@@ -157,8 +160,8 @@ public class SpringConfig {
         return ddbClient().getTable(fullyQualifiedTableName);
     }
 
-    @Bean(name = "ddbUploadSchemaStudyIndex")
-    public Index ddbUploadSchemaStudyIndex() {
+    @Bean(name = "ddbUploadSchemaAppIndex")
+    public Index ddbUploadSchemaAppIndex() {
         return ddbUploadSchemaTable(bridgeConfig()).getIndex("studyId-index");
     }
 

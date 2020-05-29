@@ -15,18 +15,18 @@ public class SynapseDownloadFromTableParameters {
     private final LocalDate endDate;
     private final File tempDir;
     private final UploadSchema schema;
-    private final String studyId;
+    private final String appId;
 
     /** Private constructor. To build, use builder. */
     private SynapseDownloadFromTableParameters(String synapseTableId, String healthCode, LocalDate startDate,
-            LocalDate endDate, File tempDir, UploadSchema schema, String studyId) {
+            LocalDate endDate, File tempDir, UploadSchema schema, String appId) {
         this.synapseTableId = synapseTableId;
         this.healthCode = healthCode;
         this.startDate = startDate;
         this.endDate = endDate;
         this.tempDir = tempDir;
         this.schema = schema;
-        this.studyId = studyId;
+        this.appId = appId;
     }
 
     /** ID of the Synapse table to query against. */
@@ -59,9 +59,9 @@ public class SynapseDownloadFromTableParameters {
         return schema;
     }
 
-    /** Study ID, used to get meta tables. */
-    public String getStudyId() {
-        return studyId;
+    /** App ID, used to get meta tables. */
+    public String getAppId() {
+        return appId;
     }
 
     /** Parameter class builder. */
@@ -72,7 +72,7 @@ public class SynapseDownloadFromTableParameters {
         private LocalDate endDate;
         private File tempDir;
         private UploadSchema schema;
-        private String studyId;
+        private String appId;
 
         /** @see SynapseDownloadFromTableParameters#getSynapseTableId */
         public Builder withSynapseTableId(String synapseTableId) {
@@ -110,9 +110,9 @@ public class SynapseDownloadFromTableParameters {
             return this;
         }
 
-        /** @see SynapseDownloadFromTableParameters#getStudyId */
-        public Builder withStudyId(String studyId) {
-            this.studyId = studyId;
+        /** @see SynapseDownloadFromTableParameters#getAppId */
+        public Builder withAppId(String appId) {
+            this.appId = appId;
             return this;
         }
 
@@ -142,12 +142,12 @@ public class SynapseDownloadFromTableParameters {
                 throw new IllegalStateException("tempDir must be specified");
             }
 
-            if (StringUtils.isBlank(studyId)) {
-                throw new IllegalStateException("studyId must be specified");
+            if (StringUtils.isBlank(appId)) {
+                throw new IllegalStateException("appId must be specified");
             }
 
             return new SynapseDownloadFromTableParameters(synapseTableId, healthCode, startDate, endDate, tempDir,
-                    schema, studyId);
+                    schema, appId);
         }
     }
 }

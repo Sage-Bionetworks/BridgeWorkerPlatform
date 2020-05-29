@@ -30,7 +30,7 @@ public class BridgeNotificationWorkerProcessorTest {
     private static final String DATE_STRING = "2018-04-27";
     private static final LocalDate DATE = LocalDate.parse(DATE_STRING);
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
-    private static final String STUDY_ID = "test-study";
+    private static final String APP_ID = "test-app";
     private static final String TAG = "dummy tag";
 
     private BridgeHelper mockBridgeHelper;
@@ -53,29 +53,29 @@ public class BridgeNotificationWorkerProcessorTest {
     }
 
     @Test(expectedExceptions = PollSqsWorkerBadRequestException.class, expectedExceptionsMessageRegExp =
-            "studyId must be specified")
-    public void argsNoStudyId() throws Exception {
+            "appId must be specified")
+    public void argsNoAppId() throws Exception {
         ObjectNode requestNode = makeValidRequestNode();
-        requestNode.remove(BridgeNotificationWorkerProcessor.REQUEST_PARAM_STUDY_ID);
+        requestNode.remove(BridgeNotificationWorkerProcessor.REQUEST_PARAM_APP_ID);
         processor.accept(requestNode);
     }
 
     @Test(expectedExceptions = PollSqsWorkerBadRequestException.class, expectedExceptionsMessageRegExp =
-            "studyId must be specified")
-    public void argsNullStudyId() throws Exception {
+            "appId must be specified")
+    public void argsNullAppId() throws Exception {
         ObjectNode requestNode = makeValidRequestNode();
-        requestNode.putNull(BridgeNotificationWorkerProcessor.REQUEST_PARAM_STUDY_ID);
+        requestNode.putNull(BridgeNotificationWorkerProcessor.REQUEST_PARAM_APP_ID);
         processor.accept(requestNode);
     }
 
     @Test(expectedExceptions = PollSqsWorkerBadRequestException.class, expectedExceptionsMessageRegExp =
-            "studyId must be a string")
-    public void argsStudyIdWrongType() throws Exception {
+            "appId must be a string")
+    public void argsAppIdWrongType() throws Exception {
         ObjectNode requestNode = makeValidRequestNode();
-        requestNode.put(BridgeNotificationWorkerProcessor.REQUEST_PARAM_STUDY_ID, 1234);
+        requestNode.put(BridgeNotificationWorkerProcessor.REQUEST_PARAM_APP_ID, 1234);
         processor.accept(requestNode);
     }
-
+    
     @Test(expectedExceptions = PollSqsWorkerBadRequestException.class, expectedExceptionsMessageRegExp =
             "date must be specified")
     public void argsNoDate() throws Exception {
@@ -118,21 +118,21 @@ public class BridgeNotificationWorkerProcessorTest {
         AccountSummary accountSummary2 = mockAccountSummary("user-2");
         AccountSummary accountSummary3 = mockAccountSummary("user-3");
         AccountSummary accountSummary4 = mockAccountSummary("user-4");
-        when(mockBridgeHelper.getAllAccountSummaries(STUDY_ID, true)).thenReturn(ImmutableList.of(accountSummary1,
+        when(mockBridgeHelper.getAllAccountSummaries(APP_ID, true)).thenReturn(ImmutableList.of(accountSummary1,
                 accountSummary2, accountSummary3, accountSummary4).iterator());
 
-        doThrow(IOException.class).when(processor).processAccountForDate(STUDY_ID, DATE, "user-2");
-        doThrow(UserNotConfiguredException.class).when(processor).processAccountForDate(STUDY_ID, DATE,
+        doThrow(IOException.class).when(processor).processAccountForDate(APP_ID, DATE, "user-2");
+        doThrow(UserNotConfiguredException.class).when(processor).processAccountForDate(APP_ID, DATE,
                 "user-3");
 
         // Execute
         processor.accept(makeValidRequestNode());
 
         // Verify calls to processAccount()
-        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-1");
-        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-2");
-        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-3");
-        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-4");
+        verify(processor).processAccountForDate(APP_ID, DATE, "user-1");
+        verify(processor).processAccountForDate(APP_ID, DATE, "user-2");
+        verify(processor).processAccountForDate(APP_ID, DATE, "user-3");
+        verify(processor).processAccountForDate(APP_ID, DATE, "user-4");
 
         // Verify call to dynamoHelper.writeWorkerLog()
         verify(mockDynamoHelper).writeWorkerLog(BridgeNotificationWorkerProcessor.VALUE_WORKER_ID, TAG);
@@ -157,9 +157,9 @@ public class BridgeNotificationWorkerProcessorTest {
         processor.accept(requestNode);
 
         // Verify calls to processAccount()
-        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-A");
-        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-B");
-        verify(processor).processAccountForDate(STUDY_ID, DATE, "user-C");
+        verify(processor).processAccountForDate(APP_ID, DATE, "user-A");
+        verify(processor).processAccountForDate(APP_ID, DATE, "user-B");
+        verify(processor).processAccountForDate(APP_ID, DATE, "user-C");
 
         // Verify call to dynamoHelper.writeWorkerLog()
         verify(mockDynamoHelper).writeWorkerLog(BridgeNotificationWorkerProcessor.VALUE_WORKER_ID, TAG);
@@ -170,7 +170,7 @@ public class BridgeNotificationWorkerProcessorTest {
 
     private static ObjectNode makeValidRequestNode() {
         ObjectNode requestNode = JSON_MAPPER.createObjectNode();
-        requestNode.put(BridgeNotificationWorkerProcessor.REQUEST_PARAM_STUDY_ID, STUDY_ID);
+        requestNode.put(BridgeNotificationWorkerProcessor.REQUEST_PARAM_APP_ID, APP_ID);
         requestNode.put(BridgeNotificationWorkerProcessor.REQUEST_PARAM_DATE, DATE_STRING);
         requestNode.put(BridgeNotificationWorkerProcessor.REQUEST_PARAM_TAG, TAG);
         return requestNode;

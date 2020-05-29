@@ -23,8 +23,8 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.OAuthProvider;
-import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
@@ -42,7 +42,7 @@ public class BridgeFitBitWorkerProcessorTest {
         processor.setBridgeHelper(mockBridgeHelper);
 
         // Set rate limit to 1000 so tests aren't bottlenecked by the rate limiter.
-        processor.setPerStudyRateLimit(1000.0);
+        processor.setPerAppRateLimit(1000.0);
     }
 
     // branch coverage
@@ -64,119 +64,120 @@ public class BridgeFitBitWorkerProcessorTest {
 
     @Test
     public void multipleStudies() throws Exception {
-        // Make studies for test. First study is unconfigured. Second study throws. Third and fourth study succeed.
+        // Make apps for test. First app is unconfigured. Second app throws. Third and fourth app succeeds.
 
-        // Mock study summaries call. This call returns studies that only have study ID.
-        Study studySummary1 = new Study().identifier("study1");
-        Study studySummary2 = new Study().identifier("study2");
-        Study studySummary3 = new Study().identifier("study3");
-        Study studySummary4 = new Study().identifier("study4");
-        when(mockBridgeHelper.getAllStudies()).thenReturn(ImmutableList.of(studySummary1, studySummary2, studySummary3,
-                studySummary4));
+        // Mock app summaries call. This call returns apps that only have an ID.
+        App appSummary1 = new App().identifier("app1");
+        App appSummary2 = new App().identifier("app2");
+        App appSummary3 = new App().identifier("app3");
+        App appSummary4 = new App().identifier("app4");
+        when(mockBridgeHelper.getAllApps()).thenReturn(ImmutableList.of(appSummary1, appSummary2, appSummary3,
+                appSummary4));
 
-        // Mock get study call. This returns a "full" study.
-        Study study1 = new Study().identifier("study1");
-        Study study2 = new Study().identifier("study2").synapseProjectId("project-2").synapseDataAccessTeamId(2222L)
+        // Mock get app call. This returns a "full" app.
+        App app1 = new App().identifier("app1");
+        App app2 = new App().identifier("app2").synapseProjectId("project-2").synapseDataAccessTeamId(2222L)
                 .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
-        Study study3 = new Study().identifier("study3").synapseProjectId("project-3").synapseDataAccessTeamId(3333L)
+        App app3 = new App().identifier("app3").synapseProjectId("project-3").synapseDataAccessTeamId(3333L)
                 .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
-        Study study4 = new Study().identifier("study4").synapseProjectId("project-4").synapseDataAccessTeamId(4444L)
+        App app4 = new App().identifier("app4").synapseProjectId("project-4").synapseDataAccessTeamId(4444L)
                 .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
 
-        when(mockBridgeHelper.getStudy("study1")).thenReturn(study1);
-        when(mockBridgeHelper.getStudy("study2")).thenReturn(study2);
-        when(mockBridgeHelper.getStudy("study3")).thenReturn(study3);
-        when(mockBridgeHelper.getStudy("study4")).thenReturn(study4);
+        when(mockBridgeHelper.getApp("app1")).thenReturn(app1);
+        when(mockBridgeHelper.getApp("app2")).thenReturn(app2);
+        when(mockBridgeHelper.getApp("app3")).thenReturn(app3);
+        when(mockBridgeHelper.getApp("app4")).thenReturn(app4);
 
-        // Spy processStudy(). This is tested elsewhere.
+        // Spy processApp(). This is tested elsewhere.
         doAnswer(invocation -> {
-            // We throw for study2. We throw a RuntimeException because the iterator can't throw checked exceptions.
-            Study study = invocation.getArgumentAt(1, Study.class);
-            if ("study2".equals(study.getIdentifier())) {
+            // We throw for app2. We throw a RuntimeException because the iterator can't throw checked exceptions.
+            App app = invocation.getArgumentAt(1, App.class);
+            if ("app2".equals(app.getIdentifier())) {
                 throw new RuntimeException("test exception");
             }
 
             // Requred return value for doAnswer().
             return null;
-        }).when(processor).processStudy(any(), any(), any());
+        }).when(processor).processApp(any(), any(), any());
 
         // Execute
         ObjectNode requestNode = DefaultObjectMapper.INSTANCE.createObjectNode();
         requestNode.put(BridgeFitBitWorkerProcessor.REQUEST_PARAM_DATE, "2017-12-11");
         processor.accept(requestNode);
 
-        // Verify call to processStudy().
-        ArgumentCaptor<Study> processedStudyCaptor = ArgumentCaptor.forClass(Study.class);
-        verify(processor, times(3)).processStudy(eq("2017-12-11"), processedStudyCaptor
+        // Verify call to processApp().
+        ArgumentCaptor<App> processedAppCaptor = ArgumentCaptor.forClass(App.class);
+        verify(processor, times(3)).processApp(eq("2017-12-11"), processedAppCaptor
                 .capture(), isNull(List.class));
 
-        List<Study> processedStudyList = processedStudyCaptor.getAllValues();
-        assertEquals(processedStudyList.size(), 3);
-        assertEquals(processedStudyList.get(0).getIdentifier(), "study2");
-        assertEquals(processedStudyList.get(1).getIdentifier(), "study3");
-        assertEquals(processedStudyList.get(2).getIdentifier(), "study4");
+        List<App> processedAppList = processedAppCaptor.getAllValues();
+        assertEquals(processedAppList.size(), 3);
+        assertEquals(processedAppList.get(0).getIdentifier(), "app2");
+        assertEquals(processedAppList.get(1).getIdentifier(), "app3");
+        assertEquals(processedAppList.get(2).getIdentifier(), "app4");
     }
 
     @Test
-    public void healthCodeWhitelistAndStudyWhitelist() throws Exception {
-        // Mock get study call. This returns a "full" study.
-        Study study2 = new Study().identifier("study2").synapseProjectId("project-2").synapseDataAccessTeamId(2222L)
+    public void healthCodeWhitelistAndAppWhitelist() throws Exception {
+        // Mock get app call. This returns a "full" app.
+        App app2 = new App().identifier("app2").synapseProjectId("project-2").synapseDataAccessTeamId(2222L)
                 .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
-        when(mockBridgeHelper.getStudy("study2")).thenReturn(study2);
+        when(mockBridgeHelper.getApp("app2")).thenReturn(app2);
 
-        // Spy processStudy(). This is tested elsewhere.
-        doNothing().when(processor).processStudy(any(), any(), any());
+        // Spy processApp(). This is tested elsewhere.
+        doNothing().when(processor).processApp(any(), any(), any());
 
         // Create request.
         ArrayNode healthCodeWhitelistNode = DefaultObjectMapper.INSTANCE.createArrayNode();
         healthCodeWhitelistNode.add("healthcode2");
 
-        ArrayNode studyWhitelistNode = DefaultObjectMapper.INSTANCE.createArrayNode();
-        studyWhitelistNode.add("study2");
+        ArrayNode appWhitelistNode = DefaultObjectMapper.INSTANCE.createArrayNode();
+        appWhitelistNode.add("app2");
 
         ObjectNode requestNode = DefaultObjectMapper.INSTANCE.createObjectNode();
         requestNode.put(BridgeFitBitWorkerProcessor.REQUEST_PARAM_DATE, "2017-12-11");
         requestNode.set(BridgeFitBitWorkerProcessor.REQUEST_PARAM_HEALTH_CODE_WHITELIST, healthCodeWhitelistNode);
-        requestNode.set(BridgeFitBitWorkerProcessor.REQUEST_PARAM_STUDY_WHITELIST, studyWhitelistNode);
+        // studyWhitelist is used in next test; both work
+        requestNode.set(BridgeFitBitWorkerProcessor.REQUEST_PARAM_APP_WHITELIST, appWhitelistNode);
 
         // Execute
         processor.accept(requestNode);
 
-        // Verify only one call to processStudy().
-        verify(processor).processStudy("2017-12-11", study2, ImmutableList.of("healthcode2"));
+        // Verify only one call to processApp().
+        verify(processor).processApp("2017-12-11", app2, ImmutableList.of("healthcode2"));
 
-        // Verify we never call Bridge Helper to get the list of studies
-        verify(mockBridgeHelper, never()).getAllStudies();
+        // Verify we never call Bridge Helper to get the list of apps
+        verify(mockBridgeHelper, never()).getAllApps();
     }
 
     // branch coverage
     @Test
-    public void emptyHealthCodeWhitelistAndStudyWhitelist() throws Exception {
-        // Mock study summaries call. This call returns studies that only have study ID.
-        Study studySummary3 = new Study().identifier("study3");
-        when(mockBridgeHelper.getAllStudies()).thenReturn(ImmutableList.of(studySummary3));
+    public void emptyHealthCodeWhitelistAndAppWhitelist() throws Exception {
+        // Mock app summaries call. This call returns apps that only have app ID.
+        App appSummary3 = new App().identifier("app3");
+        when(mockBridgeHelper.getAllApps()).thenReturn(ImmutableList.of(appSummary3));
 
-        // Mock get study call. This returns a "full" study.
-        Study study3 = new Study().identifier("study3").synapseProjectId("project-3").synapseDataAccessTeamId(3333L)
+        // Mock get app call. This returns a "full" app.
+        App app3 = new App().identifier("app3").synapseProjectId("project-3").synapseDataAccessTeamId(3333L)
                 .putOAuthProvidersItem(Constants.FITBIT_VENDOR_ID, new OAuthProvider());
-        when(mockBridgeHelper.getStudy("study3")).thenReturn(study3);
+        when(mockBridgeHelper.getApp("app3")).thenReturn(app3);
 
-        // Spy processStudy(). This is tested elsewhere.
-        doNothing().when(processor).processStudy(any(), any(), any());
+        // Spy processApp(). This is tested elsewhere.
+        doNothing().when(processor).processApp(any(), any(), any());
 
         // Create request.
         ArrayNode healthCodeWhitelistNode = DefaultObjectMapper.INSTANCE.createArrayNode();
-        ArrayNode studyWhitelistNode = DefaultObjectMapper.INSTANCE.createArrayNode();
+        ArrayNode appWhitelistNode = DefaultObjectMapper.INSTANCE.createArrayNode();
 
         ObjectNode requestNode = DefaultObjectMapper.INSTANCE.createObjectNode();
         requestNode.put(BridgeFitBitWorkerProcessor.REQUEST_PARAM_DATE, "2017-12-11");
         requestNode.set(BridgeFitBitWorkerProcessor.REQUEST_PARAM_HEALTH_CODE_WHITELIST, healthCodeWhitelistNode);
-        requestNode.set(BridgeFitBitWorkerProcessor.REQUEST_PARAM_STUDY_WHITELIST, studyWhitelistNode);
+        requestNode.set(BridgeFitBitWorkerProcessor.REQUEST_PARAM_STUDY_WHITELIST, appWhitelistNode);
 
         // Execute
         processor.accept(requestNode);
 
-        // Verify only one call to processStudy().
-        verify(processor).processStudy("2017-12-11", study3, ImmutableList.of());
+        // Verify only one call to processApp().
+        verify(processor).processApp("2017-12-11", app3, ImmutableList.of());
     }
 }

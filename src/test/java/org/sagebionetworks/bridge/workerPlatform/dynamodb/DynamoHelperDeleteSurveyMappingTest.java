@@ -24,7 +24,7 @@ import org.testng.annotations.Test;
 
 @SuppressWarnings("unchecked")
 public class DynamoHelperDeleteSurveyMappingTest {
-    private static final String STUDY_ID = "my-study";
+    private static final String APP_ID = "my-app";
     private static final String TABLE_ID_FOO = "table-foo";
     private static final String TABLE_ID_BAR = "table-bar";
 
@@ -41,23 +41,23 @@ public class DynamoHelperDeleteSurveyMappingTest {
 
     @Test
     public void noItem() {
-        when(mockSynapseSurveyTable.getItem(DynamoHelper.ATTR_STUDY_ID, STUDY_ID)).thenReturn(null);
-        helper.deleteSynapseSurveyTableMapping(STUDY_ID, TABLE_ID_FOO);
+        when(mockSynapseSurveyTable.getItem(DynamoHelper.ATTR_APP_ID, APP_ID)).thenReturn(null);
+        helper.deleteSynapseSurveyTableMapping(APP_ID, TABLE_ID_FOO);
         verify(mockSynapseSurveyTable, never()).updateItem(any());
     }
 
     @Test
     public void noSet() {
-        when(mockSynapseSurveyTable.getItem(DynamoHelper.ATTR_STUDY_ID, STUDY_ID)).thenReturn(new Item());
-        helper.deleteSynapseSurveyTableMapping(STUDY_ID, TABLE_ID_FOO);
+        when(mockSynapseSurveyTable.getItem(DynamoHelper.ATTR_APP_ID, APP_ID)).thenReturn(new Item());
+        helper.deleteSynapseSurveyTableMapping(APP_ID, TABLE_ID_FOO);
         verify(mockSynapseSurveyTable, never()).updateItem(any());
     }
 
     @Test
     public void setDoesntContainTableId() {
         Item item = new Item().withStringSet(DynamoHelper.ATTR_TABLE_ID_SET, "table-other");
-        when(mockSynapseSurveyTable.getItem(DynamoHelper.ATTR_STUDY_ID, STUDY_ID)).thenReturn(item);
-        helper.deleteSynapseSurveyTableMapping(STUDY_ID, TABLE_ID_FOO);
+        when(mockSynapseSurveyTable.getItem(DynamoHelper.ATTR_APP_ID, APP_ID)).thenReturn(item);
+        helper.deleteSynapseSurveyTableMapping(APP_ID, TABLE_ID_FOO);
         verify(mockSynapseSurveyTable, never()).updateItem(any());
     }
 
@@ -65,10 +65,10 @@ public class DynamoHelperDeleteSurveyMappingTest {
     public void normalCase() {
         // Mock DDB table.
         Item item = new Item().withStringSet(DynamoHelper.ATTR_TABLE_ID_SET, TABLE_ID_FOO, TABLE_ID_BAR);
-        when(mockSynapseSurveyTable.getItem(DynamoHelper.ATTR_STUDY_ID, STUDY_ID)).thenReturn(item);
+        when(mockSynapseSurveyTable.getItem(DynamoHelper.ATTR_APP_ID, APP_ID)).thenReturn(item);
 
         // Execute and validate.
-        helper.deleteSynapseSurveyTableMapping(STUDY_ID, TABLE_ID_FOO);
+        helper.deleteSynapseSurveyTableMapping(APP_ID, TABLE_ID_FOO);
 
         ArgumentCaptor<UpdateItemSpec> updateItemSpecCaptor = ArgumentCaptor.forClass(UpdateItemSpec.class);
         verify(mockSynapseSurveyTable).updateItem(updateItemSpecCaptor.capture());
@@ -79,8 +79,8 @@ public class DynamoHelperDeleteSurveyMappingTest {
         Collection<KeyAttribute> keyComponents = updateItemSpec.getKeyComponents();
         assertEquals(keyComponents.size(), 1);
         KeyAttribute key = Iterables.getOnlyElement(keyComponents);
-        assertEquals(key.getName(), DynamoHelper.ATTR_STUDY_ID);
-        assertEquals(key.getValue(), STUDY_ID);
+        assertEquals(key.getName(), DynamoHelper.ATTR_APP_ID);
+        assertEquals(key.getValue(), APP_ID);
 
         Map<String, Object> valueMap = updateItemSpec.getValueMap();
         assertEquals(valueMap.size(), 1);
@@ -92,11 +92,11 @@ public class DynamoHelperDeleteSurveyMappingTest {
     public void removeLastTableId() {
         // Mock DDB table.
         Item item = new Item().withStringSet(DynamoHelper.ATTR_TABLE_ID_SET, TABLE_ID_FOO);
-        when(mockSynapseSurveyTable.getItem(DynamoHelper.ATTR_STUDY_ID, STUDY_ID)).thenReturn(item);
+        when(mockSynapseSurveyTable.getItem(DynamoHelper.ATTR_APP_ID, APP_ID)).thenReturn(item);
 
         // Execute and validate. Update params already tested in a previous test. Just test the submitted table ID set
         // is null.
-        helper.deleteSynapseSurveyTableMapping(STUDY_ID, TABLE_ID_FOO);
+        helper.deleteSynapseSurveyTableMapping(APP_ID, TABLE_ID_FOO);
 
         ArgumentCaptor<UpdateItemSpec> updateItemSpecCaptor = ArgumentCaptor.forClass(UpdateItemSpec.class);
         verify(mockSynapseSurveyTable).updateItem(updateItemSpecCaptor.capture());

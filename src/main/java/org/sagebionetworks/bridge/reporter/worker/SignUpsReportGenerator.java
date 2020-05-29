@@ -7,7 +7,6 @@ import java.util.Map;
 
 import org.joda.time.DateTime;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.reporter.request.ReportType;
@@ -34,7 +33,7 @@ public class SignUpsReportGenerator implements ReportGenerator {
     }
     
     @Override
-    public Report generate(BridgeReporterRequest request, String studyId) throws IOException {
+    public Report generate(BridgeReporterRequest request, String appId) throws IOException {
         DateTime startDate = request.getStartDateTime();
         DateTime endDate = request.getEndDateTime();
         String scheduler = request.getScheduler();
@@ -45,7 +44,7 @@ public class SignUpsReportGenerator implements ReportGenerator {
         Multiset<AccountStatus> statuses = HashMultiset.create();
         Multiset<SharingScope> sharingScopes = HashMultiset.create();
 
-        List<StudyParticipant> participants = bridgeHelper.getParticipantsForStudy(studyId, startDate, endDate);
+        List<StudyParticipant> participants = bridgeHelper.getParticipantsForApp(appId, startDate, endDate);
         for (StudyParticipant participant : participants) {
             if (participant.getRoles().isEmpty()) {
                 statuses.add(participant.getStatus());
@@ -77,7 +76,7 @@ public class SignUpsReportGenerator implements ReportGenerator {
         reportData.put("bySharing", sharingData);
         reportData.put("byStatus", statusData);
 
-        return new Report.Builder().withStudyId(studyId).withReportId(reportId).withDate(startDate.toLocalDate())
+        return new Report.Builder().withAppId(appId).withReportId(reportId).withDate(startDate.toLocalDate())
                 .withReportData(reportData).build();
     }
 }

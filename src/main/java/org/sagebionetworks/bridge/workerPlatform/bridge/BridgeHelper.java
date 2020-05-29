@@ -16,6 +16,7 @@ import org.sagebionetworks.bridge.reporter.worker.Report;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.AccountSummaryList;
 import org.sagebionetworks.bridge.rest.model.ActivityEvent;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.ReportData;
 import org.sagebionetworks.bridge.rest.model.RequestInfo;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
@@ -25,10 +26,9 @@ import org.sagebionetworks.bridge.rest.model.UploadList;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 import org.sagebionetworks.bridge.rest.ClientManager;
+import org.sagebionetworks.bridge.rest.api.AppsApi;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
-import org.sagebionetworks.bridge.rest.api.StudiesApi;
 import org.sagebionetworks.bridge.rest.model.OAuthAccessToken;
-import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.rest.model.UploadStatus;
 import org.sagebionetworks.bridge.rest.model.UploadValidationStatus;
@@ -68,10 +68,10 @@ public class BridgeHelper {
     }
 
     /** Gets account information (email address, healthcode) for the given account ID. */
-    public AccountInfo getAccountInfo(String studyId, String userId)
+    public AccountInfo getAccountInfo(String appId, String userId)
             throws IOException, PollSqsWorkerBadRequestException {
-        StudyParticipant participant = clientManager.getClient(ForWorkersApi.class).getParticipantByIdForStudy(
-                studyId, userId, false).execute().body();
+        StudyParticipant participant = clientManager.getClient(ForWorkersApi.class).getParticipantByIdForApp(
+                appId, userId, false).execute().body();
         AccountInfo.Builder builder = new AccountInfo.Builder().withHealthCode(participant.getHealthCode())
                 .withUserId(userId);
         if (participant.getEmail() != null && Boolean.TRUE.equals(participant.isEmailVerified())) {
@@ -85,38 +85,38 @@ public class BridgeHelper {
     }
 
     /**
-     * Get an iterator for all account summaries in the given study. Note that since getAllAccountSummaries is a
+     * Get an iterator for all account summaries in the given app. Note that since getAllAccountSummaries is a
      * paginated API, the iterator may continue to call the server.
      */
-    public Iterator<AccountSummary> getAllAccountSummaries(String studyId, boolean phoneOnly) {
-        return new AccountSummaryIterator(clientManager, studyId, phoneOnly);
+    public Iterator<AccountSummary> getAllAccountSummaries(String appId, boolean phoneOnly) {
+        return new AccountSummaryIterator(clientManager, appId, phoneOnly);
     }
 
-    /** Get all activity events (e.g. enrollment) for the given user in the given study. */
-    public List<ActivityEvent> getActivityEvents(String studyId, String userId) throws IOException {
-        return clientManager.getClient(ForWorkersApi.class).getActivityEventsForParticipantAndStudy(studyId, userId).execute()
+    /** Get all activity events (e.g. enrollment) for the given user in the given app. */
+    public List<ActivityEvent> getActivityEvents(String appId, String userId) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getActivityEventsForParticipantAndApp(appId, userId).execute()
                 .body().getItems();
     }
 
     /** Returns the FitBitUser for a single user. */
-    public FitBitUser getFitBitUserForStudyAndHealthCode(String studyId, String healthCode) throws IOException {
-        OAuthAccessToken token = clientManager.getClient(ForWorkersApi.class).getOAuthAccessToken(studyId,
+    public FitBitUser getFitBitUserForAppAndHealthCode(String appId, String healthCode) throws IOException {
+        OAuthAccessToken token = clientManager.getClient(ForWorkersApi.class).getOAuthAccessToken(appId,
                 Constants.FITBIT_VENDOR_ID, healthCode).execute().body();
         return new FitBitUser.Builder().withHealthCode(healthCode).withToken(token).build();
     }
 
-    /** Gets an iterator for all FitBit users in the given study. */
-    public Iterator<FitBitUser> getFitBitUsersForStudy(String studyId) {
-        return new FitBitUserIterator(clientManager, studyId);
+    /** Gets an iterator for all FitBit users in the given app. */
+    public Iterator<FitBitUser> getFitBitUsersForApp(String appId) {
+        return new FitBitUserIterator(clientManager, appId);
     }
 
-    /** Gets a participant for the given user in the given study. */
-    public StudyParticipant getParticipant(String studyId, String userId, boolean withConsents) throws IOException {
-        return clientManager.getClient(ForWorkersApi.class).getParticipantByIdForStudy(studyId, userId, withConsents)
+    /** Gets a participant for the given user in the given app. */
+    public StudyParticipant getParticipant(String appId, String userId, boolean withConsents) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getParticipantByIdForApp(appId, userId, withConsents)
                 .execute().body();
     }
 
-    public List<StudyParticipant> getParticipantsForStudy(String studyId, DateTime startDateTime, DateTime endDateTime)
+    public List<StudyParticipant> getParticipantsForApp(String appId, DateTime startDateTime, DateTime endDateTime)
             throws IOException {
         List<StudyParticipant> retList = new ArrayList<>();
 
@@ -126,10 +126,10 @@ public class BridgeHelper {
         int total;
         do {
             AccountSummaryList summaries = workersApi
-                    .getParticipantsForStudy(studyId, offset, PARTICIPANT_PAGE_SIZE, null, null, startDateTime, endDateTime)
+                    .getParticipantsForApp(appId, offset, PARTICIPANT_PAGE_SIZE, null, null, startDateTime, endDateTime)
                     .execute().body();
             for (AccountSummary summary : summaries.getItems()) {
-                StudyParticipant participant = workersApi.getParticipantByIdForStudy(studyId, summary.getId(), false).execute().body();
+                StudyParticipant participant = workersApi.getParticipantByIdForApp(appId, summary.getId(), false).execute().body();
                 retList.add(participant);
                 doSleep();
             }
@@ -140,68 +140,68 @@ public class BridgeHelper {
         return retList;
     }
 
-    /** Gets the given report for the given user in the given study for the given date range (inclusive). */
-    public List<ReportData> getParticipantReports(String studyId, String userId, String reportId, LocalDate startDate,
+    /** Gets the given report for the given user in the given app for the given date range (inclusive). */
+    public List<ReportData> getParticipantReports(String appId, String userId, String reportId, LocalDate startDate,
             LocalDate endDate) throws IOException {
-        return clientManager.getClient(ForWorkersApi.class).getParticipantReportsForParticipant(studyId, userId,
+        return clientManager.getClient(ForWorkersApi.class).getParticipantReportsForParticipant(appId, userId,
                 reportId, startDate, endDate).execute().body().getItems();
     }
 
     /**
-     * Helper method to save report for specified study with report id and report data
+     * Helper method to save report for specified app with report id and report data
      */
-    public void saveReportForStudy(Report report) throws IOException {
+    public void saveReportForApp(Report report) throws IOException {
         ReportData reportData = new ReportData().date(report.getDate().toString()).data(report.getData());
         clientManager.getClient(ForWorkersApi.class)
-                .saveReport(report.getStudyId(), report.getReportId(), reportData).execute();
+                .saveReport(report.getAppId(), report.getReportId(), reportData).execute();
     }
 
-    public RequestInfo getRequestInfoForParticipant(String studyId, String userId) throws IOException {
+    public RequestInfo getRequestInfoForParticipant(String appId, String userId) throws IOException {
         ForWorkersApi workersApi = clientManager.getClient(ForWorkersApi.class);
-        return workersApi.getRequestInfoForWorker(studyId, userId).execute().body();
+        return workersApi.getRequestInfoForWorker(appId, userId).execute().body();
     }
 
-    /** Sends the given message as an SMS to the given user in the given study. */
-    public void sendSmsToUser(String studyId, String userId, String message) throws IOException {
+    /** Sends the given message as an SMS to the given user in the given app. */
+    public void sendSmsToUser(String appId, String userId, String message) throws IOException {
         SmsTemplate smsTemplate = new SmsTemplate().message(message);
-        clientManager.getClient(ForWorkersApi.class).sendSmsMessageToParticipantForStudy(studyId, userId, smsTemplate)
+        clientManager.getClient(ForWorkersApi.class).sendSmsMessageToParticipantForApp(appId, userId, smsTemplate)
                 .execute();
     }
 
-    /** Gets all study summaries (worker API, active studies only). Note that these studies only contain study ID. */
-    public List<Study> getAllStudies() throws IOException {
-        return clientManager.getClient(StudiesApi.class).getStudies(/* summary */true).execute().body()
+    /** Gets all app summaries (worker API, active apps only). Note that these apps only contain the ID. */
+    public List<App> getAllApps() throws IOException {
+        return clientManager.getClient(AppsApi.class).getApps(/* summary */true).execute().body()
                 .getItems();
     }
 
-    /** Gets the study for the given ID. */
-    public Study getStudy(String studyId) throws IOException {
-        return clientManager.getClient(ForWorkersApi.class).getStudy(studyId).execute().body();
+    /** Gets the app for the given ID. */
+    public App getApp(String appId) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getApp(appId).execute().body();
     }
 
     /**
-     * Get the user's survey history for the given user, study, survey GUID, and time range. Note that since
+     * Get the user's survey history for the given user, app, survey GUID, and time range. Note that since
      * getSurveyHistory is a paginated API, the iterator may continue to call the server.
      */
-    public Iterator<ScheduledActivity> getSurveyHistory(String studyId, String userId, String surveyGuid,
+    public Iterator<ScheduledActivity> getSurveyHistory(String appId, String userId, String surveyGuid,
             DateTime scheduledOnStart, DateTime scheduledOnEnd) {
-        return new SurveyHistoryIterator(clientManager, studyId, userId, surveyGuid, scheduledOnStart, scheduledOnEnd);
+        return new SurveyHistoryIterator(clientManager, appId, userId, surveyGuid, scheduledOnStart, scheduledOnEnd);
     }
 
     /**
-     * Get the user's task history for the given user, study, task ID, and time range. Note that since getTaskHistory
+     * Get the user's task history for the given user, app, task ID, and time range. Note that since getTaskHistory
      * is a paginated API, the iterator may continue to call the server.
      * */
-    public Iterator<ScheduledActivity> getTaskHistory(String studyId, String userId, String taskId,
+    public Iterator<ScheduledActivity> getTaskHistory(String appId, String userId, String taskId,
             DateTime scheduledOnStart, DateTime scheduledOnEnd) {
-        return new TaskHistoryIterator(clientManager, studyId, userId, taskId, scheduledOnStart, scheduledOnEnd);
+        return new TaskHistoryIterator(clientManager, appId, userId, taskId, scheduledOnStart, scheduledOnEnd);
     }
 
     /*
-     * Helper method to get all uploads for specified study and date range
+     * Helper method to get all uploads for specified app and date range
      * Paginated results should be added in one list altogether
      */
-    public List<Upload> getUploadsForStudy(String studyId, DateTime startDateTime, DateTime endDateTime)
+    public List<Upload> getUploadsForApp(String appId, DateTime startDateTime, DateTime endDateTime)
             throws IOException {
 
         List<Upload> retList = new ArrayList<>();
@@ -212,7 +212,7 @@ public class BridgeHelper {
 
             final String temOffsetKey = offsetKey;
             UploadList retBody = workersApi
-                    .getUploadsForStudy(studyId, startDateTime, endDateTime, MAX_PAGE_SIZE, temOffsetKey).execute()
+                    .getUploadsForApp(appId, startDateTime, endDateTime, MAX_PAGE_SIZE, temOffsetKey).execute()
                     .body();
             retList.addAll(retBody.getItems());
             offsetKey = retBody.getNextPageOffsetKey();

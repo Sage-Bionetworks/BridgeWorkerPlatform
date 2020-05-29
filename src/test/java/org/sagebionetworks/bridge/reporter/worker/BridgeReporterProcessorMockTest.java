@@ -23,7 +23,7 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.reporter.request.ReportType;
-import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
 public class BridgeReporterProcessorMockTest {
@@ -32,9 +32,9 @@ public class BridgeReporterProcessorMockTest {
     private static final String DUMMY_DATA_PREFIX = "dummy data for ";
     private static final LocalDate REPORT_DATE = LocalDate.parse("2018-01-11");
     private static final String REPORT_ID = "report-id";
-    private static final String STUDY_ID_1 = "study1";
-    private static final String STUDY_ID_2 = "study2";
-    private static final String STUDY_ID_3 = "study3";
+    private static final String APP_ID_1 = "app1";
+    private static final String APP_ID_2 = "app2";
+    private static final String APP_ID_3 = "app3";
 
     private BridgeHelper mockBridgeHelper;
     private ReportGenerator mockGenerator;
@@ -42,19 +42,19 @@ public class BridgeReporterProcessorMockTest {
 
     @BeforeMethod
     public void setup() throws Exception {
-        // Mock bridge helper. Return studies foo, bar, and baz.
-        List<Study> studySummaryList = ImmutableList.of(new Study().identifier(STUDY_ID_1),
-                new Study().identifier(STUDY_ID_2), new Study().identifier(STUDY_ID_3));
+        // Mock bridge helper. Return apps foo, bar, and baz.
+        List<App> appSummaryList = ImmutableList.of(new App().identifier(APP_ID_1),
+                new App().identifier(APP_ID_2), new App().identifier(APP_ID_3));
 
         mockBridgeHelper = mock(BridgeHelper.class);
-        when(mockBridgeHelper.getAllStudies()).thenReturn(studySummaryList);
+        when(mockBridgeHelper.getAllApps()).thenReturn(appSummaryList);
 
         // Mock report generator. For the purposes of this test, the generator is always DAILY.
         mockGenerator = mock(ReportGenerator.class);
         when(mockGenerator.generate(any(), any())).thenAnswer(invocation -> {
-            String studyId = invocation.getArgumentAt(1, String.class);
-            return new Report.Builder().withDate(REPORT_DATE).withReportData(DUMMY_DATA_PREFIX + studyId)
-                    .withReportId(REPORT_ID).withStudyId(studyId).build();
+            String appId = invocation.getArgumentAt(1, String.class);
+            return new Report.Builder().withDate(REPORT_DATE).withReportData(DUMMY_DATA_PREFIX + appId)
+                    .withReportId(REPORT_ID).withAppId(appId).build();
         });
         Map<ReportType, ReportGenerator> generatorMap = ImmutableMap.of(ReportType.DAILY, mockGenerator);
 
@@ -75,59 +75,59 @@ public class BridgeReporterProcessorMockTest {
         processor.process(requestNode);
 
         // Verify generator calls.
-        validateGeneratorCall(request, STUDY_ID_1);
-        validateGeneratorCall(request, STUDY_ID_2);
-        validateGeneratorCall(request, STUDY_ID_3);
+        validateGeneratorCall(request, APP_ID_1);
+        validateGeneratorCall(request, APP_ID_2);
+        validateGeneratorCall(request, APP_ID_3);
 
         // Verify reports.
         ArgumentCaptor<Report> reportCaptor = ArgumentCaptor.forClass(Report.class);
-        verify(mockBridgeHelper, times(3)).saveReportForStudy(reportCaptor.capture());
+        verify(mockBridgeHelper, times(3)).saveReportForApp(reportCaptor.capture());
 
         List<Report> reportList = reportCaptor.getAllValues();
-        validateSavedReport(reportList.get(0), STUDY_ID_1);
-        validateSavedReport(reportList.get(1), STUDY_ID_2);
-        validateSavedReport(reportList.get(2), STUDY_ID_3);
+        validateSavedReport(reportList.get(0), APP_ID_1);
+        validateSavedReport(reportList.get(1), APP_ID_2);
+        validateSavedReport(reportList.get(2), APP_ID_3);
     }
 
     @Test
-    public void withStudyWhitelist() throws Exception {
-        // Make request. Only study2.
+    public void withAppWhitelist() throws Exception {
+        // Make request. Only app2.
         BridgeReporterRequest request = new BridgeReporterRequest.Builder().withStartDateTime(START_DATE_TIME)
                 .withEndDateTime(END_DATE_TIME).withScheduler(REPORT_ID).withScheduleType(ReportType.DAILY)
-                .withStudyWhitelist(ImmutableList.of(STUDY_ID_2)).build();
+                .withAppWhitelist(ImmutableList.of(APP_ID_2)).build();
         JsonNode requestNode = DefaultObjectMapper.INSTANCE.convertValue(request, JsonNode.class);
 
         // Execute.
         processor.process(requestNode);
 
         // Verify generator calls.
-        validateGeneratorCall(request, STUDY_ID_2);
+        validateGeneratorCall(request, APP_ID_2);
 
         // Verify reports.
         ArgumentCaptor<Report> reportCaptor = ArgumentCaptor.forClass(Report.class);
-        verify(mockBridgeHelper, times(1)).saveReportForStudy(reportCaptor.capture());
-        validateSavedReport(reportCaptor.getValue(), STUDY_ID_2);
+        verify(mockBridgeHelper, times(1)).saveReportForApp(reportCaptor.capture());
+        validateSavedReport(reportCaptor.getValue(), APP_ID_2);
 
         // And no other calls.
         verifyNoMoreInteractions(mockGenerator, mockBridgeHelper);
     }
 
-    private void validateGeneratorCall(BridgeReporterRequest expectedRequest, String expectedStudyId) throws Exception {
+    private void validateGeneratorCall(BridgeReporterRequest expectedRequest, String expectedAppId) throws Exception {
         ArgumentCaptor<BridgeReporterRequest> requestCaptor = ArgumentCaptor.forClass(BridgeReporterRequest.class);
-        verify(mockGenerator).generate(requestCaptor.capture(), eq(expectedStudyId));
+        verify(mockGenerator).generate(requestCaptor.capture(), eq(expectedAppId));
 
         BridgeReporterRequest actualRequest = requestCaptor.getValue();
         assertEquals(actualRequest.getStartDateTime(), expectedRequest.getStartDateTime());
         assertEquals(actualRequest.getEndDateTime(), expectedRequest.getEndDateTime());
         assertEquals(actualRequest.getScheduler(), expectedRequest.getScheduler());
         assertEquals(actualRequest.getScheduleType(), expectedRequest.getScheduleType());
-        assertEquals(actualRequest.getStudyWhitelist(), expectedRequest.getStudyWhitelist());
+        assertEquals(actualRequest.getAppWhitelist(), expectedRequest.getAppWhitelist());
     }
 
-    private static void validateSavedReport(Report report, String studyId) throws Exception {
+    private static void validateSavedReport(Report report, String appId) throws Exception {
         assertEquals(report.getDate(), REPORT_DATE);
-        assertEquals((String) report.getData(), DUMMY_DATA_PREFIX + studyId);
+        assertEquals((String) report.getData(), DUMMY_DATA_PREFIX + appId);
         assertEquals(report.getReportId(), REPORT_ID);
-        assertEquals(report.getStudyId(), studyId);
+        assertEquals(report.getAppId(), appId);
     }
 }

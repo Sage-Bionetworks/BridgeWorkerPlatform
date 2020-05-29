@@ -24,14 +24,14 @@ import org.testng.annotations.Test;
 import org.sagebionetworks.bridge.exceptions.BridgeSynapseException;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
-import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
 public class TableProcessorEdgeCasesTest {
     private static final String DATE_STRING = "2017-12-11";
-    private static final String STUDY_ID = "test-study";
-    private static final Study STUDY = new Study().identifier(STUDY_ID);
+    private static final String APP_ID = "test-app";
+    private static final App APP = new App().identifier(APP_ID);
     private static final String SYNAPSE_TABLE_ID = "synapse-table";
     private static final String TABLE_ID = "my-table";
 
@@ -54,7 +54,7 @@ public class TableProcessorEdgeCasesTest {
         processor.setSynapseHelper(mockSynapseHelper);
 
         // Make request context
-        ctx = new RequestContext(DATE_STRING, STUDY, inMemoryFileHelper.createTempDir());
+        ctx = new RequestContext(DATE_STRING, APP, inMemoryFileHelper.createTempDir());
     }
 
     // branch coverage

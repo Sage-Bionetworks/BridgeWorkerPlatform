@@ -25,7 +25,7 @@ import org.sagebionetworks.bridge.exceptions.BridgeSynapseException;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.fitbit.schema.ColumnSchema;
 import org.sagebionetworks.bridge.fitbit.util.Utils;
-import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 
 /**
@@ -37,7 +37,7 @@ public class TableProcessor {
     // Visible for testing
     static final String CONFIG_KEY_TEAM_BRIDGE_ADMIN = "team.bridge.admin";
     static final String CONFIG_KEY_TEAM_BRIDGE_STAFF = "team.bridge.staff";
-    static final String DDB_KEY_STUDY_ID = "studyId";
+    static final String DDB_KEY_APP_ID = "studyId";
     static final String DDB_KEY_SYNAPSE_TABLE_ID = "synapseTableId";
     static final String DDB_KEY_TABLE_ID = "tableId";
 
@@ -55,7 +55,7 @@ public class TableProcessor {
         this.bridgeStaffTeamId = bridgeConfig.getInt(CONFIG_KEY_TEAM_BRIDGE_STAFF);
     }
 
-    /** DynamoDB table which maps the study ID and table ID (table name) to a Synapse table ID. */
+    /** DynamoDB table which maps the app ID and table ID (table name) to a Synapse table ID. */
     @Resource(name = "ddbTablesMap")
     public final void setDdbTablesMap(Table ddbTablesMap) {
         this.ddbTablesMap = ddbTablesMap;
@@ -134,7 +134,7 @@ public class TableProcessor {
         String tableId = table.getTableId();
 
         // Check if we have this in DDB
-        String synapseTableId = getSynapseTableIdFromDdb(ctx.getStudy().getIdentifier(), tableId);
+        String synapseTableId = getSynapseTableIdFromDdb(ctx.getApp().getIdentifier(), tableId);
 
         // Check if the table exists in Synapse
         boolean tableExists = synapseTableId != null;
@@ -154,15 +154,15 @@ public class TableProcessor {
 
         if (!tableExists) {
             // Delegate table creation to SynapseHelper.
-            Study study = ctx.getStudy();
-            Set<Long> readOnlyPrincipalIdSet = ImmutableSet.of(bridgeStaffTeamId, study.getSynapseDataAccessTeamId());
+            App app = ctx.getApp();
+            Set<Long> readOnlyPrincipalIdSet = ImmutableSet.of(bridgeStaffTeamId, app.getSynapseDataAccessTeamId());
             Set<Long> adminPrincipalIdSet = ImmutableSet.of(bridgeAdminTeamId, synapsePrincipalId);
-            String projectId = study.getSynapseProjectId();
+            String projectId = app.getSynapseProjectId();
             String newSynapseTableId = synapseHelper.createTableWithColumnsAndAcls(columnModelList,
                     readOnlyPrincipalIdSet, adminPrincipalIdSet, projectId, tableId);
 
             // write back to DDB table
-            setSynapseTableIdToDdb(study.getIdentifier(), tableId, newSynapseTableId);
+            setSynapseTableIdToDdb(app.getIdentifier(), tableId, newSynapseTableId);
             return newSynapseTableId;
         } else {
             // For backwards compatibility, we set mergeDeletedFields=true, so that any fields in the table not in our
@@ -173,8 +173,8 @@ public class TableProcessor {
     }
 
     // Helper method to get the Synapse table ID from DynamoDB.
-    private String getSynapseTableIdFromDdb(String studyId, String tableId) {
-        Item tableMapItem = ddbTablesMap.getItem(DDB_KEY_STUDY_ID, studyId, DDB_KEY_TABLE_ID, tableId);
+    private String getSynapseTableIdFromDdb(String appId, String tableId) {
+        Item tableMapItem = ddbTablesMap.getItem(DDB_KEY_APP_ID, appId, DDB_KEY_TABLE_ID, tableId);
         if (tableMapItem != null) {
             return tableMapItem.getString(DDB_KEY_SYNAPSE_TABLE_ID);
         } else {
@@ -183,8 +183,8 @@ public class TableProcessor {
     }
 
     // Helper method to write the Synapse table ID to DynamoDB, used for freshly created tables.
-    private void setSynapseTableIdToDdb(String studyId, String tableId, String synapseTableId) {
-        Item tableMapItem = new Item().withString(DDB_KEY_STUDY_ID, studyId).withString(DDB_KEY_TABLE_ID, tableId)
+    private void setSynapseTableIdToDdb(String appId, String tableId, String synapseTableId) {
+        Item tableMapItem = new Item().withString(DDB_KEY_APP_ID, appId).withString(DDB_KEY_TABLE_ID, tableId)
                 .withString(DDB_KEY_SYNAPSE_TABLE_ID, synapseTableId);
         ddbTablesMap.putItem(tableMapItem);
     }

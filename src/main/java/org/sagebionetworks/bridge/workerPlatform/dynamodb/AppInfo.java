@@ -2,34 +2,34 @@ package org.sagebionetworks.bridge.workerPlatform.dynamodb;
 
 import com.google.common.base.Strings;
 
-/** Encapsulates metadata for a study. */
-public class StudyInfo {
+/** Encapsulates metadata for an app. */
+public class AppInfo {
     private final String name;
     private final String shortName;
-    private final String studyId;
+    private final String appId;
     private final String supportEmail;
 
     /** Private constructor. To construct, use builder. */
-    private StudyInfo(String name, String shortName, String studyId, String supportEmail) {
+    private AppInfo(String name, String shortName, String appId, String supportEmail) {
         this.name = name;
         this.shortName = shortName;
-        this.studyId = studyId;
+        this.appId = appId;
         this.supportEmail = supportEmail;
     }
 
-    /** Study name. */
+    /** App name. */
     public String getName() {
         return name;
     }
     
-    /** Study's short (SMS appropriate) name. */
+    /** App's short (SMS appropriate) name. */
     public String getShortName() {
         return shortName;
     }
 
-    /** Study ID. */
-    public String getStudyId() {
-        return studyId;
+    /** App ID. */
+    public String getAppId() {
+        return appId;
     }
 
     /** Email address that emails should be sent from. */
@@ -37,14 +37,14 @@ public class StudyInfo {
         return supportEmail;
     }
 
-    /** StudyInfo builder. */
+    /** AppInfo builder. */
     public static class Builder {
         private String name;
         private String shortName;
-        private String studyId;
+        private String appId;
         private String supportEmail;
 
-        /** @see StudyInfo#getName */
+        /** @see AppInfo#getName */
         public Builder withName(String name) {
             this.name = name;
             return this;
@@ -55,33 +55,33 @@ public class StudyInfo {
             return this;
         }
 
-        /** @see StudyInfo#getStudyId */
-        public Builder withStudyId(String studyId) {
-            this.studyId = studyId;
+        /** @see AppInfo#getAppId */
+        public Builder withAppId(String appId) {
+            this.appId = appId;
             return this;
         }
 
-        /** @see StudyInfo#getSupportEmail */
+        /** @see AppInfo#getSupportEmail */
         public Builder withSupportEmail(String supportEmail) {
             this.supportEmail = supportEmail;
             return this;
         }
 
-        /** Builds a StudyInfo object and validates that all parameters are specified. */
-        public StudyInfo build() {
+        /** Builds an AppInfo object and validates that all parameters are specified. */
+        public AppInfo build() {
             if (Strings.isNullOrEmpty(name)) {
                 throw new IllegalStateException("name must be specified");
             }
 
-            if (Strings.isNullOrEmpty(studyId)) {
-                throw new IllegalStateException("studyId must be specified");
+            if (Strings.isNullOrEmpty(appId)) {
+                throw new IllegalStateException("appId must be specified");
             }
 
             if (Strings.isNullOrEmpty(supportEmail)) {
                 throw new IllegalStateException("supportEmail must be specified");
             }
 
-            return new StudyInfo(name, shortName, studyId, supportEmail);
+            return new AppInfo(name, shortName, appId, supportEmail);
         }
     }
 }

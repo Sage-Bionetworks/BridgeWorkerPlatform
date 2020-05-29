@@ -45,8 +45,8 @@ import org.sagebionetworks.bridge.fitbit.schema.EndpointSchema;
 import org.sagebionetworks.bridge.fitbit.schema.TableSchema;
 import org.sagebionetworks.bridge.fitbit.schema.UrlParameterType;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.OAuthAccessToken;
-import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
@@ -78,8 +78,8 @@ public class UserProcessorTest {
     private static final ColumnSchema UNSUPPORTED_COLUMN = new ColumnSchema.Builder().withColumnId(COLUMN_ID)
             .withColumnType(ColumnType.LINK).build();
 
-    private static final String STUDY_ID = "my-study";
-    private static final Study STUDY = new Study().identifier(STUDY_ID);
+    private static final String APP_ID = "my-app";
+    private static final App APP = new App().identifier(APP_ID);
 
     private static final String TABLE_ID = ENDPOINT_ID + '.' + TABLE_KEY;
 
@@ -157,7 +157,7 @@ public class UserProcessorTest {
         doAnswer(invocation -> mockHttpResponse).when(processor).makeHttpRequest(any(), any());
 
         // Make request context.
-        ctx = new RequestContext(DATE_STRING, STUDY, tempDir);
+        ctx = new RequestContext(DATE_STRING, APP, tempDir);
     }
 
     @Test

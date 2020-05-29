@@ -6,20 +6,20 @@ import org.apache.commons.lang3.StringUtils;
 
 /** Params needed to execute the SynapseDownloadSurveyTask. */
 public class SynapseDownloadSurveyParameters {
-    private final String studyId;
+    private final String appId;
     private final String synapseTableId;
     private final File tempDir;
 
     /** Private constructor. To build, use builder. */
-    private SynapseDownloadSurveyParameters(String studyId, String synapseTableId, File tempDir) {
-        this.studyId = studyId;
+    private SynapseDownloadSurveyParameters(String appId, String synapseTableId, File tempDir) {
+        this.appId = appId;
         this.synapseTableId = synapseTableId;
         this.tempDir = tempDir;
     }
 
-    /** Study ID for this survey download. */
-    public String getStudyId() {
-        return studyId;
+    /** App ID for this survey download. */
+    public String getAppId() {
+        return appId;
     }
 
     /** ID of the Synapse table with the survey metadata. */
@@ -34,13 +34,13 @@ public class SynapseDownloadSurveyParameters {
 
     /** Parameter class builder. */
     public static class Builder {
-        private String studyId;
+        private String appId;
         private String synapseTableId;
         private File tempDir;
 
-        /** @see SynapseDownloadSurveyParameters#getStudyId */
-        public Builder withStudyId(String studyId) {
-            this.studyId = studyId;
+        /** @see SynapseDownloadSurveyParameters#getAppId */
+        public Builder withAppId(String appId) {
+            this.appId = appId;
             return this;
         }
 
@@ -57,8 +57,8 @@ public class SynapseDownloadSurveyParameters {
 
         /** Builds the parameters object and validates parameters. */
         public SynapseDownloadSurveyParameters build() {
-            if (StringUtils.isBlank(studyId)) {
-                throw new IllegalStateException("studyId must be specified");
+            if (StringUtils.isBlank(appId)) {
+                throw new IllegalStateException("appId must be specified");
             }
 
             if (StringUtils.isBlank(synapseTableId)) {
@@ -69,7 +69,7 @@ public class SynapseDownloadSurveyParameters {
                 throw new IllegalStateException("tempDir must be specified");
             }
 
-            return new SynapseDownloadSurveyParameters(studyId, synapseTableId, tempDir);
+            return new SynapseDownloadSurveyParameters(appId, synapseTableId, tempDir);
         }
     }
 }
