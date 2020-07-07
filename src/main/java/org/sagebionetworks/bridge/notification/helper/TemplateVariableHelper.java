@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import com.google.gson.JsonSyntaxException;
 import com.jcabi.aspects.Cacheable;
 import org.joda.time.LocalDate;
 import org.slf4j.Logger;
@@ -110,7 +111,16 @@ public class TemplateVariableHelper {
         if (obj == null) {
             return null;
         }
-        obj = RestUtils.toType(obj, Map.class);
+        try {
+            obj = RestUtils.toType(obj, Map.class);
+        } catch (JsonSyntaxException ex) {
+            // The format for the Engagement report has changed since launch and is currently unclear. In some cases,
+            // the format is not parsable by the old code. If this happens, log a warning and return null instead of
+            // crashing.
+            // See https://sagebionetworks.jira.com/browse/MP2-299
+            LOG.warn("Error parsing Engagement report: " + ex.getMessage(), ex);
+            return null;
+        }
 
         // Recursive descent on the map.
         for (String oneKey : keys) {

@@ -147,6 +147,18 @@ public class TemplateVariableHelperTest {
 
     // branch coverage
     @Test
+    public void studyCommitment_notJsonObject() throws Exception {
+        String reportDataJson = "not-object";
+        Object reportDataObj = RestUtils.GSON.fromJson(reportDataJson, String.class);
+        engagementReport.setData(reportDataObj);
+
+        // Execute test.
+        String result = templateVariableHelper.getStudyCommitmentUncached(APP_ID, userId);
+        assertNull(result);
+    }
+
+    // branch coverage
+    @Test
     public void studyCommitment_noClientData() throws Exception {
         // By default, engagement report contains no client data.
 
