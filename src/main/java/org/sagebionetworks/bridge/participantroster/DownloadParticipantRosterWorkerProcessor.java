@@ -2,6 +2,10 @@ package org.sagebionetworks.bridge.participantroster;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.util.concurrent.RateLimiter;
+import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
+import org.sagebionetworks.bridge.rest.model.AccountSummary;
+import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
@@ -14,6 +18,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
+import java.io.IOException;
+import java.util.Iterator;
 import java.util.concurrent.ExecutorService;
 
 
@@ -33,6 +39,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     static final String REQUEST_PARAM_S3_BUCKET = "s3Bucket";
     static final String REQUEST_PARAM_S3_KEY = "s3Key";
     static final String REQUEST_PARAM_DOWNLOAD_TYPE = "downloadType";
+    // request param password
 
     private final RateLimiter perDownloadRateLimiter = RateLimiter.create(0.5);
 
@@ -92,8 +99,26 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             throw new PollSqsWorkerBadRequestException("downloadType must be specified");
         }
 
-        // TODO: Do we gotta check download type? Are there more than one type? (Asking bc redrive has two types)
+        BridgeDownloadParticipantRosterRequest request;
+        try {
+            request = DefaultObjectMapper.INSTANCE.treeToValue(jsonNode, BridgeDownloadParticipantRosterRequest.class);
+        } catch (IOException e) {
+            throw new PollSqsWorkerBadRequestException("Error parsing request: " + e.getMessage(), e);
+        }
 
-        //
+        String userId = request.getUserId();
+        String appId = request.getAppId();
+
+        // get caller's user using Bridge API getParticipantByIdForApp
+        StudyParticipant participant = bridgeHelper.getParticipant(appId, userId, false);
+
+        // call Bridge API searchAccountSummariesForApp(appId, caller's Org)
+        Iterator<AccountSummary> accountSummaryIterator = bridgeHelper.getAllAccountSummaries(appId, false);
+            // offsetBy=0 and increment offsetBy by pageSize with every loop until reach a total of AccountSummaryList.getTotal()
+            // or until we get an empty result set.
+        while (accountSummaryIterator.hasNext()) {
+            // as we get account summaries, write that to a csv (example in SynapseDownloadFromTableTask)
+        }
+        // email to the caller's email address
     }
 }
