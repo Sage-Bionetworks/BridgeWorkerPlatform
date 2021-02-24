@@ -1,6 +1,7 @@
 package org.sagebionetworks.bridge.participantroster;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.base.Joiner;
 import com.google.common.util.concurrent.RateLimiter;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
@@ -29,6 +30,9 @@ import java.util.concurrent.ExecutorService;
 @Component("DownloadParticipantRosterWorker")
 public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsumer<JsonNode> {
     private static final Logger LOG = LoggerFactory.getLogger(DownloadParticipantRosterWorkerProcessor.class);
+
+    private static final Joiner COMMA_SPACE_JOINER = Joiner.on(", ").skipNulls();
+    static final String WORKER_ID = "DownloadParticipantRosterWorker";
 
     // If there are a lot of downloads, write log messages regularly so we know the worker is still running.
     private static final int REPORTING_INTERVAL = 100;
