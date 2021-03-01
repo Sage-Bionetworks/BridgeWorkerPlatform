@@ -88,20 +88,20 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     /** Main entry point into Download Participant Roster Worker. */
     @Override
     public void accept(JsonNode jsonNode) throws Exception {
-        String s3Bucket = JsonUtils.asText(jsonNode, REQUEST_PARAM_S3_BUCKET);
-        if (s3Bucket == null) {
-            throw new PollSqsWorkerBadRequestException("s3Bucket must be specified");
-        }
-
-        String s3Key = JsonUtils.asText(jsonNode, REQUEST_PARAM_S3_KEY);
-        if (s3Key == null) {
-            throw new PollSqsWorkerBadRequestException("s3Key must be specified");
-        }
-
-        String downloadTypeStr = JsonUtils.asText(jsonNode, REQUEST_PARAM_DOWNLOAD_TYPE);
-        if (downloadTypeStr == null) {
-            throw new PollSqsWorkerBadRequestException("downloadType must be specified");
-        }
+//        String s3Bucket = JsonUtils.asText(jsonNode, REQUEST_PARAM_S3_BUCKET);
+//        if (s3Bucket == null) {
+//            throw new PollSqsWorkerBadRequestException("s3Bucket must be specified");
+//        }
+//
+//        String s3Key = JsonUtils.asText(jsonNode, REQUEST_PARAM_S3_KEY);
+//        if (s3Key == null) {
+//            throw new PollSqsWorkerBadRequestException("s3Key must be specified");
+//        }
+//
+//        String downloadTypeStr = JsonUtils.asText(jsonNode, REQUEST_PARAM_DOWNLOAD_TYPE);
+//        if (downloadTypeStr == null) {
+//            throw new PollSqsWorkerBadRequestException("downloadType must be specified");
+//        }
 
         BridgeDownloadParticipantRosterRequest request;
         try {

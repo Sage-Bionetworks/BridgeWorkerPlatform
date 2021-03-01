@@ -1,7 +1,9 @@
 package org.sagebionetworks.bridge.participantroster;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.google.common.base.Strings;
 
 /** Represents a request to the Participant Roster Download Worker. */
 @JsonDeserialize(builder = BridgeDownloadParticipantRosterRequest.Builder.class)
@@ -30,6 +32,40 @@ public class BridgeDownloadParticipantRosterRequest {
     }
 
     public static class Builder {
+        private String appId;
+        private String userId;
+        private String password;
 
+        @JsonAlias("studyId") //TODO or have we changed over to appId permanently?
+        public Builder withAppId(String appId) {
+            this.appId = appId;
+            return this;
+        }
+
+        public Builder withUserId(String userId) {
+            this.userId = userId;
+            return this;
+        }
+
+        public Builder withPassWord(String password) {
+            this.password = password;
+            return this;
+        }
+
+        public BridgeDownloadParticipantRosterRequest build() {
+            if (Strings.isNullOrEmpty(appId)) {
+                throw new IllegalStateException("appId must be specified");
+            }
+
+            if (Strings.isNullOrEmpty(userId)) {
+                throw new IllegalStateException("userId must be specified");
+            }
+
+            if (Strings.isNullOrEmpty(password)) {
+                throw new IllegalStateException("password must be specified");
+            }
+
+            return new BridgeDownloadParticipantRosterRequest(appId, userId, password);
+        }
     }
 }
