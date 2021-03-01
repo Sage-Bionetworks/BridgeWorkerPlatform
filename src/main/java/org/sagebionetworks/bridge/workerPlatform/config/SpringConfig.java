@@ -29,6 +29,8 @@ import com.amazonaws.services.simpleemail.AmazonSimpleEmailServiceClient;
 import com.amazonaws.services.sns.AmazonSNSClient;
 import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.sagebionetworks.bridge.participantroster.BridgeDownloadParticipantRosterRequest;
+import org.sagebionetworks.bridge.participantroster.DownloadParticipantRosterWorkerProcessor;
 import org.sagebionetworks.client.SynapseAdminClientImpl;
 import org.sagebionetworks.client.SynapseClient;
 import org.slf4j.Logger;
@@ -264,6 +266,12 @@ public class SpringConfig {
     @Autowired
     public ThrowingConsumer<JsonNode> uddWorker(BridgeUddProcessor uddProcessor) {
         return uddProcessor::process;
+    }
+
+    @Bean(name = Constants.SERVICE_TYPE_PARTICIPANT_ROSTER_DOWNLOADER)
+    @Autowired
+    public ThrowingConsumer<JsonNode> participantRosterDownloaderWorker(DownloadParticipantRosterWorkerProcessor downloadProcessor) {
+        return downloadProcessor::accept; // TODO does this need to be process?
     }
 
     @PostConstruct
