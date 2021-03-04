@@ -2,14 +2,17 @@ package org.sagebionetworks.bridge.participantroster;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Joiner;
+import com.google.common.base.Stopwatch;
 import com.google.common.util.concurrent.RateLimiter;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
+import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
+import org.sagebionetworks.bridge.workerPlatform.bridge.AccountSummaryIterator;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.workerPlatform.util.JsonUtils;
@@ -22,6 +25,7 @@ import javax.annotation.Resource;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -112,17 +116,37 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
         String userId = request.getUserId();
         String appId = request.getAppId();
+        String password = request.getPassword();
+        LOG.info("Received request for userId=" + userId + ", app=" + appId + ", password=" + password);
 
-        // get caller's user using Bridge API getParticipantByIdForApp
-        StudyParticipant participant = bridgeHelper.getParticipant(appId, userId, false);
+        Stopwatch requestStopwatch = Stopwatch.createStarted();
 
-        // call Bridge API searchAccountSummariesForApp(appId, caller's Org)
-        Iterator<AccountSummary> accountSummaryIterator = bridgeHelper.getAllAccountSummaries(appId, false);
+        try {
+            // get caller's user using Bridge API getParticipantByIdForApp
+            StudyParticipant participant = bridgeHelper.getParticipant(appId, userId, false);
+
+            // call Bridge API searchAccountSummariesForApp(appId, caller's Org)
+            Iterator<AccountSummary> accountSummaryIterator = bridgeHelper.getAllAccountSummaries(appId, false);
             // offsetBy=0 and increment offsetBy by pageSize with every loop until reach a total of AccountSummaryList.getTotal()
             // or until we get an empty result set.
-        while (accountSummaryIterator.hasNext()) {
-            // as we get account summaries, write that to a csv (example in SynapseDownloadFromTableTask)
+            while (accountSummaryIterator.hasNext()) {
+                // as we get account summaries, write that to a csv (example in SynapseDownloadFromTableTask)
+                AccountSummary accountSummary = accountSummaryIterator.next();
+                LOG.info("accountSummary=" + accountSummary.toString());
+            }
+            // email to the caller's email address
+
+        } catch (BridgeSDKException e) {
+            int status = e.getStatusCode();
+            if (status >= 400 && status < 500) {
+                throw new PollSqsWorkerBadRequestException(e);
+            } else {
+                throw new RuntimeException(e);
+            }
+        } finally {
+            LOG.info("request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
+                    " seconds for userId =" + userId + ", app=" + appId + ", password=" + password);
         }
-        // email to the caller's email address
+
     }
 }

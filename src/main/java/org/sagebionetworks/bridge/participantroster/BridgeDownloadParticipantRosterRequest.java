@@ -36,7 +36,6 @@ public class BridgeDownloadParticipantRosterRequest {
         private String userId;
         private String password;
 
-        @JsonAlias("studyId") //TODO or have we changed over to appId permanently?
         public Builder withAppId(String appId) {
             this.appId = appId;
             return this;
@@ -47,7 +46,7 @@ public class BridgeDownloadParticipantRosterRequest {
             return this;
         }
 
-        public Builder withPassWord(String password) {
+        public Builder withPassword(String password) {
             this.password = password;
             return this;
         }
