@@ -7,6 +7,8 @@ import java.util.List;
 
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
+import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
+import org.sagebionetworks.bridge.rest.model.ResourceList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -264,6 +266,14 @@ public class BridgeHelper {
     public Upload getUploadByRecordId(String recordId) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getUploadByRecordId(recordId).execute().body();
     }
+
+    // call Bridge API searchAccountSummariesForApp(appId, caller's Org)
+    /** Get account summaries by caller's appId and org */
+    public List<AccountSummary> getAccountSummariesForApp(String appId, String orgId) throws IOException {
+        AccountSummarySearch search = new AccountSummarySearch(); //TODO need to add orgId to this some how
+        return clientManager.getClient(ForWorkersApi.class).searchAccountSummariesForApp(appId, search).execute().body().getItems();
+    }
+
 
     private void doSleep() {
         // sleep a second
