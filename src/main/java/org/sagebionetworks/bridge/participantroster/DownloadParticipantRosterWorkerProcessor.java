@@ -1,9 +1,11 @@
 package org.sagebionetworks.bridge.participantroster;
 
+import au.com.bytecode.opencsv.CSVReader;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import com.google.common.util.concurrent.RateLimiter;
+import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
@@ -24,6 +26,7 @@ import org.springframework.stereotype.Component;
 import javax.annotation.Resource;
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -52,6 +55,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     private final RateLimiter perDownloadRateLimiter = RateLimiter.create(0.5);
 
     private BridgeHelper bridgeHelper;
+    private FileHelper fileHelper;
     private DynamoHelper dynamoHelper;
     private ExecutorService executorService;
     private S3Helper s3Helper;
@@ -60,6 +64,13 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     @Autowired
     public final void setBridgeHelper(BridgeHelper bridgeHelper) {
         this.bridgeHelper = bridgeHelper;
+    }
+
+    /** Wrapper class around the file system. Used by unit tests to test the functionality without hitting the real file
+     * system.
+     */
+    public final void setFileHelper(FileHelper fileHelper) {
+        this.fileHelper = fileHelper;
     }
 
     /** Mainly used to write the worker log. */
@@ -92,20 +103,6 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     /** Main entry point into Download Participant Roster Worker. */
     @Override
     public void accept(JsonNode jsonNode) throws Exception {
-//        String s3Bucket = JsonUtils.asText(jsonNode, REQUEST_PARAM_S3_BUCKET);
-//        if (s3Bucket == null) {
-//            throw new PollSqsWorkerBadRequestException("s3Bucket must be specified");
-//        }
-//
-//        String s3Key = JsonUtils.asText(jsonNode, REQUEST_PARAM_S3_KEY);
-//        if (s3Key == null) {
-//            throw new PollSqsWorkerBadRequestException("s3Key must be specified");
-//        }
-//
-//        String downloadTypeStr = JsonUtils.asText(jsonNode, REQUEST_PARAM_DOWNLOAD_TYPE);
-//        if (downloadTypeStr == null) {
-//            throw new PollSqsWorkerBadRequestException("downloadType must be specified");
-//        }
 
         BridgeDownloadParticipantRosterRequest request;
         try {
@@ -124,17 +121,23 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         try {
             // get caller's user using Bridge API getParticipantByIdForApp
             StudyParticipant participant = bridgeHelper.getParticipant(appId, userId, false);
+            String orgMembership = participant.getOrgMembership();
 
             // call Bridge API searchAccountSummariesForApp(appId, caller's Org)
-            Iterator<AccountSummary> accountSummaryIterator = bridgeHelper.getAllAccountSummaries(appId, false);
+            int offsetBy = 0;
+            List<AccountSummary> accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy);
             // offsetBy=0 and increment offsetBy by pageSize with every loop until reach a total of AccountSummaryList.getTotal()
             // or until we get an empty result set.
-            while (accountSummaryIterator.hasNext()) {
-                // as we get account summaries, write that to a csv (example in SynapseDownloadFromTableTask)
-                AccountSummary accountSummary = accountSummaryIterator.next();
-                LOG.info("accountSummary=" + accountSummary.toString());
+
+            while (!accountSummaries.isEmpty()) {
+                // add everything in the list to the csv
+
+                // get next set of account summaries
+                offsetBy += PAGE_SIZE;
+                accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy);
             }
-            // email to the caller's email address
+
+            // email the csv to the caller's email address
 
         } catch (BridgeSDKException e) {
             int status = e.getStatusCode();
@@ -147,6 +150,5 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             LOG.info("request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
                     " seconds for userId =" + userId + ", app=" + appId + ", password=" + password);
         }
-
     }
 }

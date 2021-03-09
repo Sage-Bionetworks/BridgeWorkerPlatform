@@ -269,11 +269,10 @@ public class BridgeHelper {
 
     // call Bridge API searchAccountSummariesForApp(appId, caller's Org)
     /** Get account summaries by caller's appId and org */
-    public List<AccountSummary> getAccountSummariesForApp(String appId, String orgId) throws IOException {
-        AccountSummarySearch search = new AccountSummarySearch(); //TODO need to add orgId to this some how
+    public List<AccountSummary> getAccountSummariesForApp(String appId, String orgId, int offsetBy) throws IOException {
+        AccountSummarySearch search = new AccountSummarySearch().orgMembership(orgId).offsetBy(offsetBy).pageSize(PARTICIPANT_PAGE_SIZE);
         return clientManager.getClient(ForWorkersApi.class).searchAccountSummariesForApp(appId, search).execute().body().getItems();
     }
-
 
     private void doSleep() {
         // sleep a second
