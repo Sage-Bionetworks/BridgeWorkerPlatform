@@ -267,12 +267,6 @@ public class SpringConfig {
         return uddProcessor::process;
     }
 
-    @Bean(name = Constants.SERVICE_TYPE_PARTICIPANT_ROSTER_DOWNLOADER)
-    @Autowired
-    public ThrowingConsumer<JsonNode> participantRosterDownloaderWorker(DownloadParticipantRosterWorkerProcessor downloadProcessor) {
-        return downloadProcessor::accept; // TODO does this need to be process?
-    }
-
     @PostConstruct
     public void initDynamoDbTables() throws InterruptedException {
         LOG.info("Initializing DynamoDB tables...");
