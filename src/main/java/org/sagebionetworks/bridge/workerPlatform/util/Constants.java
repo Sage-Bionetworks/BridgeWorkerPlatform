@@ -4,7 +4,6 @@ package org.sagebionetworks.bridge.workerPlatform.util;
 public class Constants {
     public static final String SERVICE_TYPE_REPORTER = "REPORTER";
     public static final String SERVICE_TYPE_UDD = "UDD";
-    public static final String SERVICE_TYPE_PARTICIPANT_ROSTER_DOWNLOADER = "PARTICIPANT_ROSTER_DOWNLOADER";
 
     // Synapse column names
     public static final String COLUMN_HEALTH_CODE = "healthCode";
