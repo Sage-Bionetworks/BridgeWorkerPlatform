@@ -1,32 +1,36 @@
 package org.sagebionetworks.bridge.participantroster;
 
-import au.com.bytecode.opencsv.CSVReader;
+import au.com.bytecode.opencsv.CSVWriter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import com.google.common.util.concurrent.RateLimiter;
+import com.google.gson.JsonElement;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
-import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
+import org.sagebionetworks.bridge.rest.RestUtils;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
-import org.sagebionetworks.bridge.workerPlatform.bridge.AccountSummaryIterator;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
-import org.sagebionetworks.bridge.workerPlatform.util.JsonUtils;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionException;
+import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
+import java.io.File;
 import java.io.IOException;
-import java.util.Iterator;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -46,6 +50,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
     static final int PAGE_SIZE = 100;
     private static final long THREAD_SLEEP_INTERVAL = 1000L;
+    private static final int NUM_CSV_COLUMNS = 14;
 
     static final String REQUEST_PARAM_S3_BUCKET = "s3Bucket";
     static final String REQUEST_PARAM_S3_KEY = "s3Key";
@@ -69,6 +74,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     /** Wrapper class around the file system. Used by unit tests to test the functionality without hitting the real file
      * system.
      */
+    @Autowired
     public final void setFileHelper(FileHelper fileHelper) {
         this.fileHelper = fileHelper;
     }
@@ -117,6 +123,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         LOG.info("Received request for userId=" + userId + ", app=" + appId + ", password=" + password);
 
         Stopwatch requestStopwatch = Stopwatch.createStarted();
+        File csvFile = null;
 
         try {
             // get caller's user using Bridge API getParticipantByIdForApp
@@ -126,29 +133,56 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             // call Bridge API searchAccountSummariesForApp(appId, caller's Org)
             int offsetBy = 0;
             List<AccountSummary> accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy);
-            // offsetBy=0 and increment offsetBy by pageSize with every loop until reach a total of AccountSummaryList.getTotal()
-            // or until we get an empty result set.
 
-            while (!accountSummaries.isEmpty()) {
-                // add everything in the list to the csv
+            //TODO make the csv stuff happen in a separate task class?
+            csvFile = fileHelper.newFile(fileHelper.createTempDir(), getDownloadFilenamePrefix() + ".csv");
+            try (CSVWriter csvFileWriter = new CSVWriter(fileHelper.getWriter(csvFile))) {
+                while (!accountSummaries.isEmpty()) {
+                    for (AccountSummary accountSummary : accountSummaries) {
+                        String[] row = getAccountSummaryArray(accountSummary);
+                        csvFileWriter.writeNext(row);
+                    }
+                    // get next set of account summaries
+                    offsetBy += PAGE_SIZE;
+                    accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy);
 
-                // get next set of account summaries
-                offsetBy += PAGE_SIZE;
-                accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy);
+                    // avoid burning out Bridge Server
+                    Thread.sleep(THREAD_SLEEP_INTERVAL);
+                }
+            } catch (IOException ex) {
+                throw new WorkerException("Error creating file " + csvFile + ": " + ex.getMessage(), ex);
             }
 
-            // email the csv to the caller's email address
+            // TODO email the csv to the caller's email address
 
-        } catch (BridgeSDKException e) {
-            int status = e.getStatusCode();
+        } catch (BridgeSDKException ex) {
+            int status = ex.getStatusCode();
             if (status >= 400 && status < 500) {
-                throw new PollSqsWorkerBadRequestException(e);
+                throw new PollSqsWorkerBadRequestException(ex);
             } else {
-                throw new RuntimeException(e);
+                throw new RuntimeException(ex);
             }
         } finally {
+            fileHelper.deleteFile(csvFile);
             LOG.info("request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
                     " seconds for userId =" + userId + ", app=" + appId + ", password=" + password);
         }
+    }
+
+    protected String getDownloadFilenamePrefix() {
+        return "account_summaries";
+    }
+
+    private String[] getAccountSummaryArray(AccountSummary accountSummary) {
+        JsonElement json = RestUtils.toJSON(accountSummary);
+
+        Set<Map.Entry<String, JsonElement>> members = json.getAsJsonObject().entrySet();
+        ArrayList<String> list = new ArrayList<>();
+
+        for (Map.Entry<String, JsonElement> member : members) {
+            list.add(member.getValue().toString());
+        }
+
+        return list.toArray(new String[0]) ;
     }
 }
