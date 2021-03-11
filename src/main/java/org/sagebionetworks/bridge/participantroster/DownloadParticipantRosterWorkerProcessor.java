@@ -2,7 +2,6 @@ package org.sagebionetworks.bridge.participantroster;
 
 import au.com.bytecode.opencsv.CSVWriter;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.gson.JsonElement;
@@ -12,26 +11,21 @@ import org.sagebionetworks.bridge.rest.RestUtils;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
-import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
-import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
-import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTaskExecutionException;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 
@@ -42,28 +36,16 @@ import java.util.concurrent.TimeUnit;
 public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsumer<JsonNode> {
     private static final Logger LOG = LoggerFactory.getLogger(DownloadParticipantRosterWorkerProcessor.class);
 
-    private static final Joiner COMMA_SPACE_JOINER = Joiner.on(", ").skipNulls();
-    static final String WORKER_ID = "DownloadParticipantRosterWorker";
-
     // If there are a lot of downloads, write log messages regularly so we know the worker is still running.
     private static final int REPORTING_INTERVAL = 100;
 
     static final int PAGE_SIZE = 100;
     private static final long THREAD_SLEEP_INTERVAL = 1000L;
-    private static final int NUM_CSV_COLUMNS = 14;
-
-    static final String REQUEST_PARAM_S3_BUCKET = "s3Bucket";
-    static final String REQUEST_PARAM_S3_KEY = "s3Key";
-    static final String REQUEST_PARAM_DOWNLOAD_TYPE = "downloadType";
-    // request param password
 
     private final RateLimiter perDownloadRateLimiter = RateLimiter.create(0.5);
 
     private BridgeHelper bridgeHelper;
     private FileHelper fileHelper;
-    private DynamoHelper dynamoHelper;
-    private ExecutorService executorService;
-    private S3Helper s3Helper;
 
     /** Helps call Bridge Server APIs */
     @Autowired
@@ -79,18 +61,6 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         this.fileHelper = fileHelper;
     }
 
-    /** Mainly used to write the worker log. */
-    @Autowired
-    public final void setDynamoHelper(DynamoHelper dynamoHelper) {
-        this.dynamoHelper = dynamoHelper;
-    }
-
-    /** Executor Service (thread pool) to allow parallel requests to Download Complete. */
-    @Resource(name = "generalExecutorService")
-    public final void setExecutorService(ExecutorService executorService) {
-        this.executorService = executorService;
-    }
-
     /**
      * Set the rate limit, in upload per second. This is mainly used to allow unit tests to run without being throttled.
      * Note that in production, since we're running in synchronous mode (to allow better robustness), it's possible that
@@ -100,11 +70,6 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         perDownloadRateLimiter.setRate(rate);
     }
 
-    /** S3 Helper, used to download list of IDs from S3. */
-    @Autowired
-    public final void setS3Helper(S3Helper s3Helper) {
-        this.s3Helper = s3Helper;
-    }
 
     /** Main entry point into Download Participant Roster Worker. */
     @Override
