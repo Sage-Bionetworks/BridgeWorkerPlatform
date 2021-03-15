@@ -12,8 +12,13 @@ import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
+import org.sagebionetworks.bridge.udd.helper.SesHelper;
+import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
+import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.AppInfo;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +51,9 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
     private BridgeHelper bridgeHelper;
     private FileHelper fileHelper;
+    private SesHelper sesHelper;
+    private DynamoHelper dynamoHelper;
+    private DownloadPackager downloadPackager;
 
     /** Helps call Bridge Server APIs */
     @Autowired
@@ -59,6 +67,23 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     @Autowired
     public final void setFileHelper(FileHelper fileHelper) {
         this.fileHelper = fileHelper;
+    }
+
+    /** SES helper, used to email the pre-signed URL to the requesting user. */
+    @Autowired
+    public final void setSesHelper(SesHelper sesHelper) {
+        this.sesHelper = sesHelper;
+    }
+
+    /** Dynamo helper*/
+    @Autowired
+    public final void setDynamoHelper(DynamoHelper dynamoHelper) {
+        this.dynamoHelper = dynamoHelper;
+    }
+
+    @Autowired
+    public final void setDownloadPackager(DownloadPackager downloadPackager) {
+        this.downloadPackager = downloadPackager;
     }
 
     /**
@@ -89,6 +114,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         File csvFile = null;
+        File tmpDir = fileHelper.createTempDir();
 
         try {
             // get caller's user using Bridge API getParticipantByIdForApp
@@ -99,9 +125,8 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             int offsetBy = 0;
             List<AccountSummary> accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy);
 
-            //TODO make the csv stuff happen in a separate task class?
-            csvFile = fileHelper.newFile(fileHelper.createTempDir(), getDownloadFilenamePrefix() + ".csv");
-            try (CSVWriter csvFileWriter = new CSVWriter(fileHelper.getWriter(csvFile))) {
+            csvFile = fileHelper.newFile(tmpDir, getDownloadFilenamePrefix() + ".csv");
+            try (CSVWriter csvFileWriter = new CSVWriter(fileHelper.getWriter(csvFile))) { //TODO is this nested try catch block an anti pattern? :/
                 while (!accountSummaries.isEmpty()) {
                     for (AccountSummary accountSummary : accountSummaries) {
                         String[] row = getAccountSummaryArray(accountSummary);
@@ -118,7 +143,10 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
                 throw new WorkerException("Error creating file " + csvFile + ": " + ex.getMessage(), ex);
             }
 
-            // TODO email the csv to the caller's email address
+            AppInfo appInfo = dynamoHelper.getApp(appId);
+            AccountInfo accountInfo = bridgeHelper.getAccountInfo(appId, userId);
+            PresignedUrlInfo presignedUrlInfo = downloadPackager.packageData(appId, csvFile, tmpDir);
+            sesHelper.sendPresignedUrlToAccount(appInfo, presignedUrlInfo, accountInfo);
 
         } catch (BridgeSDKException ex) {
             int status = ex.getStatusCode();
@@ -129,6 +157,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             }
         } finally {
             fileHelper.deleteFile(csvFile);
+            fileHelper.deleteDir(tmpDir);
             LOG.info("request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
                     " seconds for userId =" + userId + ", app=" + appId + ", password=" + password);
         }
