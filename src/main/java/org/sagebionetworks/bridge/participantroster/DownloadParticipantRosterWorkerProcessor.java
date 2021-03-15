@@ -3,6 +3,7 @@ package org.sagebionetworks.bridge.participantroster;
 import au.com.bytecode.opencsv.CSVWriter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.gson.JsonElement;
 import org.sagebionetworks.bridge.file.FileHelper;
@@ -13,6 +14,7 @@ import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
+import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
@@ -31,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 
@@ -47,13 +50,12 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     static final int PAGE_SIZE = 100;
     private static final long THREAD_SLEEP_INTERVAL = 1000L;
 
-    private final RateLimiter perDownloadRateLimiter = RateLimiter.create(0.5);
-
     private BridgeHelper bridgeHelper;
     private FileHelper fileHelper;
     private SesHelper sesHelper;
     private DynamoHelper dynamoHelper;
     private DownloadPackager downloadPackager;
+    private ZipHelper zipHelper;
 
     /** Helps call Bridge Server APIs */
     @Autowired
@@ -86,15 +88,10 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         this.downloadPackager = downloadPackager;
     }
 
-    /**
-     * Set the rate limit, in upload per second. This is mainly used to allow unit tests to run without being throttled.
-     * Note that in production, since we're running in synchronous mode (to allow better robustness), it's possible that
-     * this will run slower than the rate limit.
-     */
-    public final void setPerDownloadRateLimit(double rate) {
-        perDownloadRateLimiter.setRate(rate);
+    @Autowired
+    public final void setZipHelper(ZipHelper zipHelper) {
+        this.zipHelper = zipHelper;
     }
-
 
     /** Main entry point into Download Participant Roster Worker. */
     @Override
@@ -115,6 +112,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         File csvFile = null;
         File tmpDir = fileHelper.createTempDir();
+        File zipFile = null;
 
         try {
             // get caller's user using Bridge API getParticipantByIdForApp
@@ -146,8 +144,10 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             // zip up and email the csv file
             AppInfo appInfo = dynamoHelper.getApp(appId);
             AccountInfo accountInfo = bridgeHelper.getAccountInfo(appId, userId);
-            PresignedUrlInfo presignedUrlInfo = downloadPackager.packageData(appId, csvFile, tmpDir);
-            sesHelper.sendPresignedUrlToAccount(appInfo, presignedUrlInfo, accountInfo);
+            String zipFileName = "userdata-" + UUID.randomUUID().toString() + ".zip";
+            zipFile = fileHelper.newFile(tmpDir, zipFileName);
+            zipFiles(csvFile, zipFile);
+            sesHelper.sendAttachmentToAccount(appInfo, accountInfo, zipFile.getAbsolutePath());
 
         } catch (BridgeSDKException ex) {
             int status = ex.getStatusCode();
@@ -158,6 +158,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             }
         } finally {
             fileHelper.deleteFile(csvFile);
+            fileHelper.deleteFile(zipFile);
             fileHelper.deleteDir(tmpDir);
             LOG.info("request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
                     " seconds for userId =" + userId + ", app=" + appId + ", password=" + password);
@@ -179,5 +180,25 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         }
 
         return list.toArray(new String[0]) ;
+    }
+
+    /**
+     * Helper method that calls ZipHelper and adds timing metrics and logging.
+     * @param file
+     *          file to zip up
+     * @param zipFile
+     *          file to zip to
+     * @throws IOException
+     *          if zipping the files fails
+     */
+    private void zipFiles(File file, File zipFile) throws IOException {
+        Stopwatch zipStopwatch = Stopwatch.createStarted();
+        try {
+            zipHelper.zip(ImmutableList.of(file), zipFile);
+        } finally {
+            zipStopwatch.stop();
+            LOG.info("Zipping to file " + zipFile.getAbsolutePath() + " took " +
+                    zipStopwatch.elapsed(TimeUnit.MILLISECONDS) + " ms");
+        }
     }
 }
