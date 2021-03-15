@@ -54,7 +54,6 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     private FileHelper fileHelper;
     private SesHelper sesHelper;
     private DynamoHelper dynamoHelper;
-    private DownloadPackager downloadPackager;
     private ZipHelper zipHelper;
 
     /** Helps call Bridge Server APIs */
@@ -81,11 +80,6 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     @Autowired
     public final void setDynamoHelper(DynamoHelper dynamoHelper) {
         this.dynamoHelper = dynamoHelper;
-    }
-
-    @Autowired
-    public final void setDownloadPackager(DownloadPackager downloadPackager) {
-        this.downloadPackager = downloadPackager;
     }
 
     @Autowired
