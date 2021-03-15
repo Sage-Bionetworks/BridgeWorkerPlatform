@@ -143,6 +143,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
                 throw new WorkerException("Error creating file " + csvFile + ": " + ex.getMessage(), ex);
             }
 
+            // zip up and email the csv file
             AppInfo appInfo = dynamoHelper.getApp(appId);
             AccountInfo accountInfo = bridgeHelper.getAccountInfo(appId, userId);
             PresignedUrlInfo presignedUrlInfo = downloadPackager.packageData(appId, csvFile, tmpDir);

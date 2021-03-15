@@ -13,6 +13,7 @@ import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,6 +21,7 @@ import java.net.URL;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+@Component
 public class DownloadPackager {
     private static final Logger LOG = LoggerFactory.getLogger(DownloadPackager.class);
 
