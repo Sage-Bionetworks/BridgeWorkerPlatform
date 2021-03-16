@@ -118,7 +118,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             List<AccountSummary> accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy);
 
             csvFile = fileHelper.newFile(tmpDir, getDownloadFilenamePrefix() + ".csv");
-            try (CSVWriter csvFileWriter = new CSVWriter(fileHelper.getWriter(csvFile))) { //TODO is this nested try catch block an anti pattern? :/
+            try (CSVWriter csvFileWriter = new CSVWriter(fileHelper.getWriter(csvFile))) {
                 while (!accountSummaries.isEmpty()) {
                     for (AccountSummary accountSummary : accountSummaries) {
                         String[] row = getAccountSummaryArray(accountSummary);

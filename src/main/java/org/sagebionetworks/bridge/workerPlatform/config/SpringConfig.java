@@ -67,7 +67,7 @@ import org.sagebionetworks.bridge.workerPlatform.util.Constants;
         "org.sagebionetworks.bridge.udd",
         "org.sagebionetworks.bridge.uploadredrive",
         "org.sagebionetworks.bridge.workerPlatform",
-        "org.sagebionetworks.bridge.participantRoster" //TODO not sure I need this one or the bean below
+        "org.sagebionetworks.bridge.participantRoster"
 })
 @Import({
         org.sagebionetworks.bridge.fitbit.config.SpringConfig.class,
