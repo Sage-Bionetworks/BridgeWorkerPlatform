@@ -80,7 +80,6 @@ public class SesHelper {
     private static final String CONTENT_SUBTYPE_ALTERNATIVE = "alternative";
     private static final String CONTENT_SUBTYPE_MIXED= "mixed";
     private static final String CONTENT_TYPE = "text/html; charset=UTF-8";
-    private static String CONFIGURATION_SET = "ConfigSet";
 
     private AmazonSimpleEmailServiceClient sesClient;
 
@@ -142,7 +141,7 @@ public class SesHelper {
         message.writeTo(outputStream);
         RawMessage rawMessage = new RawMessage(ByteBuffer.wrap(outputStream.toByteArray()));
 
-        SendRawEmailRequest rawEmailRequest = new SendRawEmailRequest(rawMessage).withConfigurationSetName(CONFIGURATION_SET);
+        SendRawEmailRequest rawEmailRequest = new SendRawEmailRequest(rawMessage);
 
         SendRawEmailResult sendRawEmailResult = sesClient.sendRawEmail(rawEmailRequest);
 
