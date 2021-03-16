@@ -66,8 +66,8 @@ public class SesHelper {
             "   </body>\n" +
             "</html>";
 
-    private static final String ATTACHMENT_BODY_TEMPLATE_TEXT = "Your requested data is now available." +
-            "To download your requested data, please download the .zip file attached in this email.";
+    private static final String ATTACHMENT_BODY_TEMPLATE_TEXT = "Your requested data is now available. " +
+            "To download your requested data, please click on the file attached in this email.";
     private static final String ATTACHMENT_BODY_TEMPLATE_HTML = "<html>\n" +
             "   <body>\n" +
             "       <p>\n" +
