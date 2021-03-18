@@ -4,8 +4,8 @@ import au.com.bytecode.opencsv.CSVWriter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
-import com.google.common.util.concurrent.RateLimiter;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.RestUtils;
@@ -15,7 +15,6 @@ import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelper;
-import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
@@ -31,9 +30,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 
@@ -49,6 +46,8 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
     static final int PAGE_SIZE = 100;
     private static final long THREAD_SLEEP_INTERVAL = 1000L;
+    private static final String CSV_FILE_NAME = "account_summaries.csv";
+    private static final String ZIP_FILE_NAME = "user_data.zip";
 
     private BridgeHelper bridgeHelper;
     private FileHelper fileHelper;
@@ -109,24 +108,35 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         File zipFile = null;
 
         try {
-            // get caller's user using Bridge API getParticipantByIdForApp
+            // get caller's user
             StudyParticipant participant = bridgeHelper.getParticipant(appId, userId, false);
             String orgMembership = participant.getOrgMembership();
 
-            // call Bridge API searchAccountSummariesForApp(appId, caller's Org)
-            int offsetBy = 0;
-            List<AccountSummary> accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy);
+            if (participant.getEmail() == null && !participant.isEmailVerified()) {
+                LOG.info("User does not have a validated email address.");
+                return;
+            }
 
-            csvFile = fileHelper.newFile(tmpDir, getDownloadFilenamePrefix() + ".csv");
+            int offsetBy = 0;
+            // get first page of account summaries
+            List<AccountSummary> accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy, PAGE_SIZE);
+
+            csvFile = fileHelper.newFile(tmpDir, CSV_FILE_NAME);
             try (CSVWriter csvFileWriter = new CSVWriter(fileHelper.getWriter(csvFile))) {
+
+                // write csv headers
+                String[] csvHeaders = getCsvHeaders(accountSummaries.get(0));
+                csvFileWriter.writeNext(csvHeaders);
+
+                // write the rest of the account summaries
                 while (!accountSummaries.isEmpty()) {
                     for (AccountSummary accountSummary : accountSummaries) {
-                        String[] row = getAccountSummaryArray(accountSummary);
+                        String[] row = getAccountSummaryArray(accountSummary, csvHeaders);
                         csvFileWriter.writeNext(row);
                     }
                     // get next set of account summaries
                     offsetBy += PAGE_SIZE;
-                    accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy);
+                    accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy, 0);
 
                     // avoid burning out Bridge Server
                     Thread.sleep(THREAD_SLEEP_INTERVAL);
@@ -137,11 +147,10 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
             // zip up and email the csv file
             AppInfo appInfo = dynamoHelper.getApp(appId);
-            AccountInfo accountInfo = bridgeHelper.getAccountInfo(appId, userId);
-            String zipFileName = "userdata-" + UUID.randomUUID().toString() + ".zip";
-            zipFile = fileHelper.newFile(tmpDir, zipFileName);
+            AccountInfo accountInfo = bridgeHelper.getAccountInfo(appId, userId);;
+            zipFile = fileHelper.newFile(tmpDir, ZIP_FILE_NAME);
             zipFiles(csvFile, zipFile);
-            sesHelper.sendAttachmentToAccount(appInfo, accountInfo, zipFile.getAbsolutePath());
+            sesHelper.sendEmailWithAttachmentToAccount(appInfo, accountInfo, zipFile.getAbsolutePath());
 
         } catch (BridgeSDKException ex) {
             int status = ex.getStatusCode();
@@ -151,29 +160,30 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
                 throw new RuntimeException(ex);
             }
         } finally {
-            fileHelper.deleteFile(csvFile);
-            fileHelper.deleteFile(zipFile);
-            fileHelper.deleteDir(tmpDir);
+            cleanupFiles(csvFile, zipFile, tmpDir);
             LOG.info("request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
-                    " seconds for userId =" + userId + ", app=" + appId + ", password=" + password);
+                    " seconds for userId =" + userId + ", app=" + appId);
         }
     }
 
-    protected String getDownloadFilenamePrefix() {
-        return "account_summaries";
+    /** Given an AccountSummary, return a String array of all of its attribute keys */
+    private String[] getCsvHeaders(AccountSummary accountSummary) {
+        JsonElement json = RestUtils.toJSON(accountSummary);
+        Set<String> keys = json.getAsJsonObject().keySet();
+        List<String> list = new ArrayList<>(keys);
+        return list.toArray(new String[0]);
     }
 
-    private String[] getAccountSummaryArray(AccountSummary accountSummary) {
-        JsonElement json = RestUtils.toJSON(accountSummary);
-
-        Set<Map.Entry<String, JsonElement>> members = json.getAsJsonObject().entrySet();
+    /** Given an AccountSummary, return a String array of all of its attribute values */
+    private String[] getAccountSummaryArray(AccountSummary accountSummary, String[] csvHeaders) {
+        JsonObject json = RestUtils.toJSON(accountSummary).getAsJsonObject();
         ArrayList<String> list = new ArrayList<>();
 
-        for (Map.Entry<String, JsonElement> member : members) {
-            list.add(member.getValue().toString());
+        for (int i = 0; i < csvHeaders.length; i++) {
+            String value = json.get(csvHeaders[i]) == null ? "" : json.get(csvHeaders[i]).toString();
+            list.add(value);
         }
-
-        return list.toArray(new String[0]) ;
+        return list.toArray(new String[0]);
     }
 
     /**
@@ -193,6 +203,19 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             zipStopwatch.stop();
             LOG.info("Zipping to file " + zipFile.getAbsolutePath() + " took " +
                     zipStopwatch.elapsed(TimeUnit.MILLISECONDS) + " ms");
+        }
+    }
+
+    /** Delete the temporary files */
+    private void cleanupFiles(File csvFile, File zipFile, File tmpDir) {
+        if (csvFile != null) {
+            fileHelper.deleteFile(csvFile);
+        }
+        if (zipFile != null) {
+            fileHelper.deleteFile(zipFile);
+        }
+        if (tmpDir != null) {
+            fileHelper.deleteDir(tmpDir);
         }
     }
 }

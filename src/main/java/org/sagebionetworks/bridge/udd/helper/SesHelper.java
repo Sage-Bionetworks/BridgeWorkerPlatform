@@ -79,7 +79,8 @@ public class SesHelper {
     private static final String CHARSET_UTF_8 = "UTF-8";
     private static final String CONTENT_SUBTYPE_ALTERNATIVE = "alternative";
     private static final String CONTENT_SUBTYPE_MIXED= "mixed";
-    private static final String CONTENT_TYPE = "text/html; charset=UTF-8";
+    private static final String CONTENT_TYPE_TEXT_HTML = "text/html; charset=UTF-8";
+    private static final String CONTENT_TYPE_ZIP = "application/zip";
 
     private AmazonSimpleEmailServiceClient sesClient;
 
@@ -135,7 +136,7 @@ public class SesHelper {
      * @param attachment
      *          attachment which should be sent to the specified account, must be non-null
      */
-    public void sendAttachmentToAccount(AppInfo appInfo, AccountInfo accountInfo, String attachment) throws MessagingException, IOException {
+    public void sendEmailWithAttachmentToAccount(AppInfo appInfo, AccountInfo accountInfo, String attachment) throws MessagingException, IOException {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         MimeMessage message = makeRawEmailMessage(appInfo, accountInfo, attachment);
         message.writeTo(outputStream);
@@ -190,32 +191,39 @@ public class SesHelper {
         String appName = appInfo.getName();
         String subjectStr = String.format(SUBJECT_TEMPLATE, appName);
 
-        // create and send message
+        // create message
         Session session = Session.getDefaultInstance(new Properties());
         MimeMessage message = new MimeMessage(session);
 
+        // add subject, from address, recipient address
         message.setSubject(subjectStr, CHARSET_UTF_8);
         message.setFrom(new InternetAddress(fromAddress));
         message.setRecipient(javax.mail.Message.RecipientType.TO, new InternetAddress(destination));
 
+        // create multipart/alternative child container, wrapper for the HTML and text parts
         MimeMultipart messageBody = new MimeMultipart(CONTENT_SUBTYPE_ALTERNATIVE);
         MimeBodyPart wrap = new MimeBodyPart();
 
         MimeBodyPart textPart = new MimeBodyPart();
-        textPart.setContent(ATTACHMENT_BODY_TEMPLATE_TEXT, CONTENT_TYPE);
+        textPart.setContent(ATTACHMENT_BODY_TEMPLATE_TEXT, CONTENT_TYPE_TEXT_HTML);
 
         MimeBodyPart htmlPart = new MimeBodyPart();
-        htmlPart.setContent(ATTACHMENT_BODY_TEMPLATE_HTML, CONTENT_TYPE);
+        htmlPart.setContent(ATTACHMENT_BODY_TEMPLATE_HTML, CONTENT_TYPE_TEXT_HTML);
 
+        // add text and HTML parts to child container
         messageBody.addBodyPart(textPart);
         messageBody.addBodyPart(htmlPart);
 
+        // add child container to wrapper obj
         wrap.setContent(messageBody);
 
+        // create multipart/mixed parent container
         MimeMultipart mimeMessage = new MimeMultipart(CONTENT_SUBTYPE_MIXED);
 
+        // add parent container to message
         message.setContent(mimeMessage);
 
+        // add multipart/alternative part to message
         mimeMessage.addBodyPart(wrap);
 
         // define attachment
@@ -224,6 +232,7 @@ public class SesHelper {
         mimeAttachment.setDataHandler(new DataHandler(dataSource));
         mimeAttachment.setFileName(dataSource.getName());
 
+        // add attachment to message
         mimeMessage.addBodyPart(mimeAttachment);
 
         return message;
