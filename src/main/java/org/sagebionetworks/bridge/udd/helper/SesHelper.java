@@ -231,6 +231,7 @@ public class SesHelper {
         DataSource dataSource = new FileDataSource(attachment);
         mimeAttachment.setDataHandler(new DataHandler(dataSource));
         mimeAttachment.setFileName(dataSource.getName());
+        mimeAttachment.setHeader("Content-Type", CONTENT_TYPE_ZIP);
 
         // add attachment to message
         mimeMessage.addBodyPart(mimeAttachment);
