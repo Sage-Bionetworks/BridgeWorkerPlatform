@@ -90,9 +90,9 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     @Override
     public void accept(JsonNode jsonNode) throws Exception {
 
-        BridgeDownloadParticipantRosterRequest request;
+        DownloadParticipantRosterRequest request;
         try {
-            request = DefaultObjectMapper.INSTANCE.treeToValue(jsonNode, BridgeDownloadParticipantRosterRequest.class);
+            request = DefaultObjectMapper.INSTANCE.treeToValue(jsonNode, DownloadParticipantRosterRequest.class);
         } catch (IOException e) {
             throw new PollSqsWorkerBadRequestException("Error parsing request: " + e.getMessage(), e);
         }

@@ -5,9 +5,9 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.common.base.Strings;
 
 /** Represents a request to the Participant Roster Download Worker. */
-@JsonDeserialize(builder = BridgeDownloadParticipantRosterRequest.Builder.class)
+@JsonDeserialize(builder = DownloadParticipantRosterRequest.Builder.class)
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
-public class BridgeDownloadParticipantRosterRequest {
+public class DownloadParticipantRosterRequest {
     private final String appId;
     private final String userId;
     private final String password;
@@ -24,7 +24,7 @@ public class BridgeDownloadParticipantRosterRequest {
         return password;
     }
 
-    private BridgeDownloadParticipantRosterRequest(String appId, String userId, String password) {
+    private DownloadParticipantRosterRequest(String appId, String userId, String password) {
         this.appId = appId;
         this.userId = userId;
         this.password = password;
@@ -50,7 +50,7 @@ public class BridgeDownloadParticipantRosterRequest {
             return this;
         }
 
-        public BridgeDownloadParticipantRosterRequest build() {
+        public DownloadParticipantRosterRequest build() {
             if (Strings.isNullOrEmpty(appId)) {
                 throw new IllegalStateException("appId must be specified");
             }
@@ -63,7 +63,7 @@ public class BridgeDownloadParticipantRosterRequest {
                 throw new IllegalStateException("password must be specified");
             }
 
-            return new BridgeDownloadParticipantRosterRequest(appId, userId, password);
+            return new DownloadParticipantRosterRequest(appId, userId, password);
         }
     }
 }
