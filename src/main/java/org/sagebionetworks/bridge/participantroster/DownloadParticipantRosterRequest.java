@@ -1,5 +1,6 @@
 package org.sagebionetworks.bridge.participantroster;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.common.base.Strings;
@@ -24,6 +25,7 @@ public class DownloadParticipantRosterRequest {
         return password;
     }
 
+    /** Private constructor. To construct, use builder. */
     private DownloadParticipantRosterRequest(String appId, String userId, String password) {
         this.appId = appId;
         this.userId = userId;
@@ -35,6 +37,7 @@ public class DownloadParticipantRosterRequest {
         private String userId;
         private String password;
 
+        @JsonAlias("studyId") // TODO not sure if this is necessary
         public Builder withAppId(String appId) {
             this.appId = appId;
             return this;
