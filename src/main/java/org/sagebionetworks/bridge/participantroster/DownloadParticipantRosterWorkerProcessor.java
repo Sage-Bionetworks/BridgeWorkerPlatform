@@ -41,6 +41,8 @@ import java.util.concurrent.TimeUnit;
 public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsumer<JsonNode> {
     private static final Logger LOG = LoggerFactory.getLogger(DownloadParticipantRosterWorkerProcessor.class);
 
+    static final String WORKER_ID = "DownloadParticipantRosterWorker";
+
     // If there are a lot of downloads, write log messages regularly so we know the worker is still running.
     private static final int REPORTING_INTERVAL = 100;
 
