@@ -59,13 +59,16 @@ public class DownloadParticipantRosterWorkerProcessorTest {
     }
 
     @Test
-    public void normalCase() throws IOException, MessagingException {
+    public void normalCase() throws Exception {
         // mock Bridge Helper get participant info
         when(mockBridgeHelper.getParticipant(APP_ID, USER_ID, false)).thenReturn(new StudyParticipant());
 
         // mock Bridge Helper get account summaries
         when(mockBridgeHelper.getAccountSummariesForApp(APP_ID, ORG_MEMBERSHIP, 0, PAGE_SIZE)).thenReturn(
                 ImmutableList.of(makeAccountSummary(), makeAccountSummary(), makeAccountSummary()));
+
+        // execute
+        processor.accept(makeValidRequestNode());
 
         // mock sesHelper send email with attachment to account
         verify(mockSesHelper).sendEmailWithAttachmentToAccount(any(), any(), any());
