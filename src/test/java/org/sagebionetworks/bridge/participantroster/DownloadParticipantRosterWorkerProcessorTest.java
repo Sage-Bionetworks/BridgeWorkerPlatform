@@ -1,6 +1,5 @@
 package org.sagebionetworks.bridge.participantroster;
 
-import au.com.bytecode.opencsv.CSVWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.sagebionetworks.bridge.file.FileHelper;
@@ -9,7 +8,6 @@ import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
-import org.slf4j.Logger;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 

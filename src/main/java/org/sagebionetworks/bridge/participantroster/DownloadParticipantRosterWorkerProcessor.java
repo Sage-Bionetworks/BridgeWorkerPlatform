@@ -150,6 +150,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         }
     }
 
+    /** Write all of the account summaries to the CSV file */
     private void writeAccountSummaries(CSVWriter csvFileWriter, List<AccountSummary> accountSummaries, int offsetBy,
                                        String appId, String orgMembership) throws IOException, InterruptedException {
         // write csv headers
