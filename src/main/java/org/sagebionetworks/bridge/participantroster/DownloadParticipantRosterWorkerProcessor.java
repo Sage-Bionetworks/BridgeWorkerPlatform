@@ -124,24 +124,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
             csvFile = fileHelper.newFile(tmpDir, CSV_FILE_NAME);
             try (CSVWriter csvFileWriter = new CSVWriter(fileHelper.getWriter(csvFile))) {
-
-                // write csv headers
-                String[] csvHeaders = getCsvHeaders(accountSummaries.get(0));
-                csvFileWriter.writeNext(csvHeaders);
-
-                // write the rest of the account summaries
-                while (!accountSummaries.isEmpty()) {
-                    for (AccountSummary accountSummary : accountSummaries) {
-                        String[] row = getAccountSummaryArray(accountSummary, csvHeaders);
-                        csvFileWriter.writeNext(row);
-                    }
-                    // get next set of account summaries
-                    offsetBy += PAGE_SIZE;
-                    accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy, 0);
-
-                    // avoid burning out Bridge Server
-                    Thread.sleep(THREAD_SLEEP_INTERVAL);
-                }
+                writeAccountSummaries(csvFileWriter, accountSummaries, offsetBy, appId, orgMembership);
             } catch (IOException ex) {
                 throw new WorkerException("Error creating file " + csvFile + ": " + ex.getMessage(), ex);
             }
@@ -164,6 +147,27 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             cleanupFiles(csvFile, zipFile, tmpDir);
             LOG.info("request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
                     " seconds for userId =" + userId + ", app=" + appId);
+        }
+    }
+
+    private void writeAccountSummaries(CSVWriter csvFileWriter, List<AccountSummary> accountSummaries, int offsetBy,
+                                       String appId, String orgMembership) throws IOException, InterruptedException {
+        // write csv headers
+        String[] csvHeaders = getCsvHeaders(accountSummaries.get(0));
+        csvFileWriter.writeNext(csvHeaders);
+
+        // write the rest of the account summaries
+        while (!accountSummaries.isEmpty()) {
+            for (AccountSummary accountSummary : accountSummaries) {
+                String[] row = getAccountSummaryArray(accountSummary, csvHeaders);
+                csvFileWriter.writeNext(row);
+            }
+            // get next set of account summaries
+            offsetBy += PAGE_SIZE;
+            accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy, 0);
+
+            // avoid burning out Bridge Server
+            Thread.sleep(THREAD_SLEEP_INTERVAL);
         }
     }
 

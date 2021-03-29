@@ -33,9 +33,7 @@ public class DownloadParticipantRosterWorkerProcessorTest {
 
     private DynamoHelper mockDynamoHelper;
     private BridgeHelper mockBridgeHelper;
-    private Logger mockLog;
     private SesHelper mockSesHelper;
-    private CSVWriter mockCsvWriter;
     private FileHelper mockFileHelper;
 
     private DownloadParticipantRosterWorkerProcessor processor;
@@ -44,10 +42,8 @@ public class DownloadParticipantRosterWorkerProcessorTest {
     public void before() {
         mockDynamoHelper = mock(DynamoHelper.class);
         mockBridgeHelper = mock(BridgeHelper.class);
-        mockLog = mock(Logger.class);
         mockSesHelper = mock(SesHelper.class);
         mockFileHelper = mock(FileHelper.class);
-        mockCsvWriter = mock(CSVWriter.class);
 
         processor = spy(new DownloadParticipantRosterWorkerProcessor());
         processor.setDynamoHelper(mockDynamoHelper);
