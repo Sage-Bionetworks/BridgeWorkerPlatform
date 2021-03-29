@@ -101,8 +101,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
         String userId = request.getUserId();
         String appId = request.getAppId();
-        String password = request.getPassword();
-        LOG.info("Received request for userId=" + userId + ", app=" + appId + ", password=" + password);
+        LOG.info("Received request for userId=" + userId + ", app=" + appId);
 
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         File csvFile = null;
@@ -114,7 +113,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             StudyParticipant participant = bridgeHelper.getParticipant(appId, userId, false);
             String orgMembership = participant.getOrgMembership();
 
-            if (participant.getEmail() == null && !participant.isEmailVerified()) {
+            if (participant.getEmail() == null || !participant.isEmailVerified()) {
                 LOG.info("User does not have a validated email address.");
                 return;
             }
