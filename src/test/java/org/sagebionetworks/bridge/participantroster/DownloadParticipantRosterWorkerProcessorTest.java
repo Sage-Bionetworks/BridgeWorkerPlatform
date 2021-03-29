@@ -1,9 +1,8 @@
 package org.sagebionetworks.bridge.participantroster;
 
+import au.com.bytecode.opencsv.CSVWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.common.collect.ImmutableList;
-import org.mockito.Mock;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
@@ -14,19 +13,15 @@ import org.slf4j.Logger;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 
-import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyString;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class DownloadParticipantRosterWorkerProcessorTest {
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
@@ -40,7 +35,9 @@ public class DownloadParticipantRosterWorkerProcessorTest {
     private BridgeHelper mockBridgeHelper;
     private Logger mockLog;
     private SesHelper mockSesHelper;
+    private CSVWriter mockCsvWriter;
     private FileHelper mockFileHelper;
+
     private DownloadParticipantRosterWorkerProcessor processor;
 
     @BeforeMethod
@@ -50,6 +47,7 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         mockLog = mock(Logger.class);
         mockSesHelper = mock(SesHelper.class);
         mockFileHelper = mock(FileHelper.class);
+        mockCsvWriter = mock(CSVWriter.class);
 
         processor = spy(new DownloadParticipantRosterWorkerProcessor());
         processor.setDynamoHelper(mockDynamoHelper);
@@ -82,25 +80,6 @@ public class DownloadParticipantRosterWorkerProcessorTest {
 
         // verify that this call isn't reached, because study participant does not have a verified email
         verify(mockBridgeHelper, never()).getAccountSummariesForApp(anyString(), anyString(), anyInt(), anyInt());
-    }
-
-    @Test
-    public void normalCase() throws Exception {
-        // mock Bridge Helper get participant info
-        when(mockBridgeHelper.getParticipant(APP_ID, USER_ID, false)).thenReturn(new StudyParticipant());
-
-        // mock Bridge Helper get account summaries
-        when(mockBridgeHelper.getAccountSummariesForApp(APP_ID, ORG_MEMBERSHIP, 0, PAGE_SIZE)).thenReturn(
-                ImmutableList.of(makeAccountSummary(), makeAccountSummary(), makeAccountSummary()));
-
-        // execute
-        processor.accept(makeValidRequestNode());
-
-        // mock sesHelper send email with attachment to account
-        verify(mockSesHelper).sendEmailWithAttachmentToAccount(any(), any(), any());
-
-        // verify log info
-        verify(mockLog).info(any());
     }
 
     private static ObjectNode makeValidRequestNode() {
