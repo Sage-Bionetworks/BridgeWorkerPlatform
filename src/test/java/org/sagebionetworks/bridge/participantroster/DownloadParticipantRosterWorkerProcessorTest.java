@@ -3,6 +3,8 @@ package org.sagebionetworks.bridge.participantroster;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
+import org.mockito.Mock;
+import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
@@ -12,11 +14,16 @@ import org.slf4j.Logger;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import javax.mail.MessagingException;
 import java.io.IOException;
+import java.util.ArrayList;
 
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,6 +40,7 @@ public class DownloadParticipantRosterWorkerProcessorTest {
     private BridgeHelper mockBridgeHelper;
     private Logger mockLog;
     private SesHelper mockSesHelper;
+    private FileHelper mockFileHelper;
     private DownloadParticipantRosterWorkerProcessor processor;
 
     @BeforeMethod
@@ -41,21 +49,39 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         mockBridgeHelper = mock(BridgeHelper.class);
         mockLog = mock(Logger.class);
         mockSesHelper = mock(SesHelper.class);
+        mockFileHelper = mock(FileHelper.class);
 
         processor = spy(new DownloadParticipantRosterWorkerProcessor());
         processor.setDynamoHelper(mockDynamoHelper);
+        processor.setSesHelper(mockSesHelper);
+        processor.setFileHelper(mockFileHelper);
+        processor.setBridgeHelper(mockBridgeHelper);
     }
 
     @Test
-    public void noEmail() throws IOException {
-        when(mockBridgeHelper.getParticipant(APP_ID, USER_ID, false)).thenReturn(new StudyParticipant());
-        verify(mockLog).info("User does not have a validated email address.");
+    public void noEmail() throws Exception {
+        doReturn(new StudyParticipant()).when(mockBridgeHelper).getParticipant(APP_ID, USER_ID, false);
+        doReturn(new ArrayList<AccountSummary>()).when(mockBridgeHelper).getAccountSummariesForApp(anyString(), anyString(), anyInt(), anyInt());
+
+        processor.accept(makeValidRequestNode());
+
+        // verify that this call isn't reached, because study participant does not have an email
+        verify(mockBridgeHelper, never()).getAccountSummariesForApp(anyString(), anyString(), anyInt(), anyInt());
     }
 
     @Test
-    public void emailNotVerified() throws IOException {
-        when(mockBridgeHelper.getParticipant(APP_ID, USER_ID, false)).thenReturn(new StudyParticipant());
-        verify(mockLog).info("User does not have a validated email address.");
+    public void emailNotVerified() throws Exception {
+        StudyParticipant participant = new StudyParticipant();
+        participant.setEmail("example@example.org");
+        participant.setEmailVerified(false);
+
+        doReturn(participant).when(mockBridgeHelper).getParticipant(APP_ID, USER_ID, false);
+        doReturn(new ArrayList<AccountSummary>()).when(mockBridgeHelper).getAccountSummariesForApp(anyString(), anyString(), anyInt(), anyInt());
+
+        processor.accept(makeValidRequestNode());
+
+        // verify that this call isn't reached, because study participant does not have a verified email
+        verify(mockBridgeHelper, never()).getAccountSummariesForApp(anyString(), anyString(), anyInt(), anyInt());
     }
 
     @Test
