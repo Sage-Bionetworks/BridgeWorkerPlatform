@@ -2,7 +2,9 @@ package org.sagebionetworks.bridge.participantroster;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.ImmutableList;
 import org.sagebionetworks.bridge.file.FileHelper;
+import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
@@ -11,6 +13,7 @@ import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 
 import static org.mockito.Matchers.anyInt;
@@ -20,6 +23,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.testng.Assert.assertEquals;
 
 public class DownloadParticipantRosterWorkerProcessorTest {
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
@@ -41,7 +45,7 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         mockDynamoHelper = mock(DynamoHelper.class);
         mockBridgeHelper = mock(BridgeHelper.class);
         mockSesHelper = mock(SesHelper.class);
-        mockFileHelper = mock(FileHelper.class);
+        mockFileHelper = mock(InMemoryFileHelper.class);
 
         processor = spy(new DownloadParticipantRosterWorkerProcessor());
         processor.setDynamoHelper(mockDynamoHelper);
@@ -74,6 +78,17 @@ public class DownloadParticipantRosterWorkerProcessorTest {
 
         // verify that this call isn't reached, because study participant does not have a verified email
         verify(mockBridgeHelper, never()).getAccountSummariesForApp(anyString(), anyString(), anyInt(), anyInt());
+    }
+
+    @Test
+    public void getCsvHeaders(){
+        AccountSummary accountSummary = makeAccountSummary();
+        String[] headers = processor.getCsvHeaders(accountSummary.getAttributes());
+
+        assertEquals(headers.length, 3);
+        assertEquals("firstName", headers[0]);
+        assertEquals("lastName", headers[1]);
+        assertEquals("email", headers[2]);
     }
 
     private static ObjectNode makeValidRequestNode() {

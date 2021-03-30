@@ -172,8 +172,10 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         }
     }
 
-    /** Given an AccountSummary, return a String array of all of its attribute keys */
-    private String[] getCsvHeaders(AccountSummary accountSummary) {
+    /** Given an Object, return a String array of all of its attribute keys
+     *  Visible for unit testing
+     */
+    String[] getCsvHeaders(Object accountSummary) {
         JsonElement json = RestUtils.toJSON(accountSummary);
         Set<String> keys = json.getAsJsonObject().keySet();
         List<String> list = new ArrayList<>(keys);
