@@ -182,8 +182,10 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         return list.toArray(new String[0]);
     }
 
-    /** Given an AccountSummary, return a String array of all of its attribute values */
-    private String[] getAccountSummaryArray(AccountSummary accountSummary, String[] csvHeaders) {
+    /** Given an AccountSummary, return a String array of all of its attribute values
+     *  Visible for unit testing
+     */
+    String[] getAccountSummaryArray(AccountSummary accountSummary, String[] csvHeaders) {
         JsonObject json = RestUtils.toJSON(accountSummary).getAsJsonObject();
         ArrayList<String> list = new ArrayList<>();
 

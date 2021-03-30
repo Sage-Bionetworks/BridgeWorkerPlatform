@@ -2,8 +2,6 @@ package org.sagebionetworks.bridge.participantroster;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.common.collect.ImmutableList;
-import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
@@ -13,7 +11,6 @@ import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 
 import static org.mockito.Matchers.anyInt;
@@ -24,6 +21,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
 
 public class DownloadParticipantRosterWorkerProcessorTest {
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
@@ -36,7 +34,7 @@ public class DownloadParticipantRosterWorkerProcessorTest {
     private DynamoHelper mockDynamoHelper;
     private BridgeHelper mockBridgeHelper;
     private SesHelper mockSesHelper;
-    private FileHelper mockFileHelper;
+    private InMemoryFileHelper fileHelper;
 
     private DownloadParticipantRosterWorkerProcessor processor;
 
@@ -45,12 +43,12 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         mockDynamoHelper = mock(DynamoHelper.class);
         mockBridgeHelper = mock(BridgeHelper.class);
         mockSesHelper = mock(SesHelper.class);
-        mockFileHelper = mock(InMemoryFileHelper.class);
+        fileHelper = new InMemoryFileHelper();
 
         processor = spy(new DownloadParticipantRosterWorkerProcessor());
         processor.setDynamoHelper(mockDynamoHelper);
         processor.setSesHelper(mockSesHelper);
-        processor.setFileHelper(mockFileHelper);
+        processor.setFileHelper(fileHelper);
         processor.setBridgeHelper(mockBridgeHelper);
     }
 
@@ -89,6 +87,35 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         assertEquals("firstName", headers[0]);
         assertEquals("lastName", headers[1]);
         assertEquals("email", headers[2]);
+    }
+
+    @Test
+    public void getAccountSummaryArray() {
+        AccountSummary accountSummary = new AccountSummary();
+        accountSummary.putAttributesItem("firstName", "first-name");
+
+        String[] headers = processor.getCsvHeaders(accountSummary);
+        assertEquals(headers.length, 1);
+        assertEquals("attributes", headers[0]);
+
+        String[] accountSummaryArray = processor.getAccountSummaryArray(accountSummary, headers);
+        assertEquals(accountSummaryArray.length, 1);
+        assertEquals("{\"firstName\":\"first-name\"}", accountSummaryArray[0]);
+    }
+
+    @Test
+    public void normalCase() throws Exception {
+        StudyParticipant participant = new StudyParticipant();
+        participant.setEmail("example@example.org");
+        participant.setEmailVerified(true);
+        participant.setEmailVerified(false);
+
+        doReturn(participant).when(mockBridgeHelper).getParticipant(APP_ID, USER_ID, false);
+        doReturn(new ArrayList<AccountSummary>()).when(mockBridgeHelper).getAccountSummariesForApp(anyString(), anyString(), anyInt(), anyInt());
+
+        processor.accept(makeValidRequestNode());
+
+        assertTrue(fileHelper.isEmpty());
     }
 
     private static ObjectNode makeValidRequestNode() {
