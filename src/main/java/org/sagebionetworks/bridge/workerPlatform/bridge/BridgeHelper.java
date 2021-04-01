@@ -270,7 +270,12 @@ public class BridgeHelper {
     // call Bridge API searchAccountSummariesForApp(appId, caller's Org)
     /** Get account summaries by caller's appId and org */
     public List<AccountSummary> getAccountSummariesForApp(String appId, String orgId, int offsetBy, int pageSize) throws IOException {
-        AccountSummarySearch search = new AccountSummarySearch().orgMembership(orgId).offsetBy(offsetBy);
+        AccountSummarySearch search = new AccountSummarySearch().offsetBy(offsetBy);
+
+        if (orgId != null) {
+            search.orgMembership(orgId);
+        }
+
         if (pageSize > 0) {
             search.pageSize(PARTICIPANT_PAGE_SIZE);
         }

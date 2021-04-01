@@ -11,6 +11,7 @@ import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.RestUtils;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
+import org.sagebionetworks.bridge.rest.model.Role;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
@@ -111,7 +112,17 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         try {
             // get caller's user
             StudyParticipant participant = bridgeHelper.getParticipant(appId, userId, false);
-            String orgMembership = participant.getOrgMembership();
+            String orgMembership = null;
+            List<Role> participantRoles = participant.getRoles();
+
+            if (!participantRoles.contains(Role.RESEARCHER) && !participantRoles.contains(Role.STUDY_COORDINATOR)) {
+                LOG.info("User does not have a Researcher or Study Coordinator role.");
+                return;
+            }
+
+            if (participantRoles.contains(Role.STUDY_COORDINATOR) && !participantRoles.contains(Role.RESEARCHER)) {
+                orgMembership = participant.getOrgMembership();
+            }
 
             if (participant.getEmail() == null || !participant.isEmailVerified()) {
                 LOG.info("User does not have a validated email address.");
