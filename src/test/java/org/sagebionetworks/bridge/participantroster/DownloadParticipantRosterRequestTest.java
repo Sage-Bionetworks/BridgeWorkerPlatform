@@ -10,6 +10,7 @@ public class DownloadParticipantRosterRequestTest {
     private static final String APP_ID = "test-app";
     private static final String USER_ID = "test-user-id";
     private static final String PASSWORD = "test-password";
+    private static final String STUDY_ID = "test-studyId";
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = "appId must be specified")
     public void nullAppId() {
@@ -47,7 +48,8 @@ public class DownloadParticipantRosterRequestTest {
         String jsonText = "{\n" +
                 "   \"appId\":\"json-app\",\n" +
                 "   \"userId\":\"json-user-id\",\n" +
-                "   \"password\":\"json-password\"\n" +
+                "   \"password\":\"json-password\",\n" +
+                "   \"studyId\":\"json-studyId\"\n" +
                 "}";
 
         // convert to
@@ -55,34 +57,13 @@ public class DownloadParticipantRosterRequestTest {
         assertEquals(request.getAppId(), "json-app");
         assertEquals(request.getUserId(), "json-user-id");
         assertEquals(request.getPassword(), "json-password");
+        assertEquals(request.getStudyId(), "json-studyId");
 
         JsonNode jsonNode = DefaultObjectMapper.INSTANCE.convertValue(request, JsonNode.class);
-        assertEquals(3, jsonNode.size());
+        assertEquals(4, jsonNode.size());
         assertEquals(jsonNode.get("appId").textValue(), "json-app");
         assertEquals(jsonNode.get("userId").textValue(), "json-user-id");
         assertEquals(jsonNode.get("password").textValue(), "json-password");
-    }    @Test
-
-    public void jsonSerializationWithStudyId() throws Exception {
-        // start with JSON
-        String jsonText = "{\n" +
-                "   \"studyId\":\"json-app\",\n" +
-                "   \"userId\":\"json-user-id\",\n" +
-                "   \"password\":\"json-password\"\n" +
-                "}";
-
-        // convert to
-        DownloadParticipantRosterRequest request = DefaultObjectMapper.INSTANCE.readValue(jsonText, DownloadParticipantRosterRequest.class);
-        assertEquals(request.getAppId(), "json-app");
-        assertEquals(request.getUserId(), "json-user-id");
-        assertEquals(request.getPassword(), "json-password");
-
-        JsonNode jsonNode = DefaultObjectMapper.INSTANCE.convertValue(request, JsonNode.class);
-        assertEquals(3, jsonNode.size());
-        assertEquals(jsonNode.get("appId").textValue(), "json-app");
-        assertEquals(jsonNode.get("userId").textValue(), "json-user-id");
-        assertEquals(jsonNode.get("password").textValue(), "json-password");
+        assertEquals(jsonNode.get("studyId").textValue(), "json-studyId");
     }
-
-
 }

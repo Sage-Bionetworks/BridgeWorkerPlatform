@@ -12,6 +12,7 @@ public class DownloadParticipantRosterRequest {
     private final String appId;
     private final String userId;
     private final String password;
+    private final String studyId;
 
     public String getAppId() {
         return appId;
@@ -25,19 +26,24 @@ public class DownloadParticipantRosterRequest {
         return password;
     }
 
+    public String getStudyId() {
+        return studyId;
+    }
+
     /** Private constructor. To construct, use builder. */
-    private DownloadParticipantRosterRequest(String appId, String userId, String password) {
+    private DownloadParticipantRosterRequest(String appId, String userId, String password, String studyId) {
         this.appId = appId;
         this.userId = userId;
         this.password = password;
+        this.studyId = studyId;
     }
 
     public static class Builder {
         private String appId;
         private String userId;
         private String password;
+        private String studyId;
 
-        @JsonAlias("studyId") // TODO not sure if this is necessary
         public Builder withAppId(String appId) {
             this.appId = appId;
             return this;
@@ -50,6 +56,11 @@ public class DownloadParticipantRosterRequest {
 
         public Builder withPassword(String password) {
             this.password = password;
+            return this;
+        }
+
+        public Builder withStudyId(String studyId) {
+            this.studyId = studyId;
             return this;
         }
 
@@ -66,7 +77,7 @@ public class DownloadParticipantRosterRequest {
                 throw new IllegalStateException("password must be specified");
             }
 
-            return new DownloadParticipantRosterRequest(appId, userId, password);
+            return new DownloadParticipantRosterRequest(appId, userId, password, studyId);
         }
     }
 }

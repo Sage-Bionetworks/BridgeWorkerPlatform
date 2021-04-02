@@ -102,7 +102,10 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
         String userId = request.getUserId();
         String appId = request.getAppId();
-        LOG.info("Received request for userId=" + userId + ", app=" + appId);
+        String password = request.getPassword();
+        String studyId = request.getStudyId();
+
+        LOG.info("Received request for userId=" + userId + ", app=" + appId + ", studyId=" + studyId);
 
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         File csvFile = null;
@@ -115,7 +118,8 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             String orgMembership = null;
             List<Role> participantRoles = participant.getRoles();
 
-            if (!participantRoles.contains(Role.RESEARCHER) && !participantRoles.contains(Role.STUDY_COORDINATOR)) {
+            if (participantRoles == null || participantRoles.isEmpty() ||
+                    !(participantRoles.contains(Role.RESEARCHER) || participantRoles.contains(Role.STUDY_COORDINATOR))) {
                 LOG.info("User does not have a Researcher or Study Coordinator role.");
                 return;
             }
@@ -131,11 +135,13 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
             int offsetBy = 0;
             // get first page of account summaries
-            List<AccountSummary> accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy, PAGE_SIZE);
+            List<AccountSummary> accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership,
+                    offsetBy, PAGE_SIZE, studyId);
 
             csvFile = fileHelper.newFile(tmpDir, CSV_FILE_NAME);
+
             try (CSVWriter csvFileWriter = new CSVWriter(fileHelper.getWriter(csvFile))) {
-                writeAccountSummaries(csvFileWriter, accountSummaries, offsetBy, appId, orgMembership);
+                writeAccountSummaries(csvFileWriter, accountSummaries, offsetBy, appId, orgMembership, studyId);
             } catch (IOException ex) {
                 throw new WorkerException("Error creating file " + csvFile + ": " + ex.getMessage(), ex);
             }
@@ -144,7 +150,8 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             AppInfo appInfo = dynamoHelper.getApp(appId);
             AccountInfo accountInfo = bridgeHelper.getAccountInfo(appId, userId);;
             zipFile = fileHelper.newFile(tmpDir, ZIP_FILE_NAME);
-            zipFiles(csvFile, zipFile);
+
+            zipFiles(csvFile, zipFile, password);
             sesHelper.sendEmailWithAttachmentToAccount(appInfo, accountInfo, zipFile.getAbsolutePath());
 
         } catch (BridgeSDKException ex) {
@@ -163,7 +170,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
     /** Write all of the account summaries to the CSV file */
     private void writeAccountSummaries(CSVWriter csvFileWriter, List<AccountSummary> accountSummaries, int offsetBy,
-                                       String appId, String orgMembership) throws IOException, InterruptedException {
+                                       String appId, String orgMembership, String studyId) throws IOException, InterruptedException {
         // write csv headers
         String[] csvHeaders = getCsvHeaders(accountSummaries.get(0));
         csvFileWriter.writeNext(csvHeaders);
@@ -176,7 +183,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             }
             // get next set of account summaries
             offsetBy += PAGE_SIZE;
-            accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy, 0);
+            accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy, 0, studyId);
 
             // avoid burning out Bridge Server
             Thread.sleep(THREAD_SLEEP_INTERVAL);
@@ -216,10 +223,10 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
      * @throws IOException
      *          if zipping the files fails
      */
-    private void zipFiles(File file, File zipFile) throws IOException {
+    private void zipFiles(File file, File zipFile, String password) throws IOException {
         Stopwatch zipStopwatch = Stopwatch.createStarted();
         try {
-            zipHelper.zip(ImmutableList.of(file), zipFile);
+            zipHelper.zipWithPassword(ImmutableList.of(file), zipFile, password);
         } finally {
             zipStopwatch.stop();
             LOG.info("Zipping to file " + zipFile.getAbsolutePath() + " took " +
@@ -229,13 +236,13 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
     /** Delete the temporary files */
     private void cleanupFiles(File csvFile, File zipFile, File tmpDir) {
-        if (csvFile != null) {
+        if (csvFile != null && csvFile.exists()) {
             fileHelper.deleteFile(csvFile);
         }
-        if (zipFile != null) {
+        if (zipFile != null && zipFile.exists()) {
             fileHelper.deleteFile(zipFile);
         }
-        if (tmpDir != null) {
+        if (tmpDir != null && tmpDir.exists()) {
             fileHelper.deleteDir(tmpDir);
         }
     }

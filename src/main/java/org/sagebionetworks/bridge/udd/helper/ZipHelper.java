@@ -10,6 +10,9 @@ import java.util.zip.ZipOutputStream;
 
 import com.google.common.base.Charsets;
 import com.google.common.io.ByteStreams;
+import net.lingala.zip4j.ZipFile;
+import net.lingala.zip4j.model.ZipParameters;
+import net.lingala.zip4j.model.enums.EncryptionMethod;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -50,5 +53,25 @@ public class ZipHelper {
                 zipOutputStream.closeEntry();
             }
         }
+    }
+
+    /**
+     * Zips and encrypts the list of input files and writes the result to the output file.
+     * @param fromList
+     *          list of input files
+     * @param to
+     *          output file to write the zip file to
+     * @param password
+     *          given password to secure the file with
+     * @throws IOException
+     *          if reading from input or writing to output fails
+     */
+    public void zipWithPassword(List<File> fromList, File to, String password) throws IOException {
+        ZipParameters zipParameters = new ZipParameters();
+        zipParameters.setEncryptFiles(true);
+        zipParameters.setEncryptionMethod(EncryptionMethod.AES); // AES 256 by default
+
+        ZipFile zipFile = new ZipFile(to, password.toCharArray());
+        zipFile.addFiles(fromList, zipParameters);
     }
 }

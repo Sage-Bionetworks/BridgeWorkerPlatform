@@ -269,16 +269,19 @@ public class BridgeHelper {
 
     // call Bridge API searchAccountSummariesForApp(appId, caller's Org)
     /** Get account summaries by caller's appId and org */
-    public List<AccountSummary> getAccountSummariesForApp(String appId, String orgId, int offsetBy, int pageSize) throws IOException {
+    public List<AccountSummary> getAccountSummariesForApp(String appId, String orgId, int offsetBy, int pageSize, String studyId) throws IOException {
         AccountSummarySearch search = new AccountSummarySearch().offsetBy(offsetBy);
 
-        if (orgId != null) {
+        if (studyId != null) {
+            search.enrolledInStudyId(studyId);
+        } else if (orgId != null) {
             search.orgMembership(orgId);
         }
 
         if (pageSize > 0) {
             search.pageSize(PARTICIPANT_PAGE_SIZE);
         }
+
         return clientManager.getClient(ForWorkersApi.class).searchAccountSummariesForApp(appId, search).execute().body().getItems();
     }
 
