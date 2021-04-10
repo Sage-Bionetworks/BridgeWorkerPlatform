@@ -30,6 +30,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.sagebionetworks.bridge.rest.model.Account;
+import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
+import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.rest.model.StudyList;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -96,6 +100,9 @@ public class BridgeHelperTest {
     private static final String USER_ID_2 = "user2";
     private static final String USER_ID_3 = "user3";
     private static final String USER_ID_4 = "user4";
+    private static final String ORG_ID = "test-orgId";
+    private static final int PAGE_SIZE = 100;
+    private static final String STUDY_ID = "test-studyId";
 
     private static final String UPLOAD_JSON = Tests.unescapeJson("{'contentLength':10000,"+
             "'status':'succeeded','requestedOn':'2016-07-26T22:43:10.392Z',"+
@@ -622,6 +629,49 @@ public class BridgeHelperTest {
 
         verify(mockWorkerApi).completeUploadSession(UPLOAD_ID, false, true);
         verify(mockWorkerApi, times(3)).getUploadById(UPLOAD_ID);
+    }
+
+    @Test
+    public void testGetAccountSummariesForApp() throws IOException {
+        // mock SDK search account summaries call
+        AccountSummaryList accountSummaryList = mock(AccountSummaryList.class);
+        when(accountSummaryList.getItems()).thenReturn(ImmutableList.of(new AccountSummary()));
+        Response<AccountSummaryList> response = Response.success(accountSummaryList);
+
+        Call<AccountSummaryList> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenReturn(response);
+
+        when(mockWorkerApi.searchAccountSummariesForApp(eq(APP_ID), any(AccountSummarySearch.class))).thenReturn(mockCall);
+
+        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
+
+        List<AccountSummary> retSummariesForApp = bridgeHelper.getAccountSummariesForApp(APP_ID, ORG_ID, 0,
+                BridgeHelper.MAX_PAGE_SIZE, STUDY_ID);
+
+
+        bridgeHelper.getAccountSummariesForApp(APP_ID, ORG_ID, 0, PAGE_SIZE, STUDY_ID);
+
+        assertEquals(retSummariesForApp, ImmutableList.of(new AccountSummary()));
+    }
+
+    @Test
+    public void testGetStudiesForApp() throws IOException {
+        // mock SDK get sponsored studies for app call
+        StudyList studyList = mock(StudyList.class);
+        when(studyList.getItems()).thenReturn(ImmutableList.of(new Study()));
+        Response<StudyList> response = Response.success(studyList);
+
+        Call<StudyList> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenReturn(response);
+
+        when(mockWorkerApi.getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, BridgeHelper.MAX_PAGE_SIZE))
+                .thenReturn(mockCall);
+
+        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
+
+        List<Study> retStudiesForApp = bridgeHelper.getStudiesForApp(APP_ID, ORG_ID, 0, BridgeHelper.MAX_PAGE_SIZE);
+
+        assertEquals(retStudiesForApp, ImmutableList.of(new Study()));
     }
 
     private void mockUploadComplete(UploadValidationStatus status) throws Exception {
