@@ -11,7 +11,9 @@ import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.RestUtils;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
+import org.sagebionetworks.bridge.rest.model.PagedResourceList;
 import org.sagebionetworks.bridge.rest.model.Role;
+import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
@@ -29,6 +31,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -47,10 +50,10 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     // If there are a lot of downloads, write log messages regularly so we know the worker is still running.
     private static final int REPORTING_INTERVAL = 100;
 
-    static final int PAGE_SIZE = 100;
     private static final long THREAD_SLEEP_INTERVAL = 1000L;
     private static final String CSV_FILE_NAME = "account_summaries.csv";
     private static final String ZIP_FILE_NAME = "user_data.zip";
+    private int pageSize = 100;
 
     private BridgeHelper bridgeHelper;
     private FileHelper fileHelper;
@@ -89,6 +92,10 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         this.zipHelper = zipHelper;
     }
 
+    public final void setPageSize(int pageSize) {
+        this.pageSize = pageSize;
+    }
+
     /** Main entry point into Download Participant Roster Worker. */
     @Override
     public void accept(JsonNode jsonNode) throws Exception {
@@ -115,7 +122,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         try {
             // get caller's user
             StudyParticipant participant = bridgeHelper.getParticipant(appId, userId, false);
-            String orgMembership = null;
+            String orgMembership = participant.getOrgMembership();
             List<Role> participantRoles = participant.getRoles();
 
             if (participantRoles == null || participantRoles.isEmpty() ||
@@ -124,8 +131,18 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
                 return;
             }
 
-            if (participantRoles.contains(Role.STUDY_COORDINATOR) && !participantRoles.contains(Role.RESEARCHER)) {
-                orgMembership = participant.getOrgMembership();
+            if (participantRoles.contains(Role.STUDY_COORDINATOR) && orgMembership == null) {
+                LOG.info("User is a Study Coordinator and does not have an org membership.");
+                return;
+            }
+
+            if (studyId != null && participantRoles.contains(Role.STUDY_COORDINATOR)) {
+
+                List<Study> studies = bridgeHelper.getStudiesForApp(appId, orgMembership, 0, pageSize);
+                if (studies.isEmpty()) {
+                    LOG.info("User's org does not sponsor the given studyId.");
+                    return;
+                }
             }
 
             if (participant.getEmail() == null || !participant.isEmailVerified()) {
@@ -136,7 +153,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             int offsetBy = 0;
             // get first page of account summaries
             List<AccountSummary> accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership,
-                    offsetBy, PAGE_SIZE, studyId);
+                    offsetBy, pageSize, studyId);
 
             csvFile = fileHelper.newFile(tmpDir, CSV_FILE_NAME);
 
@@ -169,10 +186,10 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     }
 
     /** Write all of the account summaries to the CSV file */
-    private void writeAccountSummaries(CSVWriter csvFileWriter, List<AccountSummary> accountSummaries, int offsetBy,
+    void writeAccountSummaries(CSVWriter csvFileWriter, List<AccountSummary> accountSummaries, int offsetBy,
                                        String appId, String orgMembership, String studyId) throws IOException, InterruptedException {
         // write csv headers
-        String[] csvHeaders = getCsvHeaders(accountSummaries.get(0));
+        String[] csvHeaders = getCsvHeaders();
         csvFileWriter.writeNext(csvHeaders);
 
         // write the rest of the account summaries
@@ -182,8 +199,8 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
                 csvFileWriter.writeNext(row);
             }
             // get next set of account summaries
-            offsetBy += PAGE_SIZE;
-            accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy, 0, studyId);
+            offsetBy += pageSize;
+            accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy, pageSize, studyId);
 
             // avoid burning out Bridge Server
             Thread.sleep(THREAD_SLEEP_INTERVAL);
@@ -193,11 +210,14 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     /** Given an Object, return a String array of all of its attribute keys
      *  Visible for unit testing
      */
-    String[] getCsvHeaders(Object accountSummary) {
-        JsonElement json = RestUtils.toJSON(accountSummary);
-        Set<String> keys = json.getAsJsonObject().keySet();
-        List<String> list = new ArrayList<>(keys);
-        return list.toArray(new String[0]);
+    String[] getCsvHeaders() {
+        Field[] fields = AccountSummary.class.getDeclaredFields();
+        String[] headers = new String[fields.length];
+
+        for (int i = 0; i < fields.length; i++) {
+            headers[i] = fields[i].getName();
+        }
+        return headers;
     }
 
     /** Given an AccountSummary, return a String array of all of its attribute values
@@ -208,7 +228,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         ArrayList<String> list = new ArrayList<>();
 
         for (int i = 0; i < csvHeaders.length; i++) {
-            String value = json.get(csvHeaders[i]) == null ? "" : json.get(csvHeaders[i]).toString();
+            String value = json.get(csvHeaders[i]) == null ? "" : json.get(csvHeaders[i]).getAsString();
             list.add(value);
         }
         return list.toArray(new String[0]);
@@ -247,3 +267,4 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         }
     }
 }
+

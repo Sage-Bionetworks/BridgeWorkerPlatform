@@ -108,7 +108,7 @@
         <dependency>
             <groupId>org.sagebionetworks.bridge</groupId>
             <artifactId>rest-client</artifactId>
-            <version>0.21.24</version>
+            <version>0.21.25</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

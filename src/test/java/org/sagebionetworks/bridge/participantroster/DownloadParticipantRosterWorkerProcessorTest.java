@@ -3,18 +3,23 @@ package org.sagebionetworks.bridge.participantroster;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
+import org.joda.time.DateTime;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
+import org.sagebionetworks.bridge.rest.model.Phone;
 import org.sagebionetworks.bridge.rest.model.Role;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelper;
+import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.dynamodb.AppInfo;
 import org.sagebionetworks.bridge.workerPlatform.dynamodb.DynamoHelper;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 
 import static org.mockito.Matchers.any;
@@ -41,6 +46,8 @@ public class DownloadParticipantRosterWorkerProcessorTest {
     private SesHelper mockSesHelper;
     private InMemoryFileHelper fileHelper;
     private ZipHelper mockZipHelper;
+
+    private static DateTime now = DateTime.now();
 
     private DownloadParticipantRosterWorkerProcessor processor;
 
@@ -107,37 +114,59 @@ public class DownloadParticipantRosterWorkerProcessorTest {
     }
 
     @Test
-    public void getCsvHeaders(){
-        AccountSummary accountSummary = makeAccountSummary();
-        String[] headers = processor.getCsvHeaders(accountSummary.getAttributes());
-
-        assertEquals(headers.length, 3);
-        assertEquals("firstName", headers[0]);
-        assertEquals("lastName", headers[1]);
-        assertEquals("email", headers[2]);
+    public void getCsvHeaders() throws IllegalAccessException {
+        String[] headers = processor.getCsvHeaders();
+        assertAccountSummaryHeaders(headers);
     }
 
     @Test
-    public void getAccountSummaryArray() {
-        AccountSummary accountSummary = new AccountSummary();
-        accountSummary.putAttributesItem("firstName", "first-name");
+    public void getAccountSummaryArray() throws IllegalAccessException {
+        AccountSummary accountSummary = makeAccountSummary();
 
-        String[] headers = processor.getCsvHeaders(accountSummary);
-        assertEquals(headers.length, 1);
-        assertEquals("attributes", headers[0]);
+        String[] headers = processor.getCsvHeaders();
+        assertAccountSummaryHeaders(headers);
 
         String[] accountSummaryArray = processor.getAccountSummaryArray(accountSummary, headers);
-        assertEquals(accountSummaryArray.length, 1);
-        assertEquals("{\"firstName\":\"first-name\"}", accountSummaryArray[0]);
+        assertEquals(accountSummaryArray.length, 14);
+
+        assertEquals("test-first-name", accountSummaryArray[0]);
+        assertEquals("test-last-name", accountSummaryArray[1]);
+        assertEquals("test@test.test", accountSummaryArray[2]);
+        assertEquals("", accountSummaryArray[3]);
+        assertEquals("", accountSummaryArray[4]);
+        assertEquals(now.toString(), accountSummaryArray[5]);
+        assertEquals("", accountSummaryArray[6]);
+        assertEquals("test-app", accountSummaryArray[7]);
+        assertEquals("", accountSummaryArray[8]);
+        assertEquals("", accountSummaryArray[9]);
+        assertEquals("", accountSummaryArray[10]);
+        assertEquals("", accountSummaryArray[11]);
+        assertEquals("test-orgId", accountSummaryArray[12]);
+        assertEquals("", accountSummaryArray[13]);
     }
 
     @Test
     public void normalCase() throws Exception {
+        // default pageSize is 100
+        verifyNormalCase();
+    }
+
+    @Test
+    public void normalCaseMultiplePages() throws Exception {
+        // set page size
+        processor.setPageSize(5);
+
+        verifyNormalCase();
+    }
+
+    private void verifyNormalCase() throws Exception {
+        // set up participant
         StudyParticipant participant = new StudyParticipant();
         participant.setEmail("example@example.org");
         participant.setEmailVerified(true);
         participant.addRolesItem(Role.RESEARCHER);
 
+        //set up mocks
         doReturn(participant).when(mockBridgeHelper).getParticipant(APP_ID, USER_ID, false);
 
         when(mockBridgeHelper.getAccountSummariesForApp(anyString(), anyString(), anyInt(), anyInt(), anyString()))
@@ -146,7 +175,35 @@ public class DownloadParticipantRosterWorkerProcessorTest {
 
         doNothing().when(mockZipHelper).zipWithPassword(anyList(), any(File.class), anyString());
 
+        // execute the processor
         processor.accept(makeValidRequestNode());
+
+        // verify that the csv is written to the file
+        verify(processor).writeAccountSummaries(any(), anyList(), anyInt(), anyString(), anyString(), anyString());
+
+        // verify that the file is zipped
+        verify(mockZipHelper).zipWithPassword(anyList(), any(File.class), anyString());
+
+        // verify that the email with attachment is sent
+        verify(mockSesHelper).sendEmailWithAttachmentToAccount(any(AppInfo.class), any(AccountInfo.class), anyString());
+    }
+
+    public void assertAccountSummaryHeaders(String[] headers) {
+        assertEquals(headers.length, 14);
+        assertEquals("firstName", headers[0]);
+        assertEquals("lastName", headers[1]);
+        assertEquals("email", headers[2]);
+        assertEquals("phone", headers[3]);
+        assertEquals("id", headers[4]);
+        assertEquals("createdOn", headers[5]);
+        assertEquals("status", headers[6]);
+        assertEquals("appId", headers[7]);
+        assertEquals("studyIds", headers[8]);
+        assertEquals("externalIds", headers[9]);
+        assertEquals("synapseUserId", headers[10]);
+        assertEquals("attributes", headers[11]);
+        assertEquals("orgMembership", headers[12]);
+        assertEquals("type", headers[13]);
     }
 
     private static ObjectNode makeValidRequestNode() {
@@ -158,12 +215,36 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         return requestNode;
     }
 
-    private static AccountSummary makeAccountSummary() {
+    private static AccountSummary makeAccountSummary() throws IllegalAccessException {
         AccountSummary accountSummary = new AccountSummary();
-        accountSummary.putAttributesItem("firstName", "first-name");
-        accountSummary.putAttributesItem("lastName", "last-name");
-        accountSummary.putAttributesItem("email", "email@email.com");
+        setVariableValueInObject(accountSummary, "firstName", "test-first-name");
+        setVariableValueInObject(accountSummary, "lastName", "test-last-name");
+        setVariableValueInObject(accountSummary, "email", "test@test.test");
+        setVariableValueInObject(accountSummary, "createdOn", now);
+        setVariableValueInObject(accountSummary, "status", null);
+        setVariableValueInObject(accountSummary, "appId", "test-app");
+        setVariableValueInObject(accountSummary, "orgMembership", "test-orgId");
 
         return accountSummary;
+    }
+
+    private static void setVariableValueInObject(Object object, String variable, Object value) throws IllegalAccessException {
+        Field field = getFieldByNameIncludingSuperclasses(variable, object.getClass());
+        field.setAccessible(true);
+        field.set(object, value);
+    }
+
+    @SuppressWarnings("rawtypes")
+    private static Field getFieldByNameIncludingSuperclasses(String fieldName, Class clazz) {
+        Field retValue = null;
+        try {
+            retValue = clazz.getDeclaredField(fieldName);
+        } catch (NoSuchFieldException e) {
+            Class superclass = clazz.getSuperclass();
+            if (superclass != null) {
+                retValue = getFieldByNameIncludingSuperclasses( fieldName, superclass );
+            }
+        }
+        return retValue;
     }
 }

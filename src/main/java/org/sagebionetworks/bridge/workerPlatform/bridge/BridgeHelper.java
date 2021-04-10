@@ -8,7 +8,7 @@ import java.util.List;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
-import org.sagebionetworks.bridge.rest.model.ResourceList;
+import org.sagebionetworks.bridge.rest.model.Study;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -267,9 +267,9 @@ public class BridgeHelper {
         return clientManager.getClient(ForWorkersApi.class).getUploadByRecordId(recordId).execute().body();
     }
 
-    // call Bridge API searchAccountSummariesForApp(appId, caller's Org)
     /** Get account summaries by caller's appId and org */
-    public List<AccountSummary> getAccountSummariesForApp(String appId, String orgId, int offsetBy, int pageSize, String studyId) throws IOException {
+    public List<AccountSummary> getAccountSummariesForApp(String appId, String orgId, int offsetBy, int pageSize,
+                                                          String studyId) throws IOException {
         AccountSummarySearch search = new AccountSummarySearch().offsetBy(offsetBy);
 
         if (studyId != null) {
@@ -281,8 +281,14 @@ public class BridgeHelper {
         if (pageSize > 0) {
             search.pageSize(PARTICIPANT_PAGE_SIZE);
         }
+        return clientManager.getClient(ForWorkersApi.class).searchAccountSummariesForApp(appId, search).execute()
+                .body().getItems();
+    }
 
-        return clientManager.getClient(ForWorkersApi.class).searchAccountSummariesForApp(appId, search).execute().body().getItems();
+    /** Get studies by caller's appId and org */
+    public List<Study> getStudiesForApp(String appId, String orgId, int offsetBy, int pageSize) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getSponsoredStudiesForApp(appId, orgId, offsetBy, pageSize)
+                .execute().body().getItems();
     }
 
     private void doSleep() {
