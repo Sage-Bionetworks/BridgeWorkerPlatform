@@ -228,7 +228,11 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         ArrayList<String> list = new ArrayList<>();
 
         for (int i = 0; i < csvHeaders.length; i++) {
-            String value = json.get(csvHeaders[i]) == null ? "" : json.get(csvHeaders[i]).getAsString();
+            JsonElement jsonValue = json.get(csvHeaders[i]);
+            String value = "";
+            if (jsonValue != null) {
+                value = (jsonValue.isJsonObject()) ? jsonValue.toString() : jsonValue.getAsString();
+            }
             list.add(value);
         }
         return list.toArray(new String[0]);

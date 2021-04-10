@@ -6,17 +6,26 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import java.io.File;
+import java.io.IOException;
 import java.net.URL;
+import java.nio.ByteBuffer;
 import java.util.List;
 
+import au.com.bytecode.opencsv.CSVWriter;
 import com.amazonaws.services.simpleemail.AmazonSimpleEmailServiceClient;
 import com.amazonaws.services.simpleemail.model.Body;
 import com.amazonaws.services.simpleemail.model.Message;
+import com.amazonaws.services.simpleemail.model.RawMessage;
 import com.amazonaws.services.simpleemail.model.SendEmailRequest;
 import com.amazonaws.services.simpleemail.model.SendEmailResult;
+import com.amazonaws.services.simpleemail.model.SendRawEmailRequest;
+import com.amazonaws.services.simpleemail.model.SendRawEmailResult;
 import com.google.common.base.Strings;
 import org.joda.time.DateTime;
 import org.mockito.ArgumentCaptor;
+import org.sagebionetworks.bridge.file.FileHelper;
+import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -24,19 +33,27 @@ import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
 import org.sagebionetworks.bridge.workerPlatform.dynamodb.AppInfo;
 
+import javax.mail.MessagingException;
+
 public class SesHelperTest {
     private SesHelper sesHelper;
     private AppInfo appInfo;
     private AccountInfo accountInfo;
     private ArgumentCaptor<SendEmailRequest> sesRequestCaptor;
+    private ArgumentCaptor<SendRawEmailRequest> sesRawRequestCaptor;
 
     @BeforeMethod
     public void setup() {
         // mock SES client
         SendEmailResult mockSesResult = new SendEmailResult().withMessageId("test-ses-message-id");
+        SendRawEmailResult mockRawSesResult = new SendRawEmailResult().withMessageId("test-raw-ses-message-id");
+
         sesRequestCaptor = ArgumentCaptor.forClass(SendEmailRequest.class);
+        sesRawRequestCaptor = ArgumentCaptor.forClass(SendRawEmailRequest.class);
+
         AmazonSimpleEmailServiceClient mockSesClient = mock(AmazonSimpleEmailServiceClient.class);
         when(mockSesClient.sendEmail(sesRequestCaptor.capture())).thenReturn(mockSesResult);
+        when(mockSesClient.sendRawEmail(sesRawRequestCaptor.capture())).thenReturn(mockRawSesResult);
 
         // set up test helper
         sesHelper = new SesHelper();
@@ -87,6 +104,56 @@ public class SesHelperTest {
         String textEmail = emailBody.getText().getData();
         assertTrue(textEmail.contains(dummyPresignedUrl));
         assertTrue(textEmail.contains(dummyExpirationDateStr));
+    }
+
+    @Test
+    public void testSendEmailWithAttachmentToAccount() throws MessagingException, IOException {
+        // test attachment input by creating a temporary file to attach
+        FileHelper fileHelper = new FileHelper();
+        File tmpDir = null;
+        File tmpFile = null;
+        try {
+            tmpDir = fileHelper.createTempDir();
+            tmpFile = fileHelper.newFile(tmpDir, "testFile.txt");
+            CSVWriter csvWriter = new CSVWriter(fileHelper.getWriter(tmpFile));
+            csvWriter.writeNext("test text");
+
+            // execute
+            sesHelper.sendEmailWithAttachmentToAccount(appInfo, accountInfo, tmpFile.getAbsolutePath());
+
+            SendRawEmailRequest rawSesRequest = sesRawRequestCaptor.getValue();
+            RawMessage rawMessage = rawSesRequest.getRawMessage();
+
+            assertEquals(rawMessage.getData().get(0), 'F');
+            assertEquals(rawMessage.getData().get(1), 'r');
+            assertEquals(rawMessage.getData().get(2), 'o');
+            assertEquals(rawMessage.getData().get(3), 'm');
+            assertEquals(rawMessage.getData().get(4), ':');
+            assertEquals(rawMessage.getData().get(5), ' ');
+            assertEquals(rawMessage.getData().get(6), 's');
+            assertEquals(rawMessage.getData().get(7), 'u');
+            assertEquals(rawMessage.getData().get(8), 'p');
+            assertEquals(rawMessage.getData().get(9), 'p');
+            assertEquals(rawMessage.getData().get(10), 'o');
+            assertEquals(rawMessage.getData().get(11), 'r');
+            assertEquals(rawMessage.getData().get(12), 't');
+            assertEquals(rawMessage.getData().get(13), '@');
+            assertEquals(rawMessage.getData().get(14), 's');
+            assertEquals(rawMessage.getData().get(15), 'a');
+            assertEquals(rawMessage.getData().get(16), 'g');
+            assertEquals(rawMessage.getData().get(17), 'e');
+
+            // ...
+
+        } finally {
+            // clean up temp files
+            if (tmpFile != null && tmpFile.exists()) {
+                fileHelper.deleteFile(tmpFile);
+            }
+            if (tmpDir != null && tmpFile.exists()) {
+                fileHelper.deleteDir(tmpDir);
+            }
+        }
     }
 
     private Body validateEmailAndExtractBody() {
