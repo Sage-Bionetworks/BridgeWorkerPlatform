@@ -173,7 +173,7 @@ public class DownloadParticipantRosterWorkerProcessorTest {
                 .thenReturn(ImmutableList.of(makeAccountSummary(), makeAccountSummary(), makeAccountSummary()))
                 .thenReturn(new ArrayList<>());
 
-        doNothing().when(mockZipHelper).zipWithPassword(anyList(), any(File.class), anyString());
+        doNothing().when(mockZipHelper).zipWithPassword(anyList(), anyString(), anyString());
 
         // execute the processor
         processor.accept(makeValidRequestNode());
@@ -182,7 +182,7 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         verify(processor).writeAccountSummaries(any(), anyList(), anyInt(), anyString(), anyString(), anyString());
 
         // verify that the file is zipped
-        verify(mockZipHelper).zipWithPassword(anyList(), any(File.class), anyString());
+        verify(mockZipHelper).zipWithPassword(anyList(), anyString(), anyString());
 
         // verify that the email with attachment is sent
         verify(mockSesHelper).sendEmailWithAttachmentToAccount(any(AppInfo.class), any(AccountInfo.class), anyString());

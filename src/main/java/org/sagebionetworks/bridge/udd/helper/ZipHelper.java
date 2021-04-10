@@ -66,7 +66,7 @@ public class ZipHelper {
      * @throws IOException
      *          if reading from input or writing to output fails
      */
-    public void zipWithPassword(List<File> fromList, File to, String password) throws IOException {
+    public void zipWithPassword(List<File> fromList, String to, String password) throws IOException {
         ZipParameters zipParameters = new ZipParameters();
         zipParameters.setEncryptFiles(true);
         zipParameters.setEncryptionMethod(EncryptionMethod.AES); // AES 256 by default
