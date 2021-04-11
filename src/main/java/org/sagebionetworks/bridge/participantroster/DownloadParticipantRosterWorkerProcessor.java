@@ -168,7 +168,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             AccountInfo accountInfo = bridgeHelper.getAccountInfo(appId, userId);;
             zipFile = fileHelper.newFile(tmpDir, ZIP_FILE_NAME);
 
-            zipFiles(csvFile, zipFile.getAbsolutePath(), password);
+            zipFiles(csvFile, zipFile, password);
             sesHelper.sendEmailWithAttachmentToAccount(appInfo, accountInfo, zipFile.getAbsolutePath());
 
         } catch (BridgeSDKException ex) {
@@ -247,7 +247,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
      * @throws IOException
      *          if zipping the files fails
      */
-    private void zipFiles(File file, String zipFile, String password) throws IOException {
+    private void zipFiles(File file, File zipFile, String password) throws IOException {
         Stopwatch zipStopwatch = Stopwatch.createStarted();
         try {
             zipHelper.zipWithPassword(ImmutableList.of(file), zipFile, password);

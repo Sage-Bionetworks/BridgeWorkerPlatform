@@ -109,7 +109,7 @@ public class ZipHelperTest {
 
             // execute
             zipHelper.zipWithPassword(ImmutableList.of(mockFooFile, mockBarFile, mockBazFile),
-                    tmpFile.getAbsolutePath(), password);
+                    tmpFile, password);
 
         } finally {
             if (tmpFile != null && tmpFile.exists()) {
