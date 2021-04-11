@@ -6,6 +6,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -26,7 +27,7 @@ import org.sagebionetworks.bridge.file.FileHelper;
 public class ZipHelper {
     private FileHelper fileHelper;
 
-    private static int BUFFER_SIZE = 4096;
+    public static int BUFFER_SIZE = 4096;
 
     /** File helper, used to read data from the input files and write to the output file. */
     @Autowired
@@ -76,13 +77,14 @@ public class ZipHelper {
         byte[] buffer = new byte[BUFFER_SIZE];
         int readLen;
 
-        try (net.lingala.zip4j.io.outputstream.ZipOutputStream zipOutputStream =
-                     initZip4jZipOutputStream(outputZipFile, password.toCharArray())) {
+        try (OutputStream bufferedOutputStream = new BufferedOutputStream(fileHelper.getOutputStream(outputZipFile))) {
+            net.lingala.zip4j.io.outputstream.ZipOutputStream zipOutputStream =
+                    new net.lingala.zip4j.io.outputstream.ZipOutputStream(bufferedOutputStream, password.toCharArray());
             for (File file : filesToAdd) {
                 zipParameters.setFileNameInZip(file.getName());
                 zipOutputStream.putNextEntry(zipParameters);
 
-                try (InputStream inputStream = new FileInputStream(file)) {
+                try (InputStream inputStream = fileHelper.getInputStream(file)) {
                     while ((readLen = inputStream.read(buffer)) != -1) {
                         zipOutputStream.write(buffer, 0, readLen);
                     }

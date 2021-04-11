@@ -3,13 +3,18 @@ package org.sagebionetworks.bridge.udd.helper;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.sagebionetworks.bridge.udd.helper.ZipHelper.BUFFER_SIZE;
 import static org.testng.Assert.assertEquals;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -20,6 +25,8 @@ import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
+import net.lingala.zip4j.ZipFile;
+import net.lingala.zip4j.model.LocalFileHeader;
 import net.lingala.zip4j.model.ZipParameters;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -96,29 +103,22 @@ public class ZipHelperTest {
 
     @Test
     public void testZipWithPassword() throws IOException {
+        // mock output zip file
         String password = "password";
-        FileHelper fileHelper = new FileHelper();
-        File tmpDir = null;
-        File tmpFile = null;
+        ByteArrayOutputStream mockZipFileOutputStream = new ByteArrayOutputStream();
+        File mockFile = mock(File.class);
+        when(mockFileHelper.getOutputStream(mockFile)).thenReturn(mockZipFileOutputStream);
 
-        try {
-            tmpDir = fileHelper.createTempDir();
-            tmpFile = fileHelper.newFile(tmpDir, "tmp_data.zip");
-            CSVWriter csvWriter = new CSVWriter(fileHelper.getWriter(tmpFile));
-            csvWriter.writeNext("");
+        // execute
+        zipHelper.zipWithPassword(ImmutableList.of(mockFooFile, mockBarFile, mockBazFile), mockFile, password);
 
-            // execute
-            zipHelper.zipWithPassword(ImmutableList.of(mockFooFile, mockBarFile, mockBazFile),
-                    tmpFile, password);
+        byte[] mockZipFileBytes = mockZipFileOutputStream.toByteArray();
+        Map<String, String> unzippedMap = unzipHelper(mockZipFileBytes, password.toCharArray());
 
-        } finally {
-            if (tmpFile != null && tmpFile.exists()) {
-                fileHelper.deleteFile(tmpFile);
-            }
-            if (tmpDir != null && tmpDir.exists()) {
-                fileHelper.deleteDir(tmpDir);
-            }
-        }
+        assertEquals(unzippedMap.size(), 3);
+        assertEquals(unzippedMap.get("foo-file"), "foo content");
+        assertEquals(unzippedMap.get("bar-file"), "bar content");
+        assertEquals(unzippedMap.get("baz-file"), "baz content");
     }
 
     // Test helper for unzip.
@@ -133,6 +133,27 @@ public class ZipHelperTest {
                 String fileContent = new String(fileBytes, Charsets.UTF_8);
                 unzippedMap.put(filename, fileContent);
             }
+            return unzippedMap;
+        }
+    }
+
+    public static Map<String, String> unzipHelper(byte[] zipBytes, char[] password) {
+        Map<String, String> unzippedMap = new HashMap<>();
+
+        try (ByteArrayInputStream zipBytesInputStream = new ByteArrayInputStream(zipBytes);
+             net.lingala.zip4j.io.inputstream.ZipInputStream zipInputStream =
+                     new net.lingala.zip4j.io.inputstream.ZipInputStream(zipBytesInputStream, password)) {
+            LocalFileHeader localFileHeader = zipInputStream.getNextEntry();
+            while (localFileHeader != null) {
+                String fileName = localFileHeader.getFileName();
+                byte[] fileBytes = ByteStreams.toByteArray(zipInputStream);
+                String fileContent = new String(fileBytes, Charsets.UTF_8);
+                unzippedMap.put(fileName, fileContent);
+
+                localFileHeader = zipInputStream.getNextEntry();
+            }
+            return unzippedMap;
+        } catch (Exception e) {
             return unzippedMap;
         }
     }
