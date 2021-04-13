@@ -2,8 +2,6 @@ package org.sagebionetworks.bridge.udd.helper;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -74,29 +72,20 @@ public class ZipHelper {
      */
     public void zipWithPassword(List<File> filesToAdd, File outputZipFile, String password) throws IOException {
         ZipParameters zipParameters = buildZipParameters();
-        byte[] buffer = new byte[BUFFER_SIZE];
-        int readLen;
 
-        try (OutputStream bufferedOutputStream = new BufferedOutputStream(fileHelper.getOutputStream(outputZipFile))) {
-            net.lingala.zip4j.io.outputstream.ZipOutputStream zipOutputStream =
-                    new net.lingala.zip4j.io.outputstream.ZipOutputStream(bufferedOutputStream, password.toCharArray());
+        try (OutputStream bufferedOutputStream = new BufferedOutputStream(fileHelper.getOutputStream(outputZipFile));
+             net.lingala.zip4j.io.outputstream.ZipOutputStream zipOutputStream =
+                new net.lingala.zip4j.io.outputstream.ZipOutputStream(bufferedOutputStream, password.toCharArray())) {
             for (File file : filesToAdd) {
                 zipParameters.setFileNameInZip(file.getName());
                 zipOutputStream.putNextEntry(zipParameters);
 
                 try (InputStream inputStream = fileHelper.getInputStream(file)) {
-                    while ((readLen = inputStream.read(buffer)) != -1) {
-                        zipOutputStream.write(buffer, 0, readLen);
-                    }
+                    ByteStreams.copy(inputStream, zipOutputStream);
                 }
                 zipOutputStream.closeEntry();
             }
         }
-    }
-
-    private net.lingala.zip4j.io.outputstream.ZipOutputStream initZip4jZipOutputStream(File outputZipFile, char[] password) throws IOException {
-        FileOutputStream fileOutputStream = new FileOutputStream(outputZipFile);
-        return new net.lingala.zip4j.io.outputstream.ZipOutputStream(fileOutputStream, password);
     }
 
     private ZipParameters buildZipParameters() {

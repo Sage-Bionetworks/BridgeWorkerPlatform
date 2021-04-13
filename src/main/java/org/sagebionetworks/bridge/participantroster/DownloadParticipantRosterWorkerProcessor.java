@@ -4,6 +4,7 @@ import au.com.bytecode.opencsv.CSVWriter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.sagebionetworks.bridge.file.FileHelper;
@@ -11,7 +12,6 @@ import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.RestUtils;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
-import org.sagebionetworks.bridge.rest.model.PagedResourceList;
 import org.sagebionetworks.bridge.rest.model.Role;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
@@ -33,6 +33,7 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -54,6 +55,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     private static final String CSV_FILE_NAME = "account_summaries.csv";
     private static final String ZIP_FILE_NAME = "user_data.zip";
     private int pageSize = 100;
+    private static final Set<String> EXCLUDED_HEADERS = new HashSet<>(ImmutableList.of("appId", "synapseUserId", "orgMembership", "type"));
 
     private BridgeHelper bridgeHelper;
     private FileHelper fileHelper;
@@ -136,10 +138,10 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
                 return;
             }
 
-            if (studyId != null && participantRoles.contains(Role.STUDY_COORDINATOR)) {
-
-                List<Study> studies = bridgeHelper.getStudiesForApp(appId, orgMembership, 0, pageSize);
-                if (studies.isEmpty()) {
+            if (studyId != null && (participantRoles.contains(Role.STUDY_COORDINATOR) ||
+                    (participantRoles.contains(Role.RESEARCHER) && orgMembership != null))) {
+                List<Study> studies = bridgeHelper.getSponsoredStudiesForApp(appId, orgMembership, 0, pageSize);
+                if (!studies.contains(studyId)) {
                     LOG.info("User's org does not sponsor the given studyId.");
                     return;
                 }
@@ -212,10 +214,13 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
      */
     String[] getCsvHeaders() {
         Field[] fields = AccountSummary.class.getDeclaredFields();
-        String[] headers = new String[fields.length];
+        String[] headers = new String[fields.length - EXCLUDED_HEADERS.size()];
 
-        for (int i = 0; i < fields.length; i++) {
-            headers[i] = fields[i].getName();
+        for (int i = 0, j = 0; i < fields.length && j < headers.length; i++) {
+            if (!EXCLUDED_HEADERS.contains(fields[i].getName())) {
+                headers[j] = fields[i].getName();
+                j++;
+            }
         }
         return headers;
     }

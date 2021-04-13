@@ -279,14 +279,14 @@ public class BridgeHelper {
         }
 
         if (pageSize > 0) {
-            search.pageSize(PARTICIPANT_PAGE_SIZE);
+            search.pageSize(pageSize);
         }
         return clientManager.getClient(ForWorkersApi.class).searchAccountSummariesForApp(appId, search).execute()
                 .body().getItems();
     }
 
     /** Get studies by caller's appId and org */
-    public List<Study> getStudiesForApp(String appId, String orgId, int offsetBy, int pageSize) throws IOException {
+    public List<Study> getSponsoredStudiesForApp(String appId, String orgId, int offsetBy, int pageSize) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getSponsoredStudiesForApp(appId, orgId, offsetBy, pageSize)
                 .execute().body().getItems();
     }

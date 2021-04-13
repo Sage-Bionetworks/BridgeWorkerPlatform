@@ -30,7 +30,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.sagebionetworks.bridge.rest.model.Account;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyList;
@@ -669,7 +668,7 @@ public class BridgeHelperTest {
 
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
 
-        List<Study> retStudiesForApp = bridgeHelper.getStudiesForApp(APP_ID, ORG_ID, 0, BridgeHelper.MAX_PAGE_SIZE);
+        List<Study> retStudiesForApp = bridgeHelper.getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, BridgeHelper.MAX_PAGE_SIZE);
 
         assertEquals(retStudiesForApp, ImmutableList.of(new Study()));
     }
