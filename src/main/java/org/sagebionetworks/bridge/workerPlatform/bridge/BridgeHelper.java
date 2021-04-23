@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import com.google.common.collect.ImmutableList;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
@@ -268,8 +269,8 @@ public class BridgeHelper {
     }
 
     /** Get account summaries by caller's appId and org */
-    public List<AccountSummary> getAccountSummariesForApp(String appId, String orgId, int offsetBy, int pageSize,
-                                                          String studyId) throws IOException {
+    public List<StudyParticipant> getStudyParticipantsForApp(String appId, String orgId, int offsetBy, int pageSize,
+                                                             String studyId) throws IOException {
         AccountSummarySearch search = new AccountSummarySearch().offsetBy(offsetBy);
 
         if (studyId != null) {
@@ -281,14 +282,28 @@ public class BridgeHelper {
         if (pageSize > 0) {
             search.pageSize(pageSize);
         }
-        return clientManager.getClient(ForWorkersApi.class).searchAccountSummariesForApp(appId, search).execute()
-                .body().getItems();
+
+        List<AccountSummary> accountSummaries = clientManager.getClient(ForWorkersApi.class)
+                .searchAccountSummariesForApp(appId, search).execute().body().getItems();
+
+        return getStudyParticipantsFromAccountSummaries(accountSummaries);
     }
 
     /** Get studies by caller's appId and org */
     public List<Study> getSponsoredStudiesForApp(String appId, String orgId, int offsetBy, int pageSize) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getSponsoredStudiesForApp(appId, orgId, offsetBy, pageSize)
                 .execute().body().getItems();
+    }
+
+    private List<StudyParticipant> getStudyParticipantsFromAccountSummaries(List<AccountSummary> accountSummaries) throws IOException {
+        List<StudyParticipant> participants = new ArrayList<>();
+        for (AccountSummary accountSummary : accountSummaries) {
+            StudyParticipant participant = clientManager.getClient(ForWorkersApi.class)
+                    .getParticipantByIdForApp(accountSummary.getAppId(), accountSummary.getId(), false).execute().body();
+            participants.add(participant);
+        }
+
+        return participants;
     }
 
     private void doSleep() {

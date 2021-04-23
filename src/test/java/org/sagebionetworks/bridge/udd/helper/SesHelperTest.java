@@ -9,7 +9,6 @@ import static org.testng.Assert.assertTrue;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 import au.com.bytecode.opencsv.CSVWriter;
@@ -25,7 +24,6 @@ import com.google.common.base.Strings;
 import org.joda.time.DateTime;
 import org.mockito.ArgumentCaptor;
 import org.sagebionetworks.bridge.file.FileHelper;
-import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -124,26 +122,17 @@ public class SesHelperTest {
             SendRawEmailRequest rawSesRequest = sesRawRequestCaptor.getValue();
             RawMessage rawMessage = rawSesRequest.getRawMessage();
 
-            assertEquals(rawMessage.getData().get(0), 'F');
-            assertEquals(rawMessage.getData().get(1), 'r');
-            assertEquals(rawMessage.getData().get(2), 'o');
-            assertEquals(rawMessage.getData().get(3), 'm');
-            assertEquals(rawMessage.getData().get(4), ':');
-            assertEquals(rawMessage.getData().get(5), ' ');
-            assertEquals(rawMessage.getData().get(6), 's');
-            assertEquals(rawMessage.getData().get(7), 'u');
-            assertEquals(rawMessage.getData().get(8), 'p');
-            assertEquals(rawMessage.getData().get(9), 'p');
-            assertEquals(rawMessage.getData().get(10), 'o');
-            assertEquals(rawMessage.getData().get(11), 'r');
-            assertEquals(rawMessage.getData().get(12), 't');
-            assertEquals(rawMessage.getData().get(13), '@');
-            assertEquals(rawMessage.getData().get(14), 's');
-            assertEquals(rawMessage.getData().get(15), 'a');
-            assertEquals(rawMessage.getData().get(16), 'g');
-            assertEquals(rawMessage.getData().get(17), 'e');
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 1000; i++) {
+                sb.append( (char) rawMessage.getData().get(i));
+            }
 
-            // ...
+            String message = sb.toString();
+            assertTrue(message.contains("From: support@sagebase.org"));
+            assertTrue(message.contains("To: dummy-email@example.com"));
+            assertTrue(message.contains("Subject: Your requested data from Test App"));
+            assertTrue(message.contains("Your requested data is now available. To download your requested data, " +
+                    "please click on the file attached in this email."));
 
         } finally {
             // clean up temp files

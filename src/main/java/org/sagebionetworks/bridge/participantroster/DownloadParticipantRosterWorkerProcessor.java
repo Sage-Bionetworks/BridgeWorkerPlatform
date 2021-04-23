@@ -11,7 +11,6 @@ import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.RestUtils;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
-import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.Role;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
@@ -29,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -52,11 +52,11 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     private static final int REPORTING_INTERVAL = 100;
 
     private static final long THREAD_SLEEP_INTERVAL = 1000L;
-    private static final String CSV_FILE_NAME = "account_summaries.csv";
+    private static final String CSV_FILE_NAME = "participant_roster.csv";
     private static final String ZIP_FILE_NAME = "user_data.zip";
     private int pageSize = 100;
-    private static final Set<String> EXCLUDED_HEADERS = new HashSet<>(ImmutableList.of("appId", "synapseUserId", "orgMembership", "type"));
-
+    private static final Set<String> EXCLUDED_HEADERS = new HashSet<>(ImmutableList.of("synapseUserId", "orgMembership", "type"));
+    // TODO now that we're using StudyParticipant instead of AccountSummary, are there more headers that we want to exclude?
     private BridgeHelper bridgeHelper;
     private FileHelper fileHelper;
     private SesHelper sesHelper;
@@ -101,6 +101,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     /** Main entry point into Download Participant Roster Worker. */
     @Override
     public void accept(JsonNode jsonNode) throws Exception {
+        Stopwatch requestStopwatch = Stopwatch.createStarted();
 
         DownloadParticipantRosterRequest request;
         try {
@@ -109,18 +110,22 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             throw new PollSqsWorkerBadRequestException("Error parsing request: " + e.getMessage(), e);
         }
 
+        File tmpDir = fileHelper.createTempDir();
+        File csvFile = fileHelper.newFile(tmpDir, CSV_FILE_NAME);
+        File zipFile = fileHelper.newFile(tmpDir, ZIP_FILE_NAME);
+        process(request, csvFile, zipFile);
+
+        LOG.info("request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
+                " seconds for userId =" + request.getUserId() + ", app=" + request.getAppId());
+    }
+
+    void process(DownloadParticipantRosterRequest request, File csvFile, File zipFile) throws Exception {
         String userId = request.getUserId();
         String appId = request.getAppId();
         String password = request.getPassword();
         String studyId = request.getStudyId();
 
         LOG.info("Received request for userId=" + userId + ", app=" + appId + ", studyId=" + studyId);
-
-        Stopwatch requestStopwatch = Stopwatch.createStarted();
-        File csvFile = null;
-        File tmpDir = fileHelper.createTempDir();
-        File zipFile = null;
-
         try {
             // get caller's user
             StudyParticipant participant = bridgeHelper.getParticipant(appId, userId, false);
@@ -153,14 +158,12 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             }
 
             int offsetBy = 0;
-            // get first page of account summaries
-            List<AccountSummary> accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership,
+            // get first page of study participants
+            List<StudyParticipant> studyParticipants = bridgeHelper.getStudyParticipantsForApp(appId, orgMembership,
                     offsetBy, pageSize, studyId);
 
-            csvFile = fileHelper.newFile(tmpDir, CSV_FILE_NAME);
-
             try (CSVWriter csvFileWriter = new CSVWriter(fileHelper.getWriter(csvFile))) {
-                writeAccountSummaries(csvFileWriter, accountSummaries, offsetBy, appId, orgMembership, studyId);
+                writeStudyParticipants(csvFileWriter, studyParticipants, offsetBy, appId, orgMembership, studyId);
             } catch (IOException ex) {
                 throw new WorkerException("Error creating file " + csvFile + ": " + ex.getMessage(), ex);
             }
@@ -168,7 +171,6 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             // zip up and email the csv file
             AppInfo appInfo = dynamoHelper.getApp(appId);
             AccountInfo accountInfo = bridgeHelper.getAccountInfo(appId, userId);;
-            zipFile = fileHelper.newFile(tmpDir, ZIP_FILE_NAME);
 
             zipFiles(csvFile, zipFile, password);
             sesHelper.sendEmailWithAttachmentToAccount(appInfo, accountInfo, zipFile.getAbsolutePath());
@@ -181,28 +183,26 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
                 throw new RuntimeException(ex);
             }
         } finally {
-            cleanupFiles(csvFile, zipFile, tmpDir);
-            LOG.info("request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
-                    " seconds for userId =" + userId + ", app=" + appId);
+            //cleanupFiles(csvFile, zipFile, tmpDir);
         }
     }
 
-    /** Write all of the account summaries to the CSV file */
-    void writeAccountSummaries(CSVWriter csvFileWriter, List<AccountSummary> accountSummaries, int offsetBy,
-                                       String appId, String orgMembership, String studyId) throws IOException, InterruptedException {
+    /** Write all of the study participants to the CSV file */
+    void writeStudyParticipants(CSVWriter csvFileWriter, List<StudyParticipant> studyParticipants, int offsetBy,
+                                String appId, String orgMembership, String studyId) throws IOException, InterruptedException {
         // write csv headers
         String[] csvHeaders = getCsvHeaders();
         csvFileWriter.writeNext(csvHeaders);
 
-        // write the rest of the account summaries
-        while (!accountSummaries.isEmpty()) {
-            for (AccountSummary accountSummary : accountSummaries) {
-                String[] row = getAccountSummaryArray(accountSummary, csvHeaders);
+        // write the rest of the study participants
+        while (!studyParticipants.isEmpty()) {
+            for (StudyParticipant studyParticipant : studyParticipants) {
+                String[] row = getStudyParticipantArray(studyParticipant, csvHeaders);
                 csvFileWriter.writeNext(row);
             }
-            // get next set of account summaries
+            // get next set of study participants
             offsetBy += pageSize;
-            accountSummaries = bridgeHelper.getAccountSummariesForApp(appId, orgMembership, offsetBy, pageSize, studyId);
+            studyParticipants = bridgeHelper.getStudyParticipantsForApp(appId, orgMembership, offsetBy, pageSize, studyId);
 
             // avoid burning out Bridge Server
             Thread.sleep(THREAD_SLEEP_INTERVAL);
@@ -213,7 +213,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
      *  Visible for unit testing
      */
     String[] getCsvHeaders() {
-        Field[] fields = AccountSummary.class.getDeclaredFields();
+        Field[] fields = StudyParticipant.class.getDeclaredFields();
         String[] headers = new String[fields.length - EXCLUDED_HEADERS.size()];
 
         for (int i = 0, j = 0; i < fields.length && j < headers.length; i++) {
@@ -228,15 +228,23 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     /** Given an AccountSummary, return a String array of all of its attribute values
      *  Visible for unit testing
      */
-    String[] getAccountSummaryArray(AccountSummary accountSummary, String[] csvHeaders) {
-        JsonObject json = RestUtils.toJSON(accountSummary).getAsJsonObject();
+    String[] getStudyParticipantArray(StudyParticipant studyParticipant, String[] csvHeaders) {
+        JsonObject json = RestUtils.toJSON(studyParticipant).getAsJsonObject();
         ArrayList<String> list = new ArrayList<>();
 
         for (int i = 0; i < csvHeaders.length; i++) {
             JsonElement jsonValue = json.get(csvHeaders[i]);
             String value = "";
             if (jsonValue != null) {
-                value = (jsonValue.isJsonObject()) ? jsonValue.toString() : jsonValue.getAsString();
+                if (jsonValue.isJsonPrimitive()) {
+                    value = jsonValue.getAsString();
+                } else if (jsonValue.isJsonObject()) {
+                    value = jsonValue.toString();
+                } else if (jsonValue.isJsonArray()) {
+                    for (JsonElement element : (JsonArray) jsonValue) {
+                        value += element.getAsString();
+                    }
+                }
             }
             list.add(value);
         }
@@ -264,7 +272,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     }
 
     /** Delete the temporary files */
-    private void cleanupFiles(File csvFile, File zipFile, File tmpDir) {
+    void cleanupFiles(File csvFile, File zipFile, File tmpDir) {
         if (csvFile != null && csvFile.exists()) {
             fileHelper.deleteFile(csvFile);
         }

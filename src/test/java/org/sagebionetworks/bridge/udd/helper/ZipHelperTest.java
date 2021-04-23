@@ -3,32 +3,22 @@ package org.sagebionetworks.bridge.udd.helper;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.sagebionetworks.bridge.udd.helper.ZipHelper.BUFFER_SIZE;
 import static org.testng.Assert.assertEquals;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import au.com.bytecode.opencsv.CSVWriter;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
-import com.google.common.io.Files;
-import net.lingala.zip4j.ZipFile;
 import net.lingala.zip4j.model.LocalFileHeader;
-import net.lingala.zip4j.model.ZipParameters;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.BeforeMethod;
@@ -137,7 +127,8 @@ public class ZipHelperTest {
         }
     }
 
-    public static Map<String, String> unzipHelper(byte[] zipBytes, char[] password) {
+    // Test helper for unzip with password
+    public static Map<String, String> unzipHelper(byte[] zipBytes, char[] password) throws IOException {
         Map<String, String> unzippedMap = new HashMap<>();
 
         try (ByteArrayInputStream zipBytesInputStream = new ByteArrayInputStream(zipBytes);
@@ -152,8 +143,6 @@ public class ZipHelperTest {
 
                 localFileHeader = zipInputStream.getNextEntry();
             }
-            return unzippedMap;
-        } catch (Exception e) {
             return unzippedMap;
         }
     }
