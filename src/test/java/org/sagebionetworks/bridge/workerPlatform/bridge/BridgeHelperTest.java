@@ -633,88 +633,12 @@ public class BridgeHelperTest {
 
     @Test
     public void testGetStudyParticipantsForAppStudyId() throws IOException, IllegalAccessException {
-        // mock SDK search account summaries call
-        AccountSummary accountSummary = new AccountSummary();
-        setVariableValueInObject(accountSummary, "id", USER_ID);
-        setVariableValueInObject(accountSummary, "appId", APP_ID);
-
-        AccountSummaryList accountSummaryList = mock(AccountSummaryList.class);
-        when(accountSummaryList.getItems()).thenReturn(ImmutableList.of(accountSummary));
-        Response<AccountSummaryList> accountSummaryListResponse = Response.success(accountSummaryList);
-
-        Call<AccountSummaryList> mockAccountSummaryListCall = mock(Call.class);
-        when(mockAccountSummaryListCall.execute()).thenReturn(accountSummaryListResponse);
-
-        ArgumentCaptor<AccountSummarySearch> accountSummarySearchCaptor = ArgumentCaptor.forClass(AccountSummarySearch.class);
-        when(mockWorkerApi.searchAccountSummariesForApp(eq(APP_ID), accountSummarySearchCaptor.capture())).thenReturn(mockAccountSummaryListCall);
-
-        // mock SDK get participant by id for app call
-        StudyParticipant studyParticipant = mock(StudyParticipant.class);
-        Response<StudyParticipant> studyParticipantResponse = Response.success(studyParticipant);
-
-        Call<StudyParticipant> mockStudyParticipantCall = mock(Call.class);
-        when(mockStudyParticipantCall.execute()).thenReturn(studyParticipantResponse);
-
-        when(mockWorkerApi.getParticipantByIdForApp(APP_ID, USER_ID, false)).thenReturn(mockStudyParticipantCall);
-
-        // mock getting worker API client
-        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
-
-        // execute getStudyParticipantForApp
-        List<StudyParticipant> retSummariesForApp = bridgeHelper.getStudyParticipantsForApp(APP_ID, ORG_ID, 0,
-                PAGE_SIZE, STUDY_ID);
-
-        // verify params and outputs
-        assertEquals(retSummariesForApp, ImmutableList.of(studyParticipant));
-
-        AccountSummarySearch search = accountSummarySearchCaptor.getValue();
-        assertEquals(0, search.getOffsetBy().intValue());
-        assertEquals(null, search.getOrgMembership()); // because we supplied a studyId
-        assertEquals(STUDY_ID, search.getEnrolledInStudyId());
-        assertEquals(PAGE_SIZE, search.getPageSize().intValue());
+        testGetStudyParticipantsForApp(STUDY_ID, null);
     }
 
     @Test
     public void testGetStudyParticipantsForAppOrgId() throws IOException, IllegalAccessException {
-        // mock SDK search account summaries call
-        AccountSummary accountSummary = new AccountSummary();
-        setVariableValueInObject(accountSummary, "id", USER_ID);
-        setVariableValueInObject(accountSummary, "appId", APP_ID);
-
-        AccountSummaryList accountSummaryList = mock(AccountSummaryList.class);
-        when(accountSummaryList.getItems()).thenReturn(ImmutableList.of(accountSummary));
-        Response<AccountSummaryList> accountSummaryListResponse = Response.success(accountSummaryList);
-
-        Call<AccountSummaryList> mockAccountSummaryListCall = mock(Call.class);
-        when(mockAccountSummaryListCall.execute()).thenReturn(accountSummaryListResponse);
-
-        ArgumentCaptor<AccountSummarySearch> accountSummarySearchCaptor = ArgumentCaptor.forClass(AccountSummarySearch.class);
-        when(mockWorkerApi.searchAccountSummariesForApp(eq(APP_ID), accountSummarySearchCaptor.capture())).thenReturn(mockAccountSummaryListCall);
-
-        // mock SDK get participant by id for app call
-        StudyParticipant studyParticipant = mock(StudyParticipant.class);
-        Response<StudyParticipant> studyParticipantResponse = Response.success(studyParticipant);
-
-        Call<StudyParticipant> mockStudyParticipantCall = mock(Call.class);
-        when(mockStudyParticipantCall.execute()).thenReturn(studyParticipantResponse);
-
-        when(mockWorkerApi.getParticipantByIdForApp(APP_ID, USER_ID, false)).thenReturn(mockStudyParticipantCall);
-
-        // mock getting worker API client
-        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
-
-        // execute getStudyParticipantForApp
-        List<StudyParticipant> retSummariesForApp = bridgeHelper.getStudyParticipantsForApp(APP_ID, ORG_ID, 0,
-                PAGE_SIZE, null);
-
-        // verify params and outputs
-        assertEquals(retSummariesForApp, ImmutableList.of(studyParticipant));
-
-        AccountSummarySearch search = accountSummarySearchCaptor.getValue();
-        assertEquals(0, search.getOffsetBy().intValue());
-        assertEquals(ORG_ID, search.getOrgMembership());
-        assertEquals(null, search.getEnrolledInStudyId()); // because we did not supply a studyId
-        assertEquals(PAGE_SIZE, search.getPageSize().intValue());
+        testGetStudyParticipantsForApp(null, ORG_ID);
     }
 
     @Test
@@ -735,6 +659,48 @@ public class BridgeHelperTest {
         List<Study> retStudiesForApp = bridgeHelper.getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, BridgeHelper.MAX_PAGE_SIZE);
 
         assertEquals(retStudiesForApp, ImmutableList.of(new Study()));
+    }
+
+    private void testGetStudyParticipantsForApp(String studyId, String orgId) throws IllegalAccessException, IOException {
+        // mock SDK search account summaries call
+        AccountSummary accountSummary = new AccountSummary();
+        setVariableValueInObject(accountSummary, "id", USER_ID);
+        setVariableValueInObject(accountSummary, "appId", APP_ID);
+
+        AccountSummaryList accountSummaryList = mock(AccountSummaryList.class);
+        when(accountSummaryList.getItems()).thenReturn(ImmutableList.of(accountSummary));
+        Response<AccountSummaryList> accountSummaryListResponse = Response.success(accountSummaryList);
+
+        Call<AccountSummaryList> mockAccountSummaryListCall = mock(Call.class);
+        when(mockAccountSummaryListCall.execute()).thenReturn(accountSummaryListResponse);
+
+        ArgumentCaptor<AccountSummarySearch> accountSummarySearchCaptor = ArgumentCaptor.forClass(AccountSummarySearch.class);
+        when(mockWorkerApi.searchAccountSummariesForApp(eq(APP_ID), accountSummarySearchCaptor.capture())).thenReturn(mockAccountSummaryListCall);
+
+        // mock SDK get participant by id for app call
+        StudyParticipant studyParticipant = mock(StudyParticipant.class);
+        Response<StudyParticipant> studyParticipantResponse = Response.success(studyParticipant);
+
+        Call<StudyParticipant> mockStudyParticipantCall = mock(Call.class);
+        when(mockStudyParticipantCall.execute()).thenReturn(studyParticipantResponse);
+
+        when(mockWorkerApi.getParticipantByIdForApp(APP_ID, USER_ID, false)).thenReturn(mockStudyParticipantCall);
+
+        // mock getting worker API client
+        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
+
+        // execute getStudyParticipantForApp
+        List<StudyParticipant> retSummariesForApp = bridgeHelper.getStudyParticipantsForApp(APP_ID, ORG_ID, 0,
+                PAGE_SIZE, studyId);
+
+        // verify params and outputs
+        assertEquals(retSummariesForApp, ImmutableList.of(studyParticipant));
+
+        AccountSummarySearch search = accountSummarySearchCaptor.getValue();
+        assertEquals(0, search.getOffsetBy().intValue());
+        assertEquals(orgId, search.getOrgMembership());
+        assertEquals(studyId, search.getEnrolledInStudyId());
+        assertEquals(PAGE_SIZE, search.getPageSize().intValue());
     }
 
     private void mockUploadComplete(UploadValidationStatus status) throws Exception {
