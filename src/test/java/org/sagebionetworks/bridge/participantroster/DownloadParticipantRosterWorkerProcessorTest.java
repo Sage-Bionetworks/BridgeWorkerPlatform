@@ -9,7 +9,9 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.rest.model.Role;
+import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
@@ -20,6 +22,7 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -175,51 +178,13 @@ public class DownloadParticipantRosterWorkerProcessorTest {
     }
 
     @Test
-    public void process() throws Exception {
-        // set up participant
-        StudyParticipant participant = new StudyParticipant();
-        participant.setEmail("example@example.org");
-        participant.setEmailVerified(true);
-        participant.addRolesItem(Role.RESEARCHER);
-        participant.setOrgMembership(ORG_ID);
+    public void processWithoutStudyId() throws Exception {
+        process(null);
+    }
 
-        // set up files
-        File tmpDir = fileHelper.createTempDir();
-        File csvFile = fileHelper.newFile(tmpDir, "participant_roster.csv");
-        File zipFile = fileHelper.newFile(tmpDir, "user_data.zip");
-
-        // set up request
-        DownloadParticipantRosterRequest request = new DownloadParticipantRosterRequest.Builder()
-                .withUserId(USER_ID).withAppId(APP_ID).withPassword(PASSWORD).build();
-
-        // set up mocks
-        doReturn(participant).when(mockBridgeHelper).getParticipant(APP_ID, USER_ID, false);
-
-        List<StudyParticipant> studyParticipants = ImmutableList.of(makeStudyParticipant(1), makeStudyParticipant(2), makeStudyParticipant(3));
-
-        doReturn(studyParticipants).doReturn(ImmutableList.of()).when(mockBridgeHelper).getStudyParticipantsForApp(eq(APP_ID), eq(ORG_ID), eq(0), eq(PAGE_SIZE), anyString());
-
-        // we want to evaluate the files before they're cleaned up
-        doNothing().when(processor).cleanupFiles(csvFile, zipFile, tmpDir);
-
-        // process
-        processor.process(request, csvFile, zipFile);
-
-        // verify file contents
-        String csvContent = new String(fileHelper.getBytes(csvFile), StandardCharsets.UTF_8);
-        assertEquals(EXPECTED_CSV_CONTENT, csvContent);
-
-        // verify that the csv is written to the file
-        verify(processor).writeStudyParticipants(any(CSVWriter.class), eq(studyParticipants), eq(0), eq(APP_ID), eq(ORG_ID), anyString());
-
-        // verify that the file is zipped
-        verify(mockZipHelper).zipWithPassword(anyList(), any(File.class), anyString());
-
-        // verify that the email with attachment is sent
-        verify(mockSesHelper).sendEmailWithAttachmentToAccount(any(AppInfo.class), any(AccountInfo.class), anyString());
-
-        // cleanup files
-        processor.cleanupFiles(csvFile, zipFile, tmpDir);
+    @Test
+    public void processWithStudyId() throws Exception {
+        process(STUDY_ID);
     }
 
     @Test
@@ -247,50 +212,42 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         StudyParticipant participant1 = makeStudyParticipant(1);
         StudyParticipant participant2 = makeStudyParticipant(2);
         StudyParticipant participant3 = makeStudyParticipant(3);
-        doAnswer(new Answer() {
-            int count = 0;
 
-            public Object answer(InvocationOnMock invocation) {
-                if (count == 0) {
-                    count++;
-                    return ImmutableList.of(participant1);
-                } else if (count == 1) {
-                    count++;
-                    return ImmutableList.of(participant2);
-                } else if (count == 2) {
-                    count++;
-                    return ImmutableList.of(participant3);
-                }
-                return ImmutableList.of();
-            }
-        }).when(mockBridgeHelper).getStudyParticipantsForApp(eq(APP_ID), eq(ORG_ID), anyInt(), eq(1), anyString());
+        doReturn(ImmutableList.of(participant1)).when(mockBridgeHelper).getStudyParticipantsForApp(APP_ID, ORG_ID, 0, 1, null);
+        doReturn(ImmutableList.of(participant2)).when(mockBridgeHelper).getStudyParticipantsForApp(APP_ID, ORG_ID, 1, 1, null);
+        doReturn(ImmutableList.of(participant3)).when(mockBridgeHelper).getStudyParticipantsForApp(APP_ID, ORG_ID, 2, 1, null);
 
+        AppInfo appInfo = new AppInfo.Builder().withAppId(APP_ID).withName("test-name").withSupportEmail("example@example.org").build();
+        doReturn(appInfo).when(mockDynamoHelper).getApp(APP_ID);
+
+        AccountInfo accountInfo = new AccountInfo.Builder().withUserId(USER_ID).withEmailAddress("example@example.org").build();
+        doReturn(accountInfo).when(mockBridgeHelper).getAccountInfo(APP_ID, USER_ID);
 
         // we want to evaluate the files before they're cleaned up
         doNothing().when(processor).cleanupFiles(csvFile, zipFile, tmpDir);
 
         // process
         processor.setPageSize(1); // the processor will need to make 3 Bridge API calls
-        processor.process(request, csvFile, zipFile);
+        processor.process(request, csvFile, zipFile, tmpDir);
 
         // verify file contents
         String csvContent = new String(fileHelper.getBytes(csvFile), StandardCharsets.UTF_8);
         assertEquals(EXPECTED_CSV_CONTENT, csvContent);
 
         // verify that the csv is written to the file
-        verify(processor).writeStudyParticipants(any(CSVWriter.class), anyList(), eq(0), eq(APP_ID), eq(ORG_ID), anyString());
+        verify(processor).writeStudyParticipants(any(CSVWriter.class), anyList(), eq(0), eq(APP_ID), eq(ORG_ID), eq(null), anyInt());
 
         // verify that the file is zipped
-        verify(mockZipHelper).zipWithPassword(anyList(), any(File.class), anyString());
+        verify(mockZipHelper).zipWithPassword(ImmutableList.of(csvFile), zipFile, PASSWORD);
 
         // verify that the email with attachment is sent
-        verify(mockSesHelper).sendEmailWithAttachmentToAccount(any(AppInfo.class), any(AccountInfo.class), anyString());
+        verify(mockSesHelper).sendEmailWithAttachmentToAccount(appInfo, accountInfo, zipFile.getAbsolutePath());
 
         // cleanup files
         processor.cleanupFiles(csvFile, zipFile, tmpDir);
     }
 
-    public void assertStudyParticipantHeaders(String[] headers) { // TODO update once we have final list of headers to omit
+    public void assertStudyParticipantHeaders(String[] headers) {
         assertEquals(headers.length, 22);
         assertEquals("firstName", headers[0]);
         assertEquals("lastName", headers[1]);
@@ -314,6 +271,63 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         assertEquals("consentHistories", headers[19]);
         assertEquals("consented", headers[20]);
         assertEquals("timeZone", headers[21]);
+    }
+
+    private void process(String studyId) throws Exception {
+        // set up participant
+        StudyParticipant participant = new StudyParticipant();
+        participant.setEmail("example@example.org");
+        participant.setEmailVerified(true);
+        participant.addRolesItem(Role.RESEARCHER);
+        participant.setOrgMembership(ORG_ID);
+
+        // set up files
+        File tmpDir = fileHelper.createTempDir();
+        File csvFile = fileHelper.newFile(tmpDir, "participant_roster.csv");
+        File zipFile = fileHelper.newFile(tmpDir, "user_data.zip");
+
+        // set up request
+        DownloadParticipantRosterRequest request = new DownloadParticipantRosterRequest.Builder()
+                .withUserId(USER_ID).withAppId(APP_ID).withPassword(PASSWORD).withStudyId(studyId).build();
+
+        // set up mocks
+        doReturn(participant).when(mockBridgeHelper).getParticipant(APP_ID, USER_ID, false);
+
+        Study study = new Study();
+        study.setIdentifier(studyId);
+        List<Study> studies = ImmutableList.of(study);
+        doReturn(studies).when(mockBridgeHelper).getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, PAGE_SIZE);
+
+        List<StudyParticipant> studyParticipants = ImmutableList.of(makeStudyParticipant(1), makeStudyParticipant(2), makeStudyParticipant(3));
+        doReturn(studyParticipants).doReturn(ImmutableList.of()).when(mockBridgeHelper).getStudyParticipantsForApp(APP_ID, ORG_ID, 0, PAGE_SIZE, studyId);
+
+        AppInfo appInfo = new AppInfo.Builder().withAppId(APP_ID).withName("test-name").withSupportEmail("example@example.org").build();
+        doReturn(appInfo).when(mockDynamoHelper).getApp(APP_ID);
+
+        AccountInfo accountInfo = new AccountInfo.Builder().withUserId(USER_ID).withEmailAddress("example@example.org").build();
+        doReturn(accountInfo).when(mockBridgeHelper).getAccountInfo(APP_ID, USER_ID);
+
+        // we want to evaluate the files before they're cleaned up
+        doNothing().when(processor).cleanupFiles(csvFile, zipFile, tmpDir);
+
+        // process
+        processor.process(request, csvFile, zipFile, tmpDir);
+
+        // verify file contents
+        String csvContent = new String(fileHelper.getBytes(csvFile), StandardCharsets.UTF_8);
+        assertEquals(EXPECTED_CSV_CONTENT, csvContent);
+
+        // verify that the csv is written to the file
+        verify(processor).writeStudyParticipants(any(CSVWriter.class), eq(studyParticipants), eq(0), eq(APP_ID), eq(ORG_ID), eq(studyId), anyInt());
+
+        // verify that the file is zipped
+        verify(mockZipHelper).zipWithPassword(ImmutableList.of(csvFile), zipFile, PASSWORD);
+
+        // verify that the email with attachment is sent
+        verify(mockSesHelper).sendEmailWithAttachmentToAccount(appInfo, accountInfo, zipFile.getAbsolutePath());
+
+        // cleanup files
+        processor.cleanupFiles(csvFile, zipFile, tmpDir);
     }
 
     private static ObjectNode makeValidRequestNode() {

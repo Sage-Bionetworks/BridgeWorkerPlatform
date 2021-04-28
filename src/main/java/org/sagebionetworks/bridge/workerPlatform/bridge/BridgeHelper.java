@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import com.google.common.collect.ImmutableList;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
@@ -48,6 +47,7 @@ public class BridgeHelper {
     // match read capacity in ddb table
     static final int MAX_PAGE_SIZE = 10;
     private static final long THREAD_SLEEP_INTERVAL = 1000L;
+    private static final long THREAD_SLEEP_20_MILLIS = 20L;
     private static final int PARTICIPANT_PAGE_SIZE = 100;
 
     private ClientManager clientManager;
@@ -270,7 +270,7 @@ public class BridgeHelper {
 
     /** Get account summaries by caller's appId and org */
     public List<StudyParticipant> getStudyParticipantsForApp(String appId, String orgId, int offsetBy, int pageSize,
-                                                             String studyId) throws IOException {
+                                                             String studyId) throws IOException, InterruptedException {
         AccountSummarySearch search = new AccountSummarySearch().offsetBy(offsetBy);
 
         if (studyId != null) {
@@ -295,12 +295,13 @@ public class BridgeHelper {
                 .execute().body().getItems();
     }
 
-    private List<StudyParticipant> getStudyParticipantsFromAccountSummaries(List<AccountSummary> accountSummaries) throws IOException {
+    private List<StudyParticipant> getStudyParticipantsFromAccountSummaries(List<AccountSummary> accountSummaries) throws IOException, InterruptedException {
         List<StudyParticipant> participants = new ArrayList<>();
         for (AccountSummary accountSummary : accountSummaries) {
             StudyParticipant participant = clientManager.getClient(ForWorkersApi.class)
-                    .getParticipantByIdForApp(accountSummary.getAppId(), accountSummary.getId(), false).execute().body();
+                    .getParticipantByIdForApp(accountSummary.getAppId(), accountSummary.getId(), true).execute().body();
             participants.add(participant);
+            Thread.sleep(THREAD_SLEEP_20_MILLIS);
         }
 
         return participants;

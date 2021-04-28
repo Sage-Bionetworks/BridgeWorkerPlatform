@@ -632,12 +632,12 @@ public class BridgeHelperTest {
     }
 
     @Test
-    public void testGetStudyParticipantsForAppStudyId() throws IOException, IllegalAccessException {
+    public void testGetStudyParticipantsForAppStudyId() throws IOException, IllegalAccessException, InterruptedException {
         testGetStudyParticipantsForApp(STUDY_ID, null);
     }
 
     @Test
-    public void testGetStudyParticipantsForAppOrgId() throws IOException, IllegalAccessException {
+    public void testGetStudyParticipantsForAppOrgId() throws IOException, IllegalAccessException, InterruptedException {
         testGetStudyParticipantsForApp(null, ORG_ID);
     }
 
@@ -661,7 +661,7 @@ public class BridgeHelperTest {
         assertEquals(retStudiesForApp, ImmutableList.of(new Study()));
     }
 
-    private void testGetStudyParticipantsForApp(String studyId, String orgId) throws IllegalAccessException, IOException {
+    private void testGetStudyParticipantsForApp(String studyId, String orgId) throws IllegalAccessException, IOException, InterruptedException {
         // mock SDK search account summaries call
         AccountSummary accountSummary = new AccountSummary();
         setVariableValueInObject(accountSummary, "id", USER_ID);

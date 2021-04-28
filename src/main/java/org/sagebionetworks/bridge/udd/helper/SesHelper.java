@@ -80,6 +80,7 @@ public class SesHelper {
     private static final String CONTENT_SUBTYPE_ALTERNATIVE = "alternative";
     private static final String CONTENT_SUBTYPE_MIXED= "mixed";
     private static final String CONTENT_TYPE_TEXT_HTML = "text/html; charset=UTF-8";
+    private static final String CONTENT_TYPE_TEXT_PLAIN = "text/plain";
     private static final String CONTENT_TYPE_ZIP = "application/zip";
 
     private AmazonSimpleEmailServiceClient sesClient;
@@ -205,7 +206,7 @@ public class SesHelper {
         MimeBodyPart wrap = new MimeBodyPart();
 
         MimeBodyPart textPart = new MimeBodyPart();
-        textPart.setContent(ATTACHMENT_BODY_TEMPLATE_TEXT, CONTENT_TYPE_TEXT_HTML);
+        textPart.setContent(ATTACHMENT_BODY_TEMPLATE_TEXT, CONTENT_TYPE_TEXT_PLAIN);
 
         MimeBodyPart htmlPart = new MimeBodyPart();
         htmlPart.setContent(ATTACHMENT_BODY_TEMPLATE_HTML, CONTENT_TYPE_TEXT_HTML);

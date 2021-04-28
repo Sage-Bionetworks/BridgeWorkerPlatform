@@ -4,7 +4,6 @@ import au.com.bytecode.opencsv.CSVWriter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.sagebionetworks.bridge.file.FileHelper;
@@ -28,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -56,7 +54,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     private static final String ZIP_FILE_NAME = "user_data.zip";
     private int pageSize = 100;
     private static final Set<String> EXCLUDED_HEADERS = new HashSet<>(ImmutableList.of("synapseUserId", "orgMembership", "type"));
-    // TODO now that we're using StudyParticipant instead of AccountSummary, are there more headers that we want to exclude?
+
     private BridgeHelper bridgeHelper;
     private FileHelper fileHelper;
     private SesHelper sesHelper;
@@ -113,13 +111,13 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         File tmpDir = fileHelper.createTempDir();
         File csvFile = fileHelper.newFile(tmpDir, CSV_FILE_NAME);
         File zipFile = fileHelper.newFile(tmpDir, ZIP_FILE_NAME);
-        process(request, csvFile, zipFile);
+        process(request, csvFile, zipFile, tmpDir);
 
         LOG.info("request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
                 " seconds for userId =" + request.getUserId() + ", app=" + request.getAppId());
     }
 
-    void process(DownloadParticipantRosterRequest request, File csvFile, File zipFile) throws Exception {
+    void process(DownloadParticipantRosterRequest request, File csvFile, File zipFile, File tmpDir) throws Exception {
         String userId = request.getUserId();
         String appId = request.getAppId();
         String password = request.getPassword();
@@ -145,8 +143,15 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
             if (studyId != null && (participantRoles.contains(Role.STUDY_COORDINATOR) ||
                     (participantRoles.contains(Role.RESEARCHER) && orgMembership != null))) {
+                boolean sponsored = false;
                 List<Study> studies = bridgeHelper.getSponsoredStudiesForApp(appId, orgMembership, 0, pageSize);
-                if (!studies.contains(studyId)) {
+                for (Study study : studies) {
+                    if (study.getIdentifier() == studyId) {
+                        sponsored = true;
+                        break;
+                    }
+                }
+                if (!sponsored) {
                     LOG.info("User's org does not sponsor the given studyId.");
                     return;
                 }
@@ -163,7 +168,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
                     offsetBy, pageSize, studyId);
 
             try (CSVWriter csvFileWriter = new CSVWriter(fileHelper.getWriter(csvFile))) {
-                writeStudyParticipants(csvFileWriter, studyParticipants, offsetBy, appId, orgMembership, studyId);
+                writeStudyParticipants(csvFileWriter, studyParticipants, offsetBy, appId, orgMembership, studyId, 0);
             } catch (IOException ex) {
                 throw new WorkerException("Error creating file " + csvFile + ": " + ex.getMessage(), ex);
             }
@@ -183,13 +188,13 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
                 throw new RuntimeException(ex);
             }
         } finally {
-            //cleanupFiles(csvFile, zipFile, tmpDir);
+            cleanupFiles(csvFile, zipFile, tmpDir);
         }
     }
 
     /** Write all of the study participants to the CSV file */
     void writeStudyParticipants(CSVWriter csvFileWriter, List<StudyParticipant> studyParticipants, int offsetBy,
-                                String appId, String orgMembership, String studyId) throws IOException, InterruptedException {
+                                String appId, String orgMembership, String studyId, int numParticipants) throws IOException, InterruptedException {
         // write csv headers
         String[] csvHeaders = getCsvHeaders();
         csvFileWriter.writeNext(csvHeaders);
@@ -197,8 +202,13 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         // write the rest of the study participants
         while (!studyParticipants.isEmpty()) {
             for (StudyParticipant studyParticipant : studyParticipants) {
+                numParticipants++;
                 String[] row = getStudyParticipantArray(studyParticipant, csvHeaders);
                 csvFileWriter.writeNext(row);
+
+                if (numParticipants % REPORTING_INTERVAL == 0) {
+                    LOG.info("Participant roster in progress: " + numParticipants + " participants processed.");
+                }
             }
             // get next set of study participants
             offsetBy += pageSize;
@@ -234,19 +244,15 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
         for (int i = 0; i < csvHeaders.length; i++) {
             JsonElement jsonValue = json.get(csvHeaders[i]);
-            String value = "";
+            StringBuilder value = new StringBuilder();
             if (jsonValue != null) {
                 if (jsonValue.isJsonPrimitive()) {
-                    value = jsonValue.getAsString();
+                    value = new StringBuilder(jsonValue.getAsString());
                 } else if (jsonValue.isJsonObject()) {
-                    value = jsonValue.toString();
-                } else if (jsonValue.isJsonArray()) {
-                    for (JsonElement element : (JsonArray) jsonValue) {
-                        value += element.getAsString();
-                    }
+                    value = new StringBuilder(jsonValue.toString());
                 }
             }
-            list.add(value);
+            list.add(value.toString());
         }
         return list.toArray(new String[0]);
     }
