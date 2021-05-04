@@ -684,7 +684,7 @@ public class BridgeHelperTest {
         Call<StudyParticipant> mockStudyParticipantCall = mock(Call.class);
         when(mockStudyParticipantCall.execute()).thenReturn(studyParticipantResponse);
 
-        when(mockWorkerApi.getParticipantByIdForApp(APP_ID, USER_ID, false)).thenReturn(mockStudyParticipantCall);
+        when(mockWorkerApi.getParticipantByIdForApp(APP_ID, USER_ID, true)).thenReturn(mockStudyParticipantCall);
 
         // mock getting worker API client
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
