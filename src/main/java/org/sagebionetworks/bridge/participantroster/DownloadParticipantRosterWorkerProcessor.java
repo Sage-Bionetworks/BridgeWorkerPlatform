@@ -46,9 +46,6 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
     static final String WORKER_ID = "DownloadParticipantRosterWorker";
 
-    // If there are a lot of downloads, write log messages regularly so we know the worker is still running.
-    private static final int REPORTING_INTERVAL = 100;
-
     private static final long THREAD_SLEEP_INTERVAL = 1000L;
     private static final String CSV_FILE_NAME = "participant_roster.csv";
     private static final String ZIP_FILE_NAME = "user_data.zip";
@@ -168,7 +165,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
                     offsetBy, pageSize, studyId);
 
             try (CSVWriter csvFileWriter = new CSVWriter(fileHelper.getWriter(csvFile))) {
-                writeStudyParticipants(csvFileWriter, studyParticipants, offsetBy, appId, orgMembership, studyId, 0);
+                writeStudyParticipants(csvFileWriter, studyParticipants, offsetBy, appId, orgMembership, studyId);
             } catch (IOException ex) {
                 throw new WorkerException("Error creating file " + csvFile + ": " + ex.getMessage(), ex);
             }
@@ -194,7 +191,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
     /** Write all of the study participants to the CSV file */
     void writeStudyParticipants(CSVWriter csvFileWriter, List<StudyParticipant> studyParticipants, int offsetBy,
-                                String appId, String orgMembership, String studyId, int numParticipants) throws IOException, InterruptedException {
+                                String appId, String orgMembership, String studyId) throws IOException, InterruptedException {
         // write csv headers
         String[] csvHeaders = getCsvHeaders();
         csvFileWriter.writeNext(csvHeaders);
@@ -202,14 +199,11 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         // write the rest of the study participants
         while (!studyParticipants.isEmpty()) {
             for (StudyParticipant studyParticipant : studyParticipants) {
-                numParticipants++;
                 String[] row = getStudyParticipantArray(studyParticipant, csvHeaders);
                 csvFileWriter.writeNext(row);
-
-                if (numParticipants % REPORTING_INTERVAL == 0) {
-                    LOG.info("Participant roster in progress: " + numParticipants + " participants processed.");
-                }
             }
+            LOG.info("Processing participant roster");
+
             // get next set of study participants
             offsetBy += pageSize;
             studyParticipants = bridgeHelper.getStudyParticipantsForApp(appId, orgMembership, offsetBy, pageSize, studyId);
@@ -244,15 +238,15 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
 
         for (int i = 0; i < csvHeaders.length; i++) {
             JsonElement jsonValue = json.get(csvHeaders[i]);
-            StringBuilder value = new StringBuilder();
+            String value = "";
             if (jsonValue != null) {
                 if (jsonValue.isJsonPrimitive()) {
-                    value = new StringBuilder(jsonValue.getAsString());
+                    value = jsonValue.getAsString();
                 } else if (jsonValue.isJsonObject()) {
-                    value = new StringBuilder(jsonValue.toString());
+                    value = jsonValue.toString();
                 }
             }
-            list.add(value.toString());
+            list.add(value);
         }
         return list.toArray(new String[0]);
     }

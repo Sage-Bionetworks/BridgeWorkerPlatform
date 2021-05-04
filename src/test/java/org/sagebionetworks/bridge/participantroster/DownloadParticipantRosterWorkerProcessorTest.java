@@ -5,13 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.rest.model.Role;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
-import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
@@ -22,7 +19,6 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -31,10 +27,8 @@ import java.util.Map;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyList;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -235,7 +229,8 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         assertEquals(EXPECTED_CSV_CONTENT, csvContent);
 
         // verify that the csv is written to the file
-        verify(processor).writeStudyParticipants(any(CSVWriter.class), anyList(), eq(0), eq(APP_ID), eq(ORG_ID), eq(null), anyInt());
+        verify(processor).writeStudyParticipants(any(CSVWriter.class), eq(ImmutableList.of(participant1)), eq(0),
+                eq(APP_ID), eq(ORG_ID), eq(null));
 
         // verify that the file is zipped
         verify(mockZipHelper).zipWithPassword(ImmutableList.of(csvFile), zipFile, PASSWORD);
@@ -318,7 +313,7 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         assertEquals(EXPECTED_CSV_CONTENT, csvContent);
 
         // verify that the csv is written to the file
-        verify(processor).writeStudyParticipants(any(CSVWriter.class), eq(studyParticipants), eq(0), eq(APP_ID), eq(ORG_ID), eq(studyId), anyInt());
+        verify(processor).writeStudyParticipants(any(CSVWriter.class), eq(studyParticipants), eq(0), eq(APP_ID), eq(ORG_ID), eq(studyId));
 
         // verify that the file is zipped
         verify(mockZipHelper).zipWithPassword(ImmutableList.of(csvFile), zipFile, PASSWORD);
