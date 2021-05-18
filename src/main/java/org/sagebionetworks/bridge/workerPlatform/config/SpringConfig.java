@@ -29,6 +29,7 @@ import com.amazonaws.services.simpleemail.AmazonSimpleEmailServiceClient;
 import com.amazonaws.services.sns.AmazonSNSClient;
 import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.sagebionetworks.bridge.participantroster.DownloadParticipantRosterWorkerProcessor;
 import org.sagebionetworks.client.SynapseAdminClientImpl;
 import org.sagebionetworks.client.SynapseClient;
 import org.slf4j.Logger;
@@ -66,6 +67,7 @@ import org.sagebionetworks.bridge.workerPlatform.util.Constants;
         "org.sagebionetworks.bridge.udd",
         "org.sagebionetworks.bridge.uploadredrive",
         "org.sagebionetworks.bridge.workerPlatform",
+        "org.sagebionetworks.bridge.participantRoster"
 })
 @Import({
         org.sagebionetworks.bridge.fitbit.config.SpringConfig.class,

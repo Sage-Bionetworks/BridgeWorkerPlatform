@@ -15,6 +15,7 @@ import static org.testng.Assert.assertSame;
 import static org.testng.Assert.fail;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -30,6 +31,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
+import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.rest.model.StudyList;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -96,6 +100,9 @@ public class BridgeHelperTest {
     private static final String USER_ID_2 = "user2";
     private static final String USER_ID_3 = "user3";
     private static final String USER_ID_4 = "user4";
+    private static final String ORG_ID = "test-orgId";
+    private static final int PAGE_SIZE = 100;
+    private static final String STUDY_ID = "test-studyId";
 
     private static final String UPLOAD_JSON = Tests.unescapeJson("{'contentLength':10000,"+
             "'status':'succeeded','requestedOn':'2016-07-26T22:43:10.392Z',"+
@@ -624,6 +631,78 @@ public class BridgeHelperTest {
         verify(mockWorkerApi, times(3)).getUploadById(UPLOAD_ID);
     }
 
+    @Test
+    public void testGetStudyParticipantsForAppStudyId() throws IOException, IllegalAccessException, InterruptedException {
+        testGetStudyParticipantsForApp(STUDY_ID, null);
+    }
+
+    @Test
+    public void testGetStudyParticipantsForAppOrgId() throws IOException, IllegalAccessException, InterruptedException {
+        testGetStudyParticipantsForApp(null, ORG_ID);
+    }
+
+    @Test
+    public void testGetStudiesForApp() throws IOException {
+        // mock SDK get sponsored studies for app call
+        StudyList studyList = mock(StudyList.class);
+        when(studyList.getItems()).thenReturn(ImmutableList.of(new Study()));
+        Response<StudyList> response = Response.success(studyList);
+
+        Call<StudyList> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenReturn(response);
+
+        when(mockWorkerApi.getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, BridgeHelper.MAX_PAGE_SIZE))
+                .thenReturn(mockCall);
+
+        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
+
+        List<Study> retStudiesForApp = bridgeHelper.getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, BridgeHelper.MAX_PAGE_SIZE);
+
+        assertEquals(retStudiesForApp, ImmutableList.of(new Study()));
+    }
+
+    private void testGetStudyParticipantsForApp(String studyId, String orgId) throws IllegalAccessException, IOException, InterruptedException {
+        // mock SDK search account summaries call
+        AccountSummary accountSummary = new AccountSummary();
+        setVariableValueInObject(accountSummary, "id", USER_ID);
+        setVariableValueInObject(accountSummary, "appId", APP_ID);
+
+        AccountSummaryList accountSummaryList = mock(AccountSummaryList.class);
+        when(accountSummaryList.getItems()).thenReturn(ImmutableList.of(accountSummary));
+        Response<AccountSummaryList> accountSummaryListResponse = Response.success(accountSummaryList);
+
+        Call<AccountSummaryList> mockAccountSummaryListCall = mock(Call.class);
+        when(mockAccountSummaryListCall.execute()).thenReturn(accountSummaryListResponse);
+
+        ArgumentCaptor<AccountSummarySearch> accountSummarySearchCaptor = ArgumentCaptor.forClass(AccountSummarySearch.class);
+        when(mockWorkerApi.searchAccountSummariesForApp(eq(APP_ID), accountSummarySearchCaptor.capture())).thenReturn(mockAccountSummaryListCall);
+
+        // mock SDK get participant by id for app call
+        StudyParticipant studyParticipant = mock(StudyParticipant.class);
+        Response<StudyParticipant> studyParticipantResponse = Response.success(studyParticipant);
+
+        Call<StudyParticipant> mockStudyParticipantCall = mock(Call.class);
+        when(mockStudyParticipantCall.execute()).thenReturn(studyParticipantResponse);
+
+        when(mockWorkerApi.getParticipantByIdForApp(APP_ID, USER_ID, true)).thenReturn(mockStudyParticipantCall);
+
+        // mock getting worker API client
+        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
+
+        // execute getStudyParticipantForApp
+        List<StudyParticipant> retSummariesForApp = bridgeHelper.getStudyParticipantsForApp(APP_ID, ORG_ID, 0,
+                PAGE_SIZE, studyId);
+
+        // verify params and outputs
+        assertEquals(retSummariesForApp, ImmutableList.of(studyParticipant));
+
+        AccountSummarySearch search = accountSummarySearchCaptor.getValue();
+        assertEquals(0, search.getOffsetBy().intValue());
+        assertEquals(orgId, search.getOrgMembership());
+        assertEquals(studyId, search.getEnrolledInStudyId());
+        assertEquals(PAGE_SIZE, search.getPageSize().intValue());
+    }
+
     private void mockUploadComplete(UploadValidationStatus status) throws Exception {
         Response<UploadValidationStatus> response = Response.success(status);
 
@@ -736,5 +815,25 @@ public class BridgeHelperTest {
         when(mockCall.execute()).thenReturn(response);
 
         return mockCall;
+    }
+
+    private static void setVariableValueInObject(Object object, String variable, Object value) throws IllegalAccessException {
+        Field field = getFieldByNameIncludingSuperclasses(variable, object.getClass());
+        field.setAccessible(true);
+        field.set(object, value);
+    }
+
+    @SuppressWarnings("rawtypes")
+    private static Field getFieldByNameIncludingSuperclasses(String fieldName, Class clazz) {
+        Field retValue = null;
+        try {
+            retValue = clazz.getDeclaredField(fieldName);
+        } catch (NoSuchFieldException e) {
+            Class superclass = clazz.getSuperclass();
+            if (superclass != null) {
+                retValue = getFieldByNameIncludingSuperclasses( fieldName, superclass );
+            }
+        }
+        return retValue;
     }
 }

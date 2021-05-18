@@ -7,6 +7,8 @@ import java.util.List;
 
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
+import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
+import org.sagebionetworks.bridge.rest.model.Study;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +47,7 @@ public class BridgeHelper {
     // match read capacity in ddb table
     static final int MAX_PAGE_SIZE = 10;
     private static final long THREAD_SLEEP_INTERVAL = 1000L;
+    private static final long THREAD_SLEEP_20_MILLIS = 20L;
     private static final int PARTICIPANT_PAGE_SIZE = 100;
 
     private ClientManager clientManager;
@@ -263,6 +266,45 @@ public class BridgeHelper {
     /** Gets an upload by record ID. */
     public Upload getUploadByRecordId(String recordId) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getUploadByRecordId(recordId).execute().body();
+    }
+
+    /** Get account summaries by caller's appId and org */
+    public List<StudyParticipant> getStudyParticipantsForApp(String appId, String orgId, int offsetBy, int pageSize,
+                                                             String studyId) throws IOException, InterruptedException {
+        AccountSummarySearch search = new AccountSummarySearch().offsetBy(offsetBy);
+
+        if (studyId != null) {
+            search.enrolledInStudyId(studyId);
+        } else if (orgId != null) {
+            search.orgMembership(orgId);
+        }
+
+        if (pageSize > 0) {
+            search.pageSize(pageSize);
+        }
+
+        List<AccountSummary> accountSummaries = clientManager.getClient(ForWorkersApi.class)
+                .searchAccountSummariesForApp(appId, search).execute().body().getItems();
+
+        return getStudyParticipantsFromAccountSummaries(accountSummaries);
+    }
+
+    /** Get studies by caller's appId and org */
+    public List<Study> getSponsoredStudiesForApp(String appId, String orgId, int offsetBy, int pageSize) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getSponsoredStudiesForApp(appId, orgId, offsetBy, pageSize)
+                .execute().body().getItems();
+    }
+
+    private List<StudyParticipant> getStudyParticipantsFromAccountSummaries(List<AccountSummary> accountSummaries) throws IOException, InterruptedException {
+        List<StudyParticipant> participants = new ArrayList<>();
+        for (AccountSummary accountSummary : accountSummaries) {
+            StudyParticipant participant = clientManager.getClient(ForWorkersApi.class)
+                    .getParticipantByIdForApp(accountSummary.getAppId(), accountSummary.getId(), true).execute().body();
+            participants.add(participant);
+            Thread.sleep(THREAD_SLEEP_20_MILLIS);
+        }
+
+        return participants;
     }
 
     private void doSleep() {

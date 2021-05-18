@@ -4,12 +4,17 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import com.google.common.base.Charsets;
 import com.google.common.io.ByteStreams;
+import net.lingala.zip4j.model.ZipParameters;
+import net.lingala.zip4j.model.enums.AesKeyStrength;
+import net.lingala.zip4j.model.enums.CompressionMethod;
+import net.lingala.zip4j.model.enums.EncryptionMethod;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +24,8 @@ import org.sagebionetworks.bridge.file.FileHelper;
 @Component
 public class ZipHelper {
     private FileHelper fileHelper;
+
+    public static int BUFFER_SIZE = 4096;
 
     /** File helper, used to read data from the input files and write to the output file. */
     @Autowired
@@ -50,5 +57,43 @@ public class ZipHelper {
                 zipOutputStream.closeEntry();
             }
         }
+    }
+
+    /**
+     * Zips and encrypts the list of input files and writes the result to the output file.
+     * @param filesToAdd
+     *          list of input files
+     * @param outputZipFile
+     *          output file to write the zip file to
+     * @param password
+     *          given password to secure the file with
+     * @throws IOException
+     *          if reading from input or writing to output fails
+     */
+    public void zipWithPassword(List<File> filesToAdd, File outputZipFile, String password) throws IOException {
+        ZipParameters zipParameters = buildZipParameters();
+
+        try (OutputStream bufferedOutputStream = new BufferedOutputStream(fileHelper.getOutputStream(outputZipFile));
+             net.lingala.zip4j.io.outputstream.ZipOutputStream zipOutputStream =
+                new net.lingala.zip4j.io.outputstream.ZipOutputStream(bufferedOutputStream, password.toCharArray())) {
+            for (File file : filesToAdd) {
+                zipParameters.setFileNameInZip(file.getName());
+                zipOutputStream.putNextEntry(zipParameters);
+
+                try (InputStream inputStream = fileHelper.getInputStream(file)) {
+                    ByteStreams.copy(inputStream, zipOutputStream);
+                }
+                zipOutputStream.closeEntry();
+            }
+        }
+    }
+
+    private ZipParameters buildZipParameters() {
+        ZipParameters zipParams = new ZipParameters();
+        zipParams.setCompressionMethod(CompressionMethod.DEFLATE);
+        zipParams.setEncryptionMethod(EncryptionMethod.AES);
+        zipParams.setAesKeyStrength(AesKeyStrength.KEY_STRENGTH_256);
+        zipParams.setEncryptFiles(true);
+        return zipParams;
     }
 }
