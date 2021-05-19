@@ -50,7 +50,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     private static final String CSV_FILE_NAME = "participant_roster.csv";
     private static final String ZIP_FILE_NAME = "user_data.zip";
     private int pageSize = 100;
-    private static final Set<String> EXCLUDED_HEADERS = new HashSet<>(ImmutableList.of("synapseUserId", "orgMembership", "type"));
+    private static final Set<String> EXCLUDED_HEADERS = new HashSet<>(ImmutableList.of("synapseUserId", "orgMembership", "type", "$jacocoData"));
 
     private BridgeHelper bridgeHelper;
     private FileHelper fileHelper;
@@ -143,7 +143,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
                 boolean sponsored = false;
                 List<Study> studies = bridgeHelper.getSponsoredStudiesForApp(appId, orgMembership, 0, pageSize);
                 for (Study study : studies) {
-                    if (study.getIdentifier() == studyId) {
+                    if (study.getIdentifier().equals(studyId)) {
                         sponsored = true;
                         break;
                     }
