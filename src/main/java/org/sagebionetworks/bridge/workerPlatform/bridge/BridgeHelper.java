@@ -8,6 +8,7 @@ import java.util.List;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
+import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,6 +112,16 @@ public class BridgeHelper {
     /** Gets an iterator for all FitBit users in the given app. */
     public Iterator<FitBitUser> getFitBitUsersForApp(String appId) {
         return new FitBitUserIterator(clientManager, appId);
+    }
+
+    //todo doc
+    public void createOrUpdateHealthDataRecordForExporter3(HealthDataRecordEx3 record) throws IOException {
+        clientManager.getClient(ForWorkersApi.class).createOrUpdateRecordEx3ForWorker(record).execute();
+    }
+
+    //todo doc
+    public HealthDataRecordEx3 getHealthDataRecordForExporter3(String recordId) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getRecordEx3ForWorker(recordId).execute().body();
     }
 
     /** Gets a participant for the given user in the given app. */

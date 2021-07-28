@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import javax.annotation.PostConstruct;
+import javax.annotation.Resource;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
@@ -29,7 +30,9 @@ import com.amazonaws.services.simpleemail.AmazonSimpleEmailServiceClient;
 import com.amazonaws.services.sns.AmazonSNSClient;
 import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.fasterxml.jackson.databind.JsonNode;
-import org.sagebionetworks.bridge.participantroster.DownloadParticipantRosterWorkerProcessor;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.LoadingCache;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.sagebionetworks.client.SynapseAdminClientImpl;
 import org.sagebionetworks.client.SynapseClient;
 import org.slf4j.Logger;
@@ -42,6 +45,8 @@ import org.springframework.context.annotation.Import;
 
 import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.config.PropertiesConfig;
+import org.sagebionetworks.bridge.crypto.CmsEncryptor;
+import org.sagebionetworks.bridge.crypto.CmsEncryptorCacheLoader;
 import org.sagebionetworks.bridge.dynamodb.DynamoNamingHelper;
 import org.sagebionetworks.bridge.dynamodb.DynamoQueryHelper;
 import org.sagebionetworks.bridge.file.FileHelper;
@@ -110,6 +115,18 @@ public class SpringConfig {
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
+    }
+
+    @Bean(name = "cmsEncryptorCache")
+    public LoadingCache<String, CmsEncryptor> cmsEncryptorCache() {
+        Config bridgeConfig = bridgeConfig();
+
+        CmsEncryptorCacheLoader cacheLoader = new CmsEncryptorCacheLoader();
+        cacheLoader.setCertBucket(bridgeConfig.get("upload.cms.cert.bucket"));
+        cacheLoader.setPrivateKeyBucket(bridgeConfig.get("upload.cms.priv.bucket"));
+        cacheLoader.setS3Helper(s3Helper());
+
+        return CacheBuilder.newBuilder().build(cacheLoader);
     }
 
     @Bean
@@ -192,6 +209,11 @@ public class SpringConfig {
         return heartbeatLogger;
     }
 
+    @Bean(name = "md5DigestUtils")
+    public DigestUtils md5DigestUtils() {
+        return new DigestUtils(DigestUtils.getMd5Digest());
+    }
+
     @Bean
     public S3Helper s3Helper() {
         S3Helper s3Helper = new S3Helper();
@@ -223,6 +245,7 @@ public class SpringConfig {
 
         PollSqsWorker sqsWorker = new PollSqsWorker();
         sqsWorker.setCallback(callback);
+        sqsWorker.setExecutorService(generalExecutorService());
         sqsWorker.setQueueUrl(config.get("workerPlatform.request.sqs.queue.url"));
         sqsWorker.setSleepTimeMillis(config.getInt("workerPlatform.request.sqs.sleep.time.millis"));
         sqsWorker.setSqsHelper(sqsHelper());

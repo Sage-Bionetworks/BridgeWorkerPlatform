@@ -1,7 +1,10 @@
 package org.sagebionetworks.bridge.workerPlatform.util;
 
+import org.joda.time.DateTimeZone;
+
 /** Constants used by the Worker */
 public class Constants {
+    public static final DateTimeZone LOCAL_TIME_ZONE = DateTimeZone.forID("America/Los_Angeles");
     public static final String SERVICE_TYPE_REPORTER = "REPORTER";
     public static final String SERVICE_TYPE_UDD = "UDD";
 

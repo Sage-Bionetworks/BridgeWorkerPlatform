@@ -86,6 +86,11 @@
             <version>0.22.1</version>
         </dependency>
         <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>1.15</version>
+        </dependency>
+        <dependency>
             <groupId>joda-time</groupId>
             <artifactId>joda-time</artifactId>
             <version>2.9.4</version>
@@ -98,7 +103,7 @@
         <dependency>
             <groupId>org.sagebionetworks</groupId>
             <artifactId>bridge-base</artifactId>
-            <version>2.7.26</version>
+            <version>2.7.30</version>
         </dependency>
         <dependency>
             <groupId>org.sagebionetworks</groupId>
@@ -108,7 +113,7 @@
         <dependency>
             <groupId>org.sagebionetworks.bridge</groupId>
             <artifactId>rest-client</artifactId>
-            <version>0.22.1</version>
+            <version>0.22.18</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
