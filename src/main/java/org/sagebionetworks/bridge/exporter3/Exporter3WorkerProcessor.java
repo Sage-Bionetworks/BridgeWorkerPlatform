@@ -16,9 +16,11 @@ import java.util.concurrent.TimeUnit;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
+import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.bouncycastle.cms.CMSException;
@@ -50,7 +52,6 @@ import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
-//todo doc
 /** Worker for Exporter 3.0. */
 @Component("Exporter3Worker")
 public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
@@ -136,6 +137,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     @Override
     public void accept(JsonNode jsonNode) throws IOException, PollSqsWorkerBadRequestException, SynapseException,
             WorkerException{
+        // Parse request.
         Exporter3Request request;
         try {
             request = DefaultObjectMapper.INSTANCE.treeToValue(jsonNode, Exporter3Request.class);
@@ -143,6 +145,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             throw new PollSqsWorkerBadRequestException("Error parsing request: " + e.getMessage(), e);
         }
 
+        // Process request.
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         try {
             process(request);
@@ -152,26 +155,40 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         }
     }
 
-    private void process(Exporter3Request request) throws IOException, PollSqsWorkerBadRequestException,
+    // Package-scoped for unit tests.
+    void process(Exporter3Request request) throws IOException, PollSqsWorkerBadRequestException,
             SynapseException, WorkerException {
-        //todo check that Synapse is not in read-only
+        // Check to see that Synapse is up and availabe for read/write. If it isn't, throw an exception, so the
+        // PollSqsWorker can re-cycle the request until Synapse is available again.
+        boolean isSynapseWritable;
+        try {
+            isSynapseWritable = synapseHelper.isSynapseWritable();
+        } catch (SynapseException ex) {
+            throw new WorkerException("Error calling Synapse: " + ex.getMessage(), ex);
+        }
+        if (!isSynapseWritable) {
+            throw new WorkerException("Synapse not in writable state");
+        }
 
         String appId = request.getAppId();
         String recordId = request.getRecordId();
+
         // Check that app is configured for export.
         App app = bridgeHelper.getApp(appId);
         Exporter3Configuration exporter3Config = app.getExporter3Configuration();
-        if (exporter3Config == null || !exporter3Config.isConfigured()) {
+        if (app.isExporter3Enabled() == null || !app.isExporter3Enabled() || exporter3Config == null
+                || !exporter3Config.isConfigured()) {
             // Exporter not enabled. Skip.
             return;
         }
 
         // Set the exportedOn time on the record. This will be propagated to both S3 and Synapse.
-        HealthDataRecordEx3 record = bridgeHelper.getHealthDataRecordForExporter3(recordId);
+        HealthDataRecordEx3 record = bridgeHelper.getHealthDataRecordForExporter3(appId, recordId);
         record.setExportedOn(DateUtils.getCurrentDateTime());
 
         // Copy the file to the raw health data bucket. This includes folderization.
-        Upload upload = bridgeHelper.getUploadByRecordId(recordId);
+        // Note that in Exporter 3.0, upload ID is the same as record ID.
+        Upload upload = bridgeHelper.getUploadByUploadId(recordId);
         ExportContext exportContext;
         if (upload.isEncrypted()) {
             exportContext = decryptAndUploadFile(appId, upload, record);
@@ -184,7 +201,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
         // Mark record as exported.
         record.setExported(true);
-        bridgeHelper.createOrUpdateHealthDataRecordForExporter3(record);
+        bridgeHelper.createOrUpdateHealthDataRecordForExporter3(appId, record);
     }
 
     private ExportContext decryptAndUploadFile(String appId, Upload upload, HealthDataRecordEx3 record)
@@ -203,11 +220,12 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             CmsEncryptor encryptor;
             try {
                 encryptor = cmsEncryptorCache.get(appId);
-            } catch (ExecutionException ex) {
+            } catch (CacheLoader.InvalidCacheLoadException ex) {
+                // Note that the cache loader can never return null. If the value would be null, instead an
+                // InvalidCacheLoadException is thrown. This is verified in unit tests.
+                throw new PollSqsWorkerBadRequestException("No encryptor for app " + appId, ex);
+            } catch (UncheckedExecutionException | ExecutionException ex) {
                 throw new WorkerException(ex);
-            }
-            if (encryptor == null) {
-                throw new PollSqsWorkerBadRequestException("No encryptor for app " + appId);
             }
 
             File decryptedFile = fileHelper.newFile(tempDir, uploadId + "-decrypted");
@@ -306,6 +324,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             ExportContext exportContext)
             throws SynapseException {
         // Exports are folderized by calendar date (YYYY-MM-DD). Create that folder if it doesn't already exist.
+        // Folder limits are documented in https://sagebionetworks.jira.com/browse/PLFM-6365
         String dateStr = getCalendarDateForUpload(upload);
         String folderId = synapseHelper.createFolderIfNotExists(exporter3Config.getRawDataFolderId(), dateStr);
 
@@ -335,6 +354,9 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         String fileEntityId = fileEntity.getId();
 
         // Add annotations.
+        // All annotations that Bridge writes will be written as strings. If researchers want to query things as ints,
+        // there are ways to do this in SQL, even with Synapse's limited SQL. This way, we can avoid storing type
+        // information in Bridge and doing parsing and validation, which is one of the problems we had in Exporter 2.0.
         Map<String, AnnotationsValue> annotationMap = new HashMap<>();
         for (Map.Entry<String, String> metadataEntry : exportContext.getMetadataMap().entrySet()) {
             AnnotationsValue value = new AnnotationsValue();

@@ -10,7 +10,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import javax.annotation.PostConstruct;
-import javax.annotation.Resource;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
@@ -69,6 +68,7 @@ import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 // See http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/credentials.html and
 // http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/java-dg-setup.html#set-up-creds for more info.
 @ComponentScan({
+        "org.sagebionetworks.bridge.exporter3",
         "org.sagebionetworks.bridge.udd",
         "org.sagebionetworks.bridge.uploadredrive",
         "org.sagebionetworks.bridge.workerPlatform",

@@ -114,14 +114,15 @@ public class BridgeHelper {
         return new FitBitUserIterator(clientManager, appId);
     }
 
-    //todo doc
-    public void createOrUpdateHealthDataRecordForExporter3(HealthDataRecordEx3 record) throws IOException {
-        clientManager.getClient(ForWorkersApi.class).createOrUpdateRecordEx3ForWorker(record).execute();
+    /** Create or update health data record for Exporter 3.0. Returns the created or updated record. */
+    public HealthDataRecordEx3 createOrUpdateHealthDataRecordForExporter3(String appId, HealthDataRecordEx3 record)
+            throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).createOrUpdateRecordEx3(appId, record).execute().body();
     }
 
-    //todo doc
-    public HealthDataRecordEx3 getHealthDataRecordForExporter3(String recordId) throws IOException {
-        return clientManager.getClient(ForWorkersApi.class).getRecordEx3ForWorker(recordId).execute().body();
+    /** Retrieves the record for the given ID for Exporter 3.0. */
+    public HealthDataRecordEx3 getHealthDataRecordForExporter3(String appId, String recordId) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getRecordEx3(appId, recordId).execute().body();
     }
 
     /** Gets a participant for the given user in the given app. */
@@ -272,6 +273,11 @@ public class BridgeHelper {
 
         // If we exit the loop, that means we timed out.
         throw new AsyncTimeoutException("Timed out waiting for upload " + uploadId + " to complete");
+    }
+
+    /** Gets an upload by upload ID. */
+    public Upload getUploadByUploadId(String uploadId) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getUploadById(uploadId).execute().body();
     }
 
     /** Gets an upload by record ID. */

@@ -3,6 +3,7 @@ package org.sagebionetworks.bridge.workerPlatform.bridge;
 import static com.google.common.collect.Lists.newArrayList;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -32,6 +33,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
+import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyList;
 import org.testng.annotations.BeforeClass;
@@ -283,6 +285,37 @@ public class BridgeHelperTest {
         // Verify basics, like return value is not null, and we called the API with the right app ID.
         assertNotNull(fitBitUserIter);
         verify(mockApi).getHealthCodesGrantingOAuthAccess(eq(APP_ID), any(), any(), any());
+    }
+
+    @Test
+    public void createOrUpdateHealthDataRecordForExporter3() throws Exception {
+        // Set up mocks.
+        HealthDataRecordEx3 createdRecord = new HealthDataRecordEx3();
+        Call<HealthDataRecordEx3> mockCall = mockCallForValue(createdRecord);
+        when(mockWorkerApi.createOrUpdateRecordEx3(any(), any())).thenReturn(mockCall);
+
+        // Execute.
+        HealthDataRecordEx3 recordToCreate = new HealthDataRecordEx3();
+        HealthDataRecordEx3 retval = bridgeHelper.createOrUpdateHealthDataRecordForExporter3(APP_ID, recordToCreate);
+        assertSame(retval, createdRecord);
+
+        // Verify.
+        verify(mockWorkerApi).createOrUpdateRecordEx3(eq(APP_ID), same(recordToCreate));
+    }
+
+    @Test
+    public void getHealthDataRecordForExporter3() throws Exception {
+        // Set up mocks.
+        HealthDataRecordEx3 record = new HealthDataRecordEx3();
+        Call<HealthDataRecordEx3> mockCall = mockCallForValue(record);
+        when(mockWorkerApi.getRecordEx3(any(), any())).thenReturn(mockCall);
+
+        // Execute.
+        HealthDataRecordEx3 retval = bridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID);
+        assertSame(retval, record);
+
+        // Verify.
+        verify(mockWorkerApi).getRecordEx3(APP_ID, RECORD_ID);
     }
 
     @Test
@@ -745,6 +778,21 @@ public class BridgeHelperTest {
         assertEquals(UPLOAD_ID, status.getUploadId());
         assertEquals(DUMMY_MESSAGE_LIST, status.getMessageList());
         assertEquals(UploadStatus.SUCCEEDED, status.getStatus());
+    }
+
+    @Test
+    public void getUploadByUploadId() throws Exception {
+        // Mock API.
+        Upload upload = new Upload();
+        Call<Upload> mockCall = mockCallForValue(upload);
+        when(mockWorkerApi.getUploadById(any())).thenReturn(mockCall);
+
+        // Execute.
+        Upload retval = bridgeHelper.getUploadByUploadId(UPLOAD_ID);
+        assertSame(retval, upload);
+
+        // Verify.
+        verify(mockWorkerApi).getUploadById(UPLOAD_ID);
     }
 
     @Test

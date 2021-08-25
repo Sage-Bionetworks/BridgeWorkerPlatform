@@ -1,11 +1,11 @@
 package org.sagebionetworks.bridge.exporter3;
 
-//todo
 /** Represents a request to Exporter 3.0. */
 public class Exporter3Request {
     private String appId;
     private String recordId;
 
+    /** App ID of the record to be exported. */
     public String getAppId() {
         return appId;
     }
@@ -14,6 +14,7 @@ public class Exporter3Request {
         this.appId = appId;
     }
 
+    /** Record ID of the record to be exported. */
     public String getRecordId() {
         return recordId;
     }
