@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -88,7 +89,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     static final String METADATA_KEY_HEALTH_CODE = "healthCode";
     static final String METADATA_KEY_RECORD_ID = "recordId";
     static final String METADATA_KEY_UPLOADED_ON = "uploadedOn";
-
+    private static final Pattern METADATA_NAME_REPLACEMENT_PATTERN = Pattern.compile("[^\\w\\.]");
     private BridgeHelper bridgeHelper;
     private LoadingCache<String, CmsEncryptor> cmsEncryptorCache;
     private FileHelper fileHelper;
@@ -197,7 +198,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         }
 
         // Upload to Synapse.
-        exportToSynapse(appId, exporter3Config, upload, exportContext);
+        exportToSynapse(appId, exporter3Config, upload, record, exportContext);
 
         // Mark record as exported.
         record.setExported(true);
@@ -241,7 +242,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             // Step 3: Upload it to the raw uploads bucket.
             Map<String, String> metadataMap = makeMetadataFromRecord(record);
             ObjectMetadata s3Metadata = makeS3Metadata(upload, metadataMap);
-            String s3Key = getRawS3KeyForUpload(appId, upload);
+            String s3Key = getRawS3KeyForUpload(appId, upload, record);
             s3Helper.writeFileToS3(rawHealthDataBucket, s3Key, decryptedFile, s3Metadata);
 
             // Step 4: While we have the file on disk, calculate the MD5 (hex-encoded). We'll need this for Synapse.
@@ -269,7 +270,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         // Copy the file to the health data bucket.
         Map<String, String> metadataMap = makeMetadataFromRecord(record);
         ObjectMetadata s3Metadata = makeS3Metadata(upload, metadataMap);
-        String s3Key = getRawS3KeyForUpload(appId, upload);
+        String s3Key = getRawS3KeyForUpload(appId, upload, record);
         s3Helper.copyS3File(uploadBucket, uploadId, rawHealthDataBucket, s3Key, s3Metadata);
 
         // The upload object has the MD5 in Base64 encoding. We need it in hex encoding.
@@ -296,13 +297,19 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         Map<String, String> recordMetadataMap = record.getMetadata();
         if (recordMetadataMap != null) {
             for (Map.Entry<String, String> metadataEntry : record.getMetadata().entrySet()) {
-                metadataMap.put(metadataEntry.getKey(), metadataEntry.getValue());
+                String metadataName = sanitizeMetadataName(metadataEntry.getKey());
+                metadataMap.put(metadataName, metadataEntry.getValue());
             }
         }
 
         // In the future, assessment stuff, study-specific stuff, and participant version would go here.
 
         return metadataMap;
+    }
+
+    private String sanitizeMetadataName(String name) {
+        // Replace invalid chars with _
+        return METADATA_NAME_REPLACEMENT_PATTERN.matcher(name).replaceAll("_");
     }
 
     private ObjectMetadata makeS3Metadata(Upload upload, Map<String, String> metadataMap) {
@@ -321,15 +328,15 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     }
 
     private void exportToSynapse(String appId, Exporter3Configuration exporter3Config, Upload upload,
-            ExportContext exportContext)
+            HealthDataRecordEx3 record, ExportContext exportContext)
             throws SynapseException {
         // Exports are folderized by calendar date (YYYY-MM-DD). Create that folder if it doesn't already exist.
         // Folder limits are documented in https://sagebionetworks.jira.com/browse/PLFM-6365
-        String dateStr = getCalendarDateForUpload(upload);
+        String dateStr = getCalendarDateForRecord(record);
         String folderId = synapseHelper.createFolderIfNotExists(exporter3Config.getRawDataFolderId(), dateStr);
 
         String filename = getFilenameForUpload(upload);
-        String s3Key = getRawS3KeyForUpload(appId, upload);
+        String s3Key = getRawS3KeyForUpload(appId, upload, record);
 
         // Create Synapse S3 file handle.
         S3FileHandle fileHandle = new S3FileHandle();
@@ -367,9 +374,9 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         synapseHelper.addAnnotationsToEntity(fileEntityId, annotationMap);
     }
 
-    private String getRawS3KeyForUpload(String appId, Upload upload) {
+    private String getRawS3KeyForUpload(String appId, Upload upload, HealthDataRecordEx3 record) {
         String filename = getFilenameForUpload(upload);
-        String dateStr = getCalendarDateForUpload(upload);
+        String dateStr = getCalendarDateForRecord(record);
         return appId + '/' + dateStr + '/' + filename;
     }
 
@@ -377,8 +384,8 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         return upload.getUploadId() + '-' + upload.getFilename();
     }
 
-    private String getCalendarDateForUpload(Upload upload) {
-        LocalDate localDate = upload.getCompletedOn().withZone(Constants.LOCAL_TIME_ZONE).toLocalDate();
+    private String getCalendarDateForRecord(HealthDataRecordEx3 record) {
+        LocalDate localDate = record.getExportedOn().withZone(Constants.LOCAL_TIME_ZONE).toLocalDate();
         return localDate.toString();
     }
 

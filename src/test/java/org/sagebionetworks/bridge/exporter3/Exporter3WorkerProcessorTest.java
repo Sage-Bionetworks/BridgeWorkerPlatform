@@ -64,6 +64,7 @@ public class Exporter3WorkerProcessorTest {
     private static final String CLIENT_INFO = "dummy client info";
     private static final String CONTENT_TYPE = "text/plain";
     private static final String CUSTOM_METADATA_KEY = "custom-metadata-key";
+    private static final String CUSTOM_METADATA_KEY_SANITIZED = "custom_metadata_key";
     private static final String CUSTOM_METADATA_VALUE = "custom-metadata-value";
     private static final long DATA_ACCESS_TEAM_ID = 1111L;
     private static final byte[] DUMMY_MD5_BYTES = "dummy-md5".getBytes(StandardCharsets.UTF_8);
@@ -422,7 +423,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_RECORD_ID), RECORD_ID);
         assertEquals(DateTime.parse(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_UPLOADED_ON)).getMillis(),
                 UPLOADED_ON_MILLIS);
-        assertEquals(userMetadataMap.get(CUSTOM_METADATA_KEY), CUSTOM_METADATA_VALUE);
+        assertEquals(userMetadataMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE);
     }
 
     private void verifySynapseExport() throws Exception {
@@ -473,7 +474,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_RECORD_ID), RECORD_ID);
         assertEquals(DateTime.parse(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_UPLOADED_ON)).getMillis(),
                 UPLOADED_ON_MILLIS);
-        assertEquals(flattenedAnnotationMap.get(CUSTOM_METADATA_KEY), CUSTOM_METADATA_VALUE);
+        assertEquals(flattenedAnnotationMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE);
     }
 
     private void verifyUpdatedRecord() throws Exception {
