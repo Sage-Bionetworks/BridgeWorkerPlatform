@@ -29,7 +29,9 @@ import com.amazonaws.services.simpleemail.AmazonSimpleEmailServiceClient;
 import com.amazonaws.services.sns.AmazonSNSClient;
 import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.fasterxml.jackson.databind.JsonNode;
-import org.sagebionetworks.bridge.participantroster.DownloadParticipantRosterWorkerProcessor;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.LoadingCache;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.sagebionetworks.client.SynapseAdminClientImpl;
 import org.sagebionetworks.client.SynapseClient;
 import org.slf4j.Logger;
@@ -38,10 +40,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
 
 import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.config.PropertiesConfig;
+import org.sagebionetworks.bridge.crypto.CmsEncryptor;
+import org.sagebionetworks.bridge.crypto.CmsEncryptorCacheLoader;
 import org.sagebionetworks.bridge.dynamodb.DynamoNamingHelper;
 import org.sagebionetworks.bridge.dynamodb.DynamoQueryHelper;
 import org.sagebionetworks.bridge.file.FileHelper;
@@ -63,17 +66,7 @@ import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 // For EC2 instances, this happens transparently.
 // See http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/credentials.html and
 // http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/java-dg-setup.html#set-up-creds for more info.
-@ComponentScan({
-        "org.sagebionetworks.bridge.udd",
-        "org.sagebionetworks.bridge.uploadredrive",
-        "org.sagebionetworks.bridge.workerPlatform",
-        "org.sagebionetworks.bridge.participantroster"
-})
-@Import({
-        org.sagebionetworks.bridge.fitbit.config.SpringConfig.class,
-        org.sagebionetworks.bridge.notification.config.SpringConfig.class,
-        org.sagebionetworks.bridge.reporter.config.SpringConfig.class,
-})
+@ComponentScan("org.sagebionetworks.bridge")
 @Configuration("GeneralConfig")
 public class SpringConfig {
     private static final Logger LOG = LoggerFactory.getLogger(SpringConfig.class);
@@ -110,6 +103,18 @@ public class SpringConfig {
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
+    }
+
+    @Bean(name = "cmsEncryptorCache")
+    public LoadingCache<String, CmsEncryptor> cmsEncryptorCache() {
+        Config bridgeConfig = bridgeConfig();
+
+        CmsEncryptorCacheLoader cacheLoader = new CmsEncryptorCacheLoader();
+        cacheLoader.setCertBucket(bridgeConfig.get("upload.cms.cert.bucket"));
+        cacheLoader.setPrivateKeyBucket(bridgeConfig.get("upload.cms.priv.bucket"));
+        cacheLoader.setS3Helper(s3Helper());
+
+        return CacheBuilder.newBuilder().build(cacheLoader);
     }
 
     @Bean
@@ -192,6 +197,11 @@ public class SpringConfig {
         return heartbeatLogger;
     }
 
+    @Bean(name = "md5DigestUtils")
+    public DigestUtils md5DigestUtils() {
+        return new DigestUtils(DigestUtils.getMd5Digest());
+    }
+
     @Bean
     public S3Helper s3Helper() {
         S3Helper s3Helper = new S3Helper();
@@ -223,6 +233,7 @@ public class SpringConfig {
 
         PollSqsWorker sqsWorker = new PollSqsWorker();
         sqsWorker.setCallback(callback);
+        sqsWorker.setExecutorService(generalExecutorService());
         sqsWorker.setQueueUrl(config.get("workerPlatform.request.sqs.queue.url"));
         sqsWorker.setSleepTimeMillis(config.getInt("workerPlatform.request.sqs.sleep.time.millis"));
         sqsWorker.setSqsHelper(sqsHelper());

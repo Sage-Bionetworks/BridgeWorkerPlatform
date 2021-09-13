@@ -9,7 +9,6 @@ import org.sagebionetworks.bridge.reporter.worker.UploadsReportGenerator;
 import com.google.common.collect.ImmutableMap;
 
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.Map;
@@ -18,7 +17,6 @@ import java.util.Map;
 // For EC2 instances, this happens transparently.
 // See http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/credentials.html and
 // http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/java-dg-setup.html#set-up-creds for more info.
-@ComponentScan("org.sagebionetworks.bridge.reporter")
 @Configuration("reporterConfig")
 public class SpringConfig {
     @Bean(name="generatorMap")

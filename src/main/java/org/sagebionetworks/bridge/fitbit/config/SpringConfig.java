@@ -10,15 +10,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.ImmutableList;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 
 import org.sagebionetworks.bridge.dynamodb.DynamoNamingHelper;
 import org.sagebionetworks.bridge.fitbit.schema.EndpointSchema;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 
-@ComponentScan("org.sagebionetworks.bridge.fitbit")
-@Configuration
+@Configuration("fitbitConfig")
 public class SpringConfig {
     @Bean(name = "endpointSchemas")
     public List<EndpointSchema> endpointSchemas() throws IOException {

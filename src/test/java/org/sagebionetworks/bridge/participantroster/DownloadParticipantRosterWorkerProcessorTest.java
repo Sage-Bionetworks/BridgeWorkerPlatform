@@ -1,5 +1,6 @@
 package org.sagebionetworks.bridge.participantroster;
 
+import au.com.bytecode.opencsv.CSVReader;
 import au.com.bytecode.opencsv.CSVWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -19,9 +20,12 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -45,16 +49,6 @@ public class DownloadParticipantRosterWorkerProcessorTest {
     private static final String ORG_ID = "test-org-id";
     private static final String STUDY_ID = "test-study-id";
     private static final int PAGE_SIZE = 100;
-
-    private static final String EXPECTED_CSV_CONTENT =
-            // header
-            "\"firstName\",\"lastName\",\"id\",\"notifyByEmail\",\"attributes\",\"sharingScope\",\"createdOn\",\"emailVerified\",\"phoneVerified\",\"status\",\"roles\",\"dataGroups\",\"clientData\",\"languages\",\"studyIds\",\"externalIds\",\"healthCode\",\"email\",\"phone\",\"consentHistories\",\"consented\",\"timeZone\"\n" +
-            // study participant 1
-            "\"test-first-name1\",\"test-last-name\",\"test-id-12345\",\"true\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"{\"\"externalId1\"\":\"\"test-id-1\"\",\"\"externalId2\"\":\"\"test-id-2\"\",\"\"externalId3\"\":\"\"test-id-3\"\"}\",\"\",\"test@test.test\",\"\",\"\",\"\",\"\"\n" +
-            // study participant 2
-            "\"test-first-name2\",\"test-last-name\",\"test-id-12345\",\"true\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"{\"\"externalId1\"\":\"\"test-id-1\"\",\"\"externalId2\"\":\"\"test-id-2\"\",\"\"externalId3\"\":\"\"test-id-3\"\"}\",\"\",\"test@test.test\",\"\",\"\",\"\",\"\"\n" +
-            // study participant 3
-            "\"test-first-name3\",\"test-last-name\",\"test-id-12345\",\"true\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"{\"\"externalId1\"\":\"\"test-id-1\"\",\"\"externalId2\"\":\"\"test-id-2\"\",\"\"externalId3\"\":\"\"test-id-3\"\"}\",\"\",\"test@test.test\",\"\",\"\",\"\",\"\"\n";
 
     private DynamoHelper mockDynamoHelper;
     private BridgeHelper mockBridgeHelper;
@@ -133,42 +127,21 @@ public class DownloadParticipantRosterWorkerProcessorTest {
     }
 
     @Test
-    public void getCsvHeaders() throws IllegalAccessException {
-        String[] headers = processor.getCsvHeaders();
-        assertStudyParticipantHeaders(headers);
-    }
-
-    @Test
     public void getStudyParticipantArray() throws IllegalAccessException {
         StudyParticipant studyParticipant = makeStudyParticipant(1);
 
         String[] headers = processor.getCsvHeaders();
-        assertStudyParticipantHeaders(headers);
 
         String[] studyParticipantArrayArray = processor.getStudyParticipantArray(studyParticipant, headers);
-        assertEquals(studyParticipantArrayArray.length, 22);
+        Map<String, String> participantAttributeMap = parseCsvRowIntoMap(headers, studyParticipantArrayArray);
 
-        assertEquals("test-first-name1", studyParticipantArrayArray[0]);
-        assertEquals("test-last-name", studyParticipantArrayArray[1]);
-        assertEquals("test-id-12345", studyParticipantArrayArray[2]);
-        assertEquals("true", studyParticipantArrayArray[3]);
-        assertEquals("", studyParticipantArrayArray[4]);
-        assertEquals("", studyParticipantArrayArray[6]);
-        assertEquals("", studyParticipantArrayArray[7]);
-        assertEquals("", studyParticipantArrayArray[8]);
-        assertEquals("", studyParticipantArrayArray[9]);
-        assertEquals("", studyParticipantArrayArray[10]);
-        assertEquals("", studyParticipantArrayArray[11]);
-        assertEquals("", studyParticipantArrayArray[12]);
-        assertEquals("", studyParticipantArrayArray[13]);
-        assertEquals("", studyParticipantArrayArray[14]);
-        assertEquals("{\"externalId1\":\"test-id-1\",\"externalId2\":\"test-id-2\",\"externalId3\":\"test-id-3\"}", studyParticipantArrayArray[15]);
-        assertEquals("", studyParticipantArrayArray[16]);
-        assertEquals("test@test.test", studyParticipantArrayArray[17]);
-        assertEquals("", studyParticipantArrayArray[18]);
-        assertEquals("", studyParticipantArrayArray[19]);
-        assertEquals("", studyParticipantArrayArray[20]);
-        assertEquals("", studyParticipantArrayArray[21]);
+        assertEquals(participantAttributeMap.get("firstName"), "test-first-name1");
+        assertEquals(participantAttributeMap.get("lastName"), "test-last-name");
+        assertEquals(participantAttributeMap.get("id"), "test-id-12345");
+        assertEquals(participantAttributeMap.get("notifyByEmail"), "true");
+        assertEquals(participantAttributeMap.get("externalIds"),
+                "{\"externalId1\":\"test-id-1\",\"externalId2\":\"test-id-2\",\"externalId3\":\"test-id-3\"}");
+        assertEquals(participantAttributeMap.get("email"), "test@test.test");
     }
 
     @Test
@@ -226,7 +199,7 @@ public class DownloadParticipantRosterWorkerProcessorTest {
 
         // verify file contents
         String csvContent = new String(fileHelper.getBytes(csvFile), StandardCharsets.UTF_8);
-        assertEquals(EXPECTED_CSV_CONTENT, csvContent);
+        assertCsvContent(csvContent);
 
         // verify that the csv is written to the file
         verify(processor).writeStudyParticipants(any(CSVWriter.class), eq(ImmutableList.of(participant1)), eq(0),
@@ -240,32 +213,6 @@ public class DownloadParticipantRosterWorkerProcessorTest {
 
         // cleanup files
         processor.cleanupFiles(csvFile, zipFile, tmpDir);
-    }
-
-    public void assertStudyParticipantHeaders(String[] headers) {
-        assertEquals(headers.length, 22);
-        assertEquals("firstName", headers[0]);
-        assertEquals("lastName", headers[1]);
-        assertEquals("id", headers[2]);
-        assertEquals("notifyByEmail", headers[3]);
-        assertEquals("attributes", headers[4]);
-        assertEquals("sharingScope", headers[5]);
-        assertEquals("createdOn", headers[6]);
-        assertEquals("emailVerified", headers[7]);
-        assertEquals("phoneVerified", headers[8]);
-        assertEquals("status", headers[9]);
-        assertEquals("roles", headers[10]);
-        assertEquals("dataGroups", headers[11]);
-        assertEquals("clientData", headers[12]);
-        assertEquals("languages", headers[13]);
-        assertEquals("studyIds", headers[14]);
-        assertEquals("externalIds", headers[15]);
-        assertEquals("healthCode", headers[16]);
-        assertEquals("email", headers[17]);
-        assertEquals("phone", headers[18]);
-        assertEquals("consentHistories", headers[19]);
-        assertEquals("consented", headers[20]);
-        assertEquals("timeZone", headers[21]);
     }
 
     private void process(String studyId) throws Exception {
@@ -310,7 +257,7 @@ public class DownloadParticipantRosterWorkerProcessorTest {
 
         // verify file contents
         String csvContent = new String(fileHelper.getBytes(csvFile), StandardCharsets.UTF_8);
-        assertEquals(EXPECTED_CSV_CONTENT, csvContent);
+        assertCsvContent(csvContent);
 
         // verify that the csv is written to the file
         verify(processor).writeStudyParticipants(any(CSVWriter.class), eq(studyParticipants), eq(0), eq(APP_ID), eq(ORG_ID), eq(studyId));
@@ -323,6 +270,58 @@ public class DownloadParticipantRosterWorkerProcessorTest {
 
         // cleanup files
         processor.cleanupFiles(csvFile, zipFile, tmpDir);
+    }
+
+    // We do this instead of using a fixed EXPECTED_CSV_CONTENT so that we don't have to re-write these tests every
+    // time StudyParticipant changes.
+    private void assertCsvContent(String csvContent) throws IOException {
+        // Parse the CSV. 1 header row, 3 data rows.
+        List<String[]> csvLines;
+        try (StringReader stringReader = new StringReader(csvContent);
+                CSVReader csvReader = new CSVReader(stringReader)) {
+            csvLines = csvReader.readAll();
+        }
+        assertEquals(csvLines.size(), 4);
+
+        // Headers should match.
+        String[] headers = processor.getCsvHeaders();
+        assertEquals(csvLines.get(0), headers);
+
+        // Row 1.
+        Map<String, String> row1Map = parseCsvRowIntoMap(headers, csvLines.get(1));
+        assertEquals(row1Map.get("firstName"), "test-first-name1");
+        assertEquals(row1Map.get("lastName"), "test-last-name");
+        assertEquals(row1Map.get("id"), "test-id-12345");
+        assertEquals(row1Map.get("notifyByEmail"), "true");
+        assertEquals(row1Map.get("externalIds"),
+                "{\"externalId1\":\"test-id-1\",\"externalId2\":\"test-id-2\",\"externalId3\":\"test-id-3\"}");
+
+        // Row 2.
+        Map<String, String> row2Map = parseCsvRowIntoMap(headers, csvLines.get(2));
+        assertEquals(row2Map.get("firstName"), "test-first-name2");
+        assertEquals(row2Map.get("lastName"), "test-last-name");
+        assertEquals(row2Map.get("id"), "test-id-12345");
+        assertEquals(row2Map.get("notifyByEmail"), "true");
+        assertEquals(row2Map.get("externalIds"),
+                "{\"externalId1\":\"test-id-1\",\"externalId2\":\"test-id-2\",\"externalId3\":\"test-id-3\"}");
+
+        // Row 3.
+        Map<String, String> row3Map = parseCsvRowIntoMap(headers, csvLines.get(3));
+        assertEquals(row3Map.get("firstName"), "test-first-name3");
+        assertEquals(row3Map.get("lastName"), "test-last-name");
+        assertEquals(row3Map.get("id"), "test-id-12345");
+        assertEquals(row3Map.get("notifyByEmail"), "true");
+        assertEquals(row3Map.get("externalIds"),
+                "{\"externalId1\":\"test-id-1\",\"externalId2\":\"test-id-2\",\"externalId3\":\"test-id-3\"}");
+    }
+
+    private static Map<String, String> parseCsvRowIntoMap(String[] headers, String[] row) {
+        assertEquals(row.length, headers.length);
+        Map<String, String> map = new HashMap<>();
+        for (int i = 0; i < headers.length; i++) {
+            map.put(headers[i], row[i]);
+        }
+        return map;
     }
 
     private static ObjectNode makeValidRequestNode() {
