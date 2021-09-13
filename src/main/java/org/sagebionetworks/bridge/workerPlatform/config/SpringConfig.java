@@ -40,7 +40,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
 
 import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.config.PropertiesConfig;
@@ -67,18 +66,7 @@ import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 // For EC2 instances, this happens transparently.
 // See http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/credentials.html and
 // http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/java-dg-setup.html#set-up-creds for more info.
-@ComponentScan({
-        "org.sagebionetworks.bridge.exporter3",
-        "org.sagebionetworks.bridge.udd",
-        "org.sagebionetworks.bridge.uploadredrive",
-        "org.sagebionetworks.bridge.workerPlatform",
-        "org.sagebionetworks.bridge.participantroster"
-})
-@Import({
-        org.sagebionetworks.bridge.fitbit.config.SpringConfig.class,
-        org.sagebionetworks.bridge.notification.config.SpringConfig.class,
-        org.sagebionetworks.bridge.reporter.config.SpringConfig.class,
-})
+@ComponentScan("org.sagebionetworks.bridge")
 @Configuration("GeneralConfig")
 public class SpringConfig {
     private static final Logger LOG = LoggerFactory.getLogger(SpringConfig.class);

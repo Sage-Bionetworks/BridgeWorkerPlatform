@@ -296,7 +296,9 @@ public class Exporter3WorkerProcessorTest {
         when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
-        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(makeUpload(true));
+
+        Upload mockUpload = mockUpload(true);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
 
         processor.setCmsEncryptorCache(ThrowingCacheLoader.LOADING_CACHE_INSTANCE);
 
@@ -310,7 +312,9 @@ public class Exporter3WorkerProcessorTest {
         when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
-        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(makeUpload(true));
+
+        Upload mockUpload = mockUpload(true);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
 
         processor.setCmsEncryptorCache(EmptyCacheLoader.LOADING_CACHE_INSTANCE);
 
@@ -324,8 +328,10 @@ public class Exporter3WorkerProcessorTest {
         when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
-        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(makeUpload(true));
         when(mockDigestUtils.digest(any(File.class))).thenReturn(DUMMY_MD5_BYTES);
+
+        Upload mockUpload = mockUpload(true);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
 
         doAnswer(invocation -> {
             File file = invocation.getArgumentAt(2, File.class);
@@ -377,7 +383,9 @@ public class Exporter3WorkerProcessorTest {
         when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
-        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(makeUpload(false));
+
+        Upload mockUpload = mockUpload(false);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
 
         mockSynapseHelper();
 
@@ -523,16 +531,16 @@ public class Exporter3WorkerProcessorTest {
         return record;
     }
 
-    private static Upload makeUpload(boolean encrypted) {
-        Upload upload = new Upload();
-        upload.setUploadId(RECORD_ID);
-        upload.setRecordId(RECORD_ID);
+    private static Upload mockUpload(boolean encrypted) {
+        Upload upload = mock(Upload.class);
+        when(upload.getUploadId()).thenReturn(RECORD_ID);
+        when(upload.getRecordId()).thenReturn(RECORD_ID);
 
-        upload.setCompletedOn(UPLOADED_ON);
-        upload.setContentType(CONTENT_TYPE);
-        upload.setContentMd5(Base64.getEncoder().encodeToString(DUMMY_MD5_BYTES));
-        upload.setEncrypted(encrypted);
-        upload.setFilename(FILENAME);
+        when(upload.getCompletedOn()).thenReturn(UPLOADED_ON);
+        when(upload.getContentType()).thenReturn(CONTENT_TYPE);
+        when(upload.getContentMd5()).thenReturn(Base64.getEncoder().encodeToString(DUMMY_MD5_BYTES));
+        when(upload.isEncrypted()).thenReturn(encrypted);
+        when(upload.getFilename()).thenReturn(FILENAME);
         return upload;
     }
 }

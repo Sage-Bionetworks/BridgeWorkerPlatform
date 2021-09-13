@@ -89,6 +89,8 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     static final String METADATA_KEY_HEALTH_CODE = "healthCode";
     static final String METADATA_KEY_RECORD_ID = "recordId";
     static final String METADATA_KEY_UPLOADED_ON = "uploadedOn";
+    // Valid characters are alphanumeric, underscores, and periods. This pattern is used to match invalid characters to
+    // convert them to underscores.
     private static final Pattern METADATA_NAME_REPLACEMENT_PATTERN = Pattern.compile("[^\\w\\.]");
     private BridgeHelper bridgeHelper;
     private LoadingCache<String, CmsEncryptor> cmsEncryptorCache;
@@ -385,7 +387,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     }
 
     private String getCalendarDateForRecord(HealthDataRecordEx3 record) {
-        LocalDate localDate = record.getExportedOn().withZone(Constants.LOCAL_TIME_ZONE).toLocalDate();
+        LocalDate localDate = record.getCreatedOn().withZone(Constants.LOCAL_TIME_ZONE).toLocalDate();
         return localDate.toString();
     }
 
