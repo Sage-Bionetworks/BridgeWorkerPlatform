@@ -43,6 +43,8 @@ import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
+import org.sagebionetworks.bridge.rest.model.SharingScope;
+import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
@@ -187,7 +189,19 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
         // Set the exportedOn time on the record. This will be propagated to both S3 and Synapse.
         HealthDataRecordEx3 record = bridgeHelper.getHealthDataRecordForExporter3(appId, recordId);
+        if (record.getSharingScope() == SharingScope.NO_SHARING) {
+            // Record was not meant to be shared. Skip.
+            return;
+        }
         record.setExportedOn(DateUtils.getCurrentDateTime());
+
+        StudyParticipant participant = bridgeHelper.getParticipantByHealthCode(appId, record.getHealthCode(),
+                false);
+        if (participant.getSharingScope() == SharingScope.NO_SHARING) {
+            // Participant is set to no sharing. This might be different from the record due to Synapse maintenance or
+            // redrives. Skip.
+            return;
+        }
 
         // Copy the file to the raw health data bucket. This includes folderization.
         // Note that in Exporter 3.0, upload ID is the same as record ID.
