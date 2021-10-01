@@ -51,6 +51,8 @@ import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
+import org.sagebionetworks.bridge.rest.model.SharingScope;
+import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
@@ -290,12 +292,61 @@ public class Exporter3WorkerProcessorTest {
         verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
     }
 
+    @Test
+    public void recordNoSharing() throws Exception {
+        // Mock services.
+        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
+        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
+
+        HealthDataRecordEx3 record = makeRecord();
+        record.setSharingScope(SharingScope.NO_SHARING);
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(record);
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Verify calls to services.
+        verify(mockSynapseHelper).isSynapseWritable();
+        verify(mockBridgeHelper).getApp(APP_ID);
+        verify(mockBridgeHelper).getHealthDataRecordForExporter3(APP_ID, RECORD_ID);
+
+        // Verify no more interactions with backend services.
+        verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
+    }
+
+    @Test
+    public void participantNoSharing() throws Exception {
+        // Mock services.
+        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
+        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
+
+        StudyParticipant participant = makeParticipant();
+        participant.setSharingScope(SharingScope.NO_SHARING);
+        when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
+                .thenReturn(participant);
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Verify calls to services.
+        verify(mockSynapseHelper).isSynapseWritable();
+        verify(mockBridgeHelper).getApp(APP_ID);
+        verify(mockBridgeHelper).getHealthDataRecordForExporter3(APP_ID, RECORD_ID);
+        verify(mockBridgeHelper).getParticipantByHealthCode(APP_ID, HEALTH_CODE, false);
+
+        // Verify no more interactions with backend services.
+        verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
+    }
+
     @Test(expectedExceptions = WorkerException.class)
     public void encryptedUpload_ErrorGettingEncryptor() throws Exception {
         // Mock services.
         when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
+        when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
+                .thenReturn(makeParticipant());
 
         Upload mockUpload = mockUpload(true);
         when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
@@ -312,6 +363,8 @@ public class Exporter3WorkerProcessorTest {
         when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
+        when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
+                .thenReturn(makeParticipant());
 
         Upload mockUpload = mockUpload(true);
         when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
@@ -328,6 +381,8 @@ public class Exporter3WorkerProcessorTest {
         when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
+        when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
+                .thenReturn(makeParticipant());
         when(mockDigestUtils.digest(any(File.class))).thenReturn(DUMMY_MD5_BYTES);
 
         Upload mockUpload = mockUpload(true);
@@ -383,6 +438,8 @@ public class Exporter3WorkerProcessorTest {
         when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
+        when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
+                .thenReturn(makeParticipant());
 
         Upload mockUpload = mockUpload(false);
         when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
@@ -525,6 +582,7 @@ public class Exporter3WorkerProcessorTest {
         record.setClientInfo(CLIENT_INFO);
         record.setHealthCode(HEALTH_CODE);
         record.setCreatedOn(UPLOADED_ON);
+        record.setSharingScope(SharingScope.ALL_QUALIFIED_RESEARCHERS);
 
         record.putMetadataItem(CUSTOM_METADATA_KEY, CUSTOM_METADATA_VALUE);
 
@@ -542,5 +600,11 @@ public class Exporter3WorkerProcessorTest {
         when(upload.isEncrypted()).thenReturn(encrypted);
         when(upload.getFilename()).thenReturn(FILENAME);
         return upload;
+    }
+
+    private static StudyParticipant makeParticipant() {
+        StudyParticipant participant = new StudyParticipant();
+        participant.setSharingScope(SharingScope.ALL_QUALIFIED_RESEARCHERS);
+        return participant;
     }
 }

@@ -131,6 +131,13 @@ public class BridgeHelper {
                 .execute().body();
     }
 
+    /** Gets a participant for the given health code in the given app. */
+    public StudyParticipant getParticipantByHealthCode(String appId, String healthCode, boolean withConsents)
+            throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getParticipantByHealthCodeForApp(appId, healthCode,
+                withConsents).execute().body();
+    }
+
     public List<StudyParticipant> getParticipantsForApp(String appId, DateTime startDateTime, DateTime endDateTime)
             throws IOException {
         List<StudyParticipant> retList = new ArrayList<>();

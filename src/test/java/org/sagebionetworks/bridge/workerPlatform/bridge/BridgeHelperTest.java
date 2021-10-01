@@ -339,6 +339,20 @@ public class BridgeHelperTest {
     }
 
     @Test
+    public void getParticipantForHealthCode() throws Exception {
+        // Set up mocks.
+        StudyParticipant participant = new StudyParticipant();
+        Call<StudyParticipant> mockCall = mockCallForValue(participant);
+        when(mockWorkerApi.getParticipantByHealthCodeForApp(APP_ID, HEALTH_CODE, true)).thenReturn(mockCall);
+
+        // Execute and validate.
+        StudyParticipant output = bridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, true);
+        assertSame(output, participant);
+
+        verify(mockWorkerApi).getParticipantByHealthCodeForApp(APP_ID, HEALTH_CODE, true);
+    }
+
+    @Test
     public void testGetParticipantsForApp() throws Exception {
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
 
