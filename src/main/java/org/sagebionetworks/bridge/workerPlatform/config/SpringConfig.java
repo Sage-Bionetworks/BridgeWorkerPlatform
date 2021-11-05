@@ -242,9 +242,18 @@ public class SpringConfig {
 
     @Bean(name="workerPlatformSynapseClient")
     public SynapseClient synapseClient() {
+        Config config = bridgeConfig();
+
         SynapseClient synapseClient = new SynapseAdminClientImpl();
-        synapseClient.setUsername(bridgeConfig().get("synapse.user"));
-        synapseClient.setApiKey(bridgeConfig().get("synapse.api.key"));
+        synapseClient.setUsername(config.get("synapse.user"));
+        synapseClient.setApiKey(config.get("synapse.api.key"));
+
+        // Based on config, we either talk to Synapse Dev (local/dev/staging) or Synapse Prod.
+        String synapseEndpoint = config.get("synapse.endpoint");
+        synapseClient.setAuthEndpoint(synapseEndpoint + "auth/v1");
+        synapseClient.setFileEndpoint(synapseEndpoint + "file/v1");
+        synapseClient.setRepositoryEndpoint(synapseEndpoint + "repo/v1");
+
         return synapseClient;
     }
 
