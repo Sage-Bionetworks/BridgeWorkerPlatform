@@ -26,6 +26,8 @@ import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.bouncycastle.cms.CMSException;
 import org.joda.time.LocalDate;
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Safelist;
 import org.sagebionetworks.client.exceptions.SynapseException;
 import org.sagebionetworks.repo.model.FileEntity;
 import org.sagebionetworks.repo.model.annotation.v2.AnnotationsValue;
@@ -38,6 +40,7 @@ import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.crypto.CmsEncryptor;
+import org.sagebionetworks.bridge.exceptions.BridgeSynapseException;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.App;
@@ -52,6 +55,7 @@ import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.time.DateUtils;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
+import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeUtils;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 
@@ -89,6 +93,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     static final String METADATA_KEY_CLIENT_INFO = "clientInfo";
     static final String METADATA_KEY_EXPORTED_ON = "exportedOn";
     static final String METADATA_KEY_HEALTH_CODE = "healthCode";
+    static final String METADATA_KEY_PARTICIPANT_VERSION = "participantVersion";
     static final String METADATA_KEY_RECORD_ID = "recordId";
     static final String METADATA_KEY_UPLOADED_ON = "uploadedOn";
     // Valid characters are alphanumeric, underscores, and periods. This pattern is used to match invalid characters to
@@ -140,8 +145,8 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     }
 
     @Override
-    public void accept(JsonNode jsonNode) throws IOException, PollSqsWorkerBadRequestException, SynapseException,
-            WorkerException{
+    public void accept(JsonNode jsonNode) throws BridgeSynapseException, IOException, PollSqsWorkerBadRequestException,
+            SynapseException, WorkerException{
         // Parse request.
         Exporter3Request request;
         try {
@@ -161,19 +166,11 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     }
 
     // Package-scoped for unit tests.
-    void process(Exporter3Request request) throws IOException, PollSqsWorkerBadRequestException,
+    void process(Exporter3Request request) throws BridgeSynapseException, IOException, PollSqsWorkerBadRequestException,
             SynapseException, WorkerException {
         // Check to see that Synapse is up and availabe for read/write. If it isn't, throw an exception, so the
         // PollSqsWorker can re-cycle the request until Synapse is available again.
-        boolean isSynapseWritable;
-        try {
-            isSynapseWritable = synapseHelper.isSynapseWritable();
-        } catch (SynapseException ex) {
-            throw new WorkerException("Error calling Synapse: " + ex.getMessage(), ex);
-        }
-        if (!isSynapseWritable) {
-            throw new WorkerException("Synapse not in writable state");
-        }
+        synapseHelper.checkSynapseWritableOrThrow();
 
         String appId = request.getAppId();
         String recordId = request.getRecordId();
@@ -181,8 +178,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         // Check that app is configured for export.
         App app = bridgeHelper.getApp(appId);
         Exporter3Configuration exporter3Config = app.getExporter3Configuration();
-        if (app.isExporter3Enabled() == null || !app.isExporter3Enabled() || exporter3Config == null
-                || !exporter3Config.isConfigured()) {
+        if (!BridgeUtils.isExporter3Configured(app)) {
             // Exporter not enabled. Skip.
             return;
         }
@@ -257,7 +253,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
             // Step 3: Upload it to the raw uploads bucket.
             Map<String, String> metadataMap = makeMetadataFromRecord(record);
-            ObjectMetadata s3Metadata = makeS3Metadata(upload, metadataMap);
+            ObjectMetadata s3Metadata = makeS3Metadata(upload, record, metadataMap);
             String s3Key = getRawS3KeyForUpload(appId, upload, record);
             s3Helper.writeFileToS3(rawHealthDataBucket, s3Key, decryptedFile, s3Metadata);
 
@@ -285,7 +281,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
         // Copy the file to the health data bucket.
         Map<String, String> metadataMap = makeMetadataFromRecord(record);
-        ObjectMetadata s3Metadata = makeS3Metadata(upload, metadataMap);
+        ObjectMetadata s3Metadata = makeS3Metadata(upload, record, metadataMap);
         String s3Key = getRawS3KeyForUpload(appId, upload, record);
         s3Helper.copyS3File(uploadBucket, uploadId, rawHealthDataBucket, s3Key, s3Metadata);
 
@@ -313,8 +309,14 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         Map<String, String> recordMetadataMap = record.getMetadata();
         if (recordMetadataMap != null) {
             for (Map.Entry<String, String> metadataEntry : record.getMetadata().entrySet()) {
+                // Replace invalid characters in metadata name.
                 String metadataName = sanitizeMetadataName(metadataEntry.getKey());
-                metadataMap.put(metadataName, metadataEntry.getValue());
+
+                // Strip HTML from metadata value. Jsoup also flattens all whitespace (tabs, newlines, carriage
+                // returns, etc).
+                String metadataValue = Jsoup.clean(metadataEntry.getValue(), Safelist.none());
+
+                metadataMap.put(metadataName, metadataValue);
             }
         }
 
@@ -328,7 +330,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         return METADATA_NAME_REPLACEMENT_PATTERN.matcher(name).replaceAll("_");
     }
 
-    private ObjectMetadata makeS3Metadata(Upload upload, Map<String, String> metadataMap) {
+    private ObjectMetadata makeS3Metadata(Upload upload, HealthDataRecordEx3 record, Map<String, String> metadataMap) {
         // Always specify S3 encryption.
         ObjectMetadata metadata = new ObjectMetadata();
         metadata.setSSEAlgorithm(ObjectMetadata.AES_256_SERVER_SIDE_ENCRYPTION);
@@ -338,6 +340,11 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         // Copy metadata from map.
         for (Map.Entry<String, String> metadataEntry : metadataMap.entrySet()) {
             metadata.addUserMetadata(metadataEntry.getKey(), metadataEntry.getValue());
+        }
+
+        // User metadata is always a string, so we have to add Participant Version as a string.
+        if (record.getParticipantVersion() != null) {
+            metadata.addUserMetadata(METADATA_KEY_PARTICIPANT_VERSION, record.getParticipantVersion().toString());
         }
 
         return metadata;
@@ -387,6 +394,16 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             value.setValue(ImmutableList.of(metadataEntry.getValue()));
             annotationMap.put(metadataEntry.getKey(), value);
         }
+
+        // Participant Version is special. Unlike the other annotations, this one will actually be queried as an int.
+        // So write this annotation as a long (which is the closest type to an int).
+        if (record.getParticipantVersion() != null) {
+            AnnotationsValue value = new AnnotationsValue();
+            value.setType(AnnotationsValueType.LONG);
+            value.setValue(ImmutableList.of(record.getParticipantVersion().toString()));
+            annotationMap.put(METADATA_KEY_PARTICIPANT_VERSION, value);
+        }
+
         synapseHelper.addAnnotationsToEntity(fileEntityId, annotationMap);
     }
 

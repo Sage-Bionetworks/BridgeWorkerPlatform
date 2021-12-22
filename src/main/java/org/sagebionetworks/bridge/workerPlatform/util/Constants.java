@@ -1,9 +1,13 @@
 package org.sagebionetworks.bridge.workerPlatform.util;
 
+import com.google.common.base.Joiner;
 import org.joda.time.DateTimeZone;
 
 /** Constants used by the Worker */
 public class Constants {
+    public static final Joiner COMMA_JOINER = Joiner.on(',').useForNull("");
+    public static final Joiner PIPE_JOINER = Joiner.on("|");
+
     public static final DateTimeZone LOCAL_TIME_ZONE = DateTimeZone.forID("America/Los_Angeles");
     public static final String SERVICE_TYPE_REPORTER = "REPORTER";
     public static final String SERVICE_TYPE_UDD = "UDD";

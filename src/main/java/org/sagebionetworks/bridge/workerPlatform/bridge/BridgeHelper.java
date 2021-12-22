@@ -9,6 +9,7 @@ import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
+import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -167,6 +168,13 @@ public class BridgeHelper {
             LocalDate endDate) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getParticipantReportsForParticipant(appId, userId,
                 reportId, startDate, endDate).execute().body().getItems();
+    }
+
+    /** Gets the participant version for the app and healthcode and version number. */
+    public ParticipantVersion getParticipantVersionForHealthCode(String appId, String healthCode,
+            int participantVersion) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getParticipantVersionForHealthCode(appId, healthCode,
+                participantVersion).execute().body();
     }
 
     /**

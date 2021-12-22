@@ -34,7 +34,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
-import org.sagebionetworks.client.exceptions.SynapseClientException;
 import org.sagebionetworks.repo.model.FileEntity;
 import org.sagebionetworks.repo.model.annotation.v2.AnnotationsValue;
 import org.sagebionetworks.repo.model.annotation.v2.AnnotationsValueType;
@@ -67,7 +66,8 @@ public class Exporter3WorkerProcessorTest {
     private static final String CONTENT_TYPE = "text/plain";
     private static final String CUSTOM_METADATA_KEY = "custom-metadata-key";
     private static final String CUSTOM_METADATA_KEY_SANITIZED = "custom_metadata_key";
-    private static final String CUSTOM_METADATA_VALUE = "custom-metadata-value";
+    private static final String CUSTOM_METADATA_VALUE = "custom-<b>metadata</b>-value";
+    private static final String CUSTOM_METADATA_VALUE_CLEAN = "custom-metadata-value";
     private static final long DATA_ACCESS_TEAM_ID = 1111L;
     private static final byte[] DUMMY_MD5_BYTES = "dummy-md5".getBytes(StandardCharsets.UTF_8);
     private static final byte[] DUMMY_ENCRYPTED_FILE_BYTES = "dummy encrypted file content"
@@ -78,6 +78,7 @@ public class Exporter3WorkerProcessorTest {
     private static final String EXPORTED_FILE_HANDLE_ID = "3333";
     private static final String FILENAME = "filename.txt";
     private static final String HEALTH_CODE = "health-code";
+    private static final int PARTICIPANT_VERSION = 42;
     private static final String PROJECT_ID = "syn4444";
     private static final String RAW_DATA_BUCKET = "raw-data-bucket";
     private static final String RAW_FOLDER_ID = "syn5555";
@@ -199,43 +200,9 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(capturedRequest.getRecordId(), RECORD_ID);
     }
 
-    @Test(expectedExceptions = WorkerException.class)
-    public void synapseNotWritable() throws Exception {
-        when(mockSynapseHelper.isSynapseWritable()).thenReturn(false);
-        processor.process(makeRequest());
-    }
-
-    @Test(expectedExceptions = WorkerException.class)
-    public void synapseIsWritableThrows() throws Exception {
-        when(mockSynapseHelper.isSynapseWritable()).thenThrow(SynapseClientException.class);
-        processor.process(makeRequest());
-    }
-
     @Test
-    public void ex3EnabledNull() throws Exception {
+    public void ex3NotEnabled() throws Exception {
         // Mock services.
-        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
-
-        App app = makeAppWithEx3Config();
-        app.setExporter3Enabled(null);
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(app);
-
-        // Execute.
-        processor.process(makeRequest());
-
-        // Verify calls to services.
-        verify(mockSynapseHelper).isSynapseWritable();
-        verify(mockBridgeHelper).getApp(APP_ID);
-
-        // Verify no more interactions with backend services.
-        verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
-    }
-
-    @Test
-    public void ex3EnabledFalse() throws Exception {
-        // Mock services.
-        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
-
         App app = makeAppWithEx3Config();
         app.setExporter3Enabled(false);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(app);
@@ -244,48 +211,7 @@ public class Exporter3WorkerProcessorTest {
         processor.process(makeRequest());
 
         // Verify calls to services.
-        verify(mockSynapseHelper).isSynapseWritable();
-        verify(mockBridgeHelper).getApp(APP_ID);
-
-        // Verify no more interactions with backend services.
-        verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
-    }
-
-    @Test
-    public void ex3ConfigNull() throws Exception {
-        // Mock services.
-        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
-
-        App app = makeAppWithEx3Config();
-        app.setExporter3Configuration(null);
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(app);
-
-        // Execute.
-        processor.process(makeRequest());
-
-        // Verify calls to services.
-        verify(mockSynapseHelper).isSynapseWritable();
-        verify(mockBridgeHelper).getApp(APP_ID);
-
-        // Verify no more interactions with backend services.
-        verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
-    }
-
-    @Test
-    public void ex3ConfigNotConfigured() throws Exception {
-        // Mock services.
-        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
-
-        App app = makeAppWithEx3Config();
-        // This is normally generated on the server-side, but there is no server in mock tests.
-        app.getExporter3Configuration().setConfigured(false);
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(app);
-
-        // Execute.
-        processor.process(makeRequest());
-
-        // Verify calls to services.
-        verify(mockSynapseHelper).isSynapseWritable();
+        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
         verify(mockBridgeHelper).getApp(APP_ID);
 
         // Verify no more interactions with backend services.
@@ -295,7 +221,6 @@ public class Exporter3WorkerProcessorTest {
     @Test
     public void recordNoSharing() throws Exception {
         // Mock services.
-        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
 
         HealthDataRecordEx3 record = makeRecord();
@@ -306,7 +231,7 @@ public class Exporter3WorkerProcessorTest {
         processor.process(makeRequest());
 
         // Verify calls to services.
-        verify(mockSynapseHelper).isSynapseWritable();
+        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
         verify(mockBridgeHelper).getApp(APP_ID);
         verify(mockBridgeHelper).getHealthDataRecordForExporter3(APP_ID, RECORD_ID);
 
@@ -317,7 +242,6 @@ public class Exporter3WorkerProcessorTest {
     @Test
     public void participantNoSharing() throws Exception {
         // Mock services.
-        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
 
@@ -330,7 +254,7 @@ public class Exporter3WorkerProcessorTest {
         processor.process(makeRequest());
 
         // Verify calls to services.
-        verify(mockSynapseHelper).isSynapseWritable();
+        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
         verify(mockBridgeHelper).getApp(APP_ID);
         verify(mockBridgeHelper).getHealthDataRecordForExporter3(APP_ID, RECORD_ID);
         verify(mockBridgeHelper).getParticipantByHealthCode(APP_ID, HEALTH_CODE, false);
@@ -342,7 +266,6 @@ public class Exporter3WorkerProcessorTest {
     @Test(expectedExceptions = WorkerException.class)
     public void encryptedUpload_ErrorGettingEncryptor() throws Exception {
         // Mock services.
-        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
         when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
@@ -360,7 +283,6 @@ public class Exporter3WorkerProcessorTest {
     @Test(expectedExceptions = PollSqsWorkerBadRequestException.class)
     public void encryptedUpload_EncryptorNotFound() throws Exception {
         // Mock services.
-        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
         when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
@@ -378,7 +300,6 @@ public class Exporter3WorkerProcessorTest {
     @Test
     public void encryptedUpload() throws Exception {
         // Mock services.
-        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
         when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
@@ -435,7 +356,6 @@ public class Exporter3WorkerProcessorTest {
     @Test
     public void nonEncryptedUpload() throws Exception {
         // Mock services.
-        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
         when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
@@ -480,15 +400,17 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(s3Metadata.getContentType(), CONTENT_TYPE);
 
         Map<String, String> userMetadataMap = s3Metadata.getUserMetadata();
-        assertEquals(userMetadataMap.size(), 6);
+        assertEquals(userMetadataMap.size(), 7);
         assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO), CLIENT_INFO);
         assertEquals(DateTime.parse(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_EXPORTED_ON)).getMillis(),
                 MOCK_NOW_MILLIS);
         assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_HEALTH_CODE), HEALTH_CODE);
+        assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_PARTICIPANT_VERSION),
+                String.valueOf(PARTICIPANT_VERSION));
         assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_RECORD_ID), RECORD_ID);
         assertEquals(DateTime.parse(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_UPLOADED_ON)).getMillis(),
                 UPLOADED_ON_MILLIS);
-        assertEquals(userMetadataMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE);
+        assertEquals(userMetadataMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE_CLEAN);
     }
 
     private void verifySynapseExport() throws Exception {
@@ -518,28 +440,36 @@ public class Exporter3WorkerProcessorTest {
         verify(mockSynapseHelper).addAnnotationsToEntity(eq(EXPORTED_FILE_ENTITY_ID), annotationMapCaptor.capture());
 
         Map<String, AnnotationsValue> annotationMap = annotationMapCaptor.getValue();
-        assertEquals(annotationMap.size(), 6);
+        assertEquals(annotationMap.size(), 7);
 
         // Verify that all annotations are of type string and have one value.
         Map<String, String> flattenedAnnotationMap = new HashMap<>();
         for (Map.Entry<String, AnnotationsValue> annotationEntry : annotationMap.entrySet()) {
             String name = annotationEntry.getKey();
             AnnotationsValue value = annotationEntry.getValue();
-            assertEquals(value.getType(), AnnotationsValueType.STRING);
+            if (Exporter3WorkerProcessor.METADATA_KEY_PARTICIPANT_VERSION.equals(name)) {
+                // participantVersion is special. This needs to be joined with the ParticipantVersion table, so it's
+                // a number.
+                assertEquals(value.getType(), AnnotationsValueType.LONG);
+            } else {
+                assertEquals(value.getType(), AnnotationsValueType.STRING);
+            }
             assertEquals(value.getValue().size(), 1);
             String valueString = value.getValue().get(0);
             flattenedAnnotationMap.put(name, valueString);
         }
 
-        assertEquals(flattenedAnnotationMap.size(), 6);
+        assertEquals(flattenedAnnotationMap.size(), 7);
         assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO), CLIENT_INFO);
         assertEquals(DateTime.parse(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_EXPORTED_ON)).getMillis(),
                 MOCK_NOW_MILLIS);
         assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_HEALTH_CODE), HEALTH_CODE);
+        assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_PARTICIPANT_VERSION),
+                String.valueOf(PARTICIPANT_VERSION));
         assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_RECORD_ID), RECORD_ID);
         assertEquals(DateTime.parse(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_UPLOADED_ON)).getMillis(),
                 UPLOADED_ON_MILLIS);
-        assertEquals(flattenedAnnotationMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE);
+        assertEquals(flattenedAnnotationMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE_CLEAN);
     }
 
     private void verifyUpdatedRecord() throws Exception {
@@ -582,6 +512,7 @@ public class Exporter3WorkerProcessorTest {
         record.setClientInfo(CLIENT_INFO);
         record.setHealthCode(HEALTH_CODE);
         record.setCreatedOn(UPLOADED_ON);
+        record.setParticipantVersion(PARTICIPANT_VERSION);
         record.setSharingScope(SharingScope.ALL_QUALIFIED_RESEARCHERS);
 
         record.putMetadataItem(CUSTOM_METADATA_KEY, CUSTOM_METADATA_VALUE);
