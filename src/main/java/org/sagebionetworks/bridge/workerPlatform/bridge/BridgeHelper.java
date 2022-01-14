@@ -170,11 +170,11 @@ public class BridgeHelper {
                 reportId, startDate, endDate).execute().body().getItems();
     }
 
-    /** Gets the participant version for the app and healthcode and version number. */
-    public ParticipantVersion getParticipantVersionForHealthCode(String appId, String healthCode,
-            int participantVersion) throws IOException {
-        return clientManager.getClient(ForWorkersApi.class).getParticipantVersionForHealthCode(appId, healthCode,
-                participantVersion).execute().body();
+    /** Gets the participant version for the app and user ID and version number. */
+    public ParticipantVersion getParticipantVersion(String appId, String userId, int participantVersion)
+            throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getParticipantVersion(appId, userId, participantVersion)
+                .execute().body();
     }
 
     /**

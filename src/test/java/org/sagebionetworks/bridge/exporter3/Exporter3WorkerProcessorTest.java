@@ -48,7 +48,6 @@ import org.sagebionetworks.bridge.crypto.CmsEncryptor;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.App;
-import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
@@ -68,7 +67,6 @@ public class Exporter3WorkerProcessorTest {
     private static final String CUSTOM_METADATA_KEY_SANITIZED = "custom_metadata_key";
     private static final String CUSTOM_METADATA_VALUE = "custom-<b>metadata</b>-value";
     private static final String CUSTOM_METADATA_VALUE_CLEAN = "custom-metadata-value";
-    private static final long DATA_ACCESS_TEAM_ID = 1111L;
     private static final byte[] DUMMY_MD5_BYTES = "dummy-md5".getBytes(StandardCharsets.UTF_8);
     private static final byte[] DUMMY_ENCRYPTED_FILE_BYTES = "dummy encrypted file content"
             .getBytes(StandardCharsets.UTF_8);
@@ -79,11 +77,8 @@ public class Exporter3WorkerProcessorTest {
     private static final String FILENAME = "filename.txt";
     private static final String HEALTH_CODE = "health-code";
     private static final int PARTICIPANT_VERSION = 42;
-    private static final String PROJECT_ID = "syn4444";
     private static final String RAW_DATA_BUCKET = "raw-data-bucket";
-    private static final String RAW_FOLDER_ID = "syn5555";
     private static final String RECORD_ID = "test-record";
-    private static final long STORAGE_LOCATION_ID = 6666L;
     private static final String TODAYS_DATE_STRING = "2021-08-23";
     private static final String TODAYS_FOLDER_ID = "syn7777";
     private static final String UPLOAD_BUCKET = "upload-bucket";
@@ -203,7 +198,7 @@ public class Exporter3WorkerProcessorTest {
     @Test
     public void ex3NotEnabled() throws Exception {
         // Mock services.
-        App app = makeAppWithEx3Config();
+        App app = Exporter3TestUtil.makeAppWithEx3Config();
         app.setExporter3Enabled(false);
         when(mockBridgeHelper.getApp(APP_ID)).thenReturn(app);
 
@@ -221,7 +216,7 @@ public class Exporter3WorkerProcessorTest {
     @Test
     public void recordNoSharing() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
+        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
 
         HealthDataRecordEx3 record = makeRecord();
         record.setSharingScope(SharingScope.NO_SHARING);
@@ -242,7 +237,7 @@ public class Exporter3WorkerProcessorTest {
     @Test
     public void participantNoSharing() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
+        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
 
         StudyParticipant participant = makeParticipant();
@@ -266,7 +261,7 @@ public class Exporter3WorkerProcessorTest {
     @Test(expectedExceptions = WorkerException.class)
     public void encryptedUpload_ErrorGettingEncryptor() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
+        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
         when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
                 .thenReturn(makeParticipant());
@@ -283,7 +278,7 @@ public class Exporter3WorkerProcessorTest {
     @Test(expectedExceptions = PollSqsWorkerBadRequestException.class)
     public void encryptedUpload_EncryptorNotFound() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
+        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
         when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
                 .thenReturn(makeParticipant());
@@ -300,7 +295,7 @@ public class Exporter3WorkerProcessorTest {
     @Test
     public void encryptedUpload() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
+        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
         when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
                 .thenReturn(makeParticipant());
@@ -356,7 +351,7 @@ public class Exporter3WorkerProcessorTest {
     @Test
     public void nonEncryptedUpload() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(makeAppWithEx3Config());
+        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
         when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
         when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
                 .thenReturn(makeParticipant());
@@ -381,7 +376,7 @@ public class Exporter3WorkerProcessorTest {
 
     private void mockSynapseHelper() throws Exception {
         // Mock create folder.
-        when(mockSynapseHelper.createFolderIfNotExists(RAW_FOLDER_ID, TODAYS_DATE_STRING))
+        when(mockSynapseHelper.createFolderIfNotExists(Exporter3TestUtil.RAW_FOLDER_ID, TODAYS_DATE_STRING))
                 .thenReturn(TODAYS_FOLDER_ID);
 
         // Mock create file handle.
@@ -423,7 +418,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(fileHandle.getContentType(), CONTENT_TYPE);
         assertEquals(fileHandle.getFileName(), FULL_FILENAME);
         assertEquals(fileHandle.getKey(), EXPECTED_S3_KEY);
-        assertEquals(fileHandle.getStorageLocationId().longValue(), STORAGE_LOCATION_ID);
+        assertEquals(fileHandle.getStorageLocationId().longValue(), Exporter3TestUtil.STORAGE_LOCATION_ID);
         assertEquals(Hex.decode(fileHandle.getContentMd5()), DUMMY_MD5_BYTES);
 
         // Verify create file entity.
@@ -486,23 +481,6 @@ public class Exporter3WorkerProcessorTest {
         request.setAppId(APP_ID);
         request.setRecordId(RECORD_ID);
         return request;
-    }
-
-    private static App makeAppWithEx3Config() {
-        Exporter3Configuration ex3Config = new Exporter3Configuration();
-        ex3Config.setDataAccessTeamId(DATA_ACCESS_TEAM_ID);
-        ex3Config.setProjectId(PROJECT_ID);
-        ex3Config.setRawDataFolderId(RAW_FOLDER_ID);
-        ex3Config.setStorageLocationId(STORAGE_LOCATION_ID);
-
-        // Need to set isConfigured manually. Normally, this is auto-generated by the server, but there is no server in
-        // mock tests.
-        ex3Config.setConfigured(true);
-
-        App app = new App();
-        app.setExporter3Enabled(true);
-        app.setExporter3Configuration(ex3Config);
-        return app;
     }
 
     private static HealthDataRecordEx3 makeRecord() {
