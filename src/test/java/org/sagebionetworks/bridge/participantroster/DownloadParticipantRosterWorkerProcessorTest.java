@@ -4,12 +4,15 @@ import au.com.bytecode.opencsv.CSVReader;
 import au.com.bytecode.opencsv.CSVWriter;
 
 import com.amazonaws.HttpMethod;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 import org.joda.time.DateTime;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -70,6 +73,8 @@ public class DownloadParticipantRosterWorkerProcessorTest extends Mockito {
     private Config mockConfig;
     // mocked manually
     private InMemoryFileHelper fileHelper;
+    @Captor
+    ArgumentCaptor<ObjectMetadata> metadataCaptor;
     @Spy
     @InjectMocks
     private DownloadParticipantRosterWorkerProcessor processor;
@@ -346,6 +351,13 @@ public class DownloadParticipantRosterWorkerProcessorTest extends Mockito {
         verify(processor).writeStudyParticipants(any(CSVWriter.class), eq(ImmutableList.of(participant1)), eq(0),
                 eq(APP_ID), eq(STUDY_ID));
 
+        verify(mockS3Helper).writeFileToS3(eq("participant-roster-bucket"), eq(S3_FILE_NAME), eq(zipFile),
+                metadataCaptor.capture());
+        
+        assertEquals(metadataCaptor.getValue().getSSEAlgorithm(), ObjectMetadata.AES_256_SERVER_SIDE_ENCRYPTION);
+        assertEquals(metadataCaptor.getValue().getContentType(), "application/zip");
+        assertEquals(metadataCaptor.getValue().getContentDisposition(), "attachment; filename=\"user_data.zip\"");
+        
         // verify that the file is zipped
         verify(mockZipHelper).zipWithPassword(ImmutableList.of(csvFile), zipFile, PASSWORD);
 
