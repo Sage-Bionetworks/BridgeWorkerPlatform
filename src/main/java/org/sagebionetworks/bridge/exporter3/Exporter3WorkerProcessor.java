@@ -298,14 +298,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     private Map<String, String> makeMetadataFromRecord(HealthDataRecordEx3 record) {
         Map<String, String> metadataMap = new HashMap<>();
 
-        // Bridge-specific metadata.
-        metadataMap.put(METADATA_KEY_CLIENT_INFO, record.getClientInfo());
-        metadataMap.put(METADATA_KEY_EXPORTED_ON, record.getExportedOn().toString());
-        metadataMap.put(METADATA_KEY_HEALTH_CODE, record.getHealthCode());
-        metadataMap.put(METADATA_KEY_RECORD_ID, record.getId());
-        metadataMap.put(METADATA_KEY_UPLOADED_ON, record.getCreatedOn().toString());
-
-        // App-provided metadata.
+        // App-provided metadata. This is first so that it gets overwritten by Bridge-specific metadata.
         Map<String, String> recordMetadataMap = record.getMetadata();
         if (recordMetadataMap != null) {
             for (Map.Entry<String, String> metadataEntry : record.getMetadata().entrySet()) {
@@ -319,6 +312,13 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
                 metadataMap.put(metadataName, metadataValue);
             }
         }
+
+        // Bridge-specific metadata.
+        metadataMap.put(METADATA_KEY_CLIENT_INFO, record.getClientInfo());
+        metadataMap.put(METADATA_KEY_EXPORTED_ON, record.getExportedOn().toString());
+        metadataMap.put(METADATA_KEY_HEALTH_CODE, record.getHealthCode());
+        metadataMap.put(METADATA_KEY_RECORD_ID, record.getId());
+        metadataMap.put(METADATA_KEY_UPLOADED_ON, record.getCreatedOn().toString());
 
         // In the future, assessment stuff, study-specific stuff, and participant version would go here.
 

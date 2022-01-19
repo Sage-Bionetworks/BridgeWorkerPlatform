@@ -495,6 +495,9 @@ public class Exporter3WorkerProcessorTest {
 
         record.putMetadataItem(CUSTOM_METADATA_KEY, CUSTOM_METADATA_VALUE);
 
+        // Add a fake client info, just to make sure Bridge overwrites/ignores this correctly.
+        record.putMetadataItem(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO, "this is ignored");
+
         return record;
     }
 

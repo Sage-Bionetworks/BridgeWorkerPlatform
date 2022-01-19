@@ -10,6 +10,7 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -176,6 +177,41 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         assertEquals(languagesNode.get(1).textValue(), "en-UK");
     }
 
+    @Test
+    public void tooManyLanguages() throws Exception {
+        // Max is 10. Make 11 fake languages of the form fake#.
+        List<String> languageList = new ArrayList<>();
+        for (int i = 0; i < 11; i++) {
+            languageList.add("fake" + i);
+        }
+
+        ParticipantVersion participantVersion = makeParticipantVersion();
+        participantVersion.setLanguages(languageList);
+
+        // Mock services.
+        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+
+        when(mockBridgeHelper.getParticipantVersion(APP_ID, "healthCode:" + HEALTH_CODE, PARTICIPANT_VERSION))
+                .thenReturn(participantVersion);
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Just validate languages was truncated.
+        ArgumentCaptor<AppendableRowSet> rowSetCaptor = ArgumentCaptor.forClass(AppendableRowSet.class);
+        verify(mockSynapseHelper).appendRowsToTable(rowSetCaptor.capture(),
+                eq(Exporter3TestUtil.PARTICIPANT_VERSION_TABLE_ID));
+
+        PartialRowSet rowSet = (PartialRowSet) rowSetCaptor.getValue();
+        Map<String, String> rowValueMap = rowSet.getRows().get(0).getValues();
+        JsonNode languagesNode = DefaultObjectMapper.INSTANCE.readTree(rowValueMap.get(COLUMN_ID_LANGUAGES));
+        assertTrue(languagesNode.isArray());
+        assertEquals(languagesNode.size(), 10);
+        for (int i = 0; i < languagesNode.size(); i++) {
+            assertEquals(languagesNode.get(i).textValue(), "fake" + i);
+        }
+    }
+
     // branch coverage
     @Test
     public void emptyParticipantVersion() throws Exception {
@@ -194,9 +230,6 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
                 eq(Exporter3TestUtil.PARTICIPANT_VERSION_TABLE_ID));
 
         PartialRowSet rowSet = (PartialRowSet) rowSetCaptor.getValue();
-        assertEquals(rowSet.getTableId(), Exporter3TestUtil.PARTICIPANT_VERSION_TABLE_ID);
-        assertEquals(rowSet.getRows().size(), 1);
-
         Map<String, String> rowValueMap = rowSet.getRows().get(0).getValues();
         assertTrue(rowValueMap.isEmpty());
     }
@@ -221,9 +254,6 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
                 eq(Exporter3TestUtil.PARTICIPANT_VERSION_TABLE_ID));
 
         PartialRowSet rowSet = (PartialRowSet) rowSetCaptor.getValue();
-        assertEquals(rowSet.getTableId(), Exporter3TestUtil.PARTICIPANT_VERSION_TABLE_ID);
-        assertEquals(rowSet.getRows().size(), 1);
-
         Map<String, String> rowValueMap = rowSet.getRows().get(0).getValues();
         assertFalse(rowValueMap.isEmpty());
         assertFalse(rowValueMap.containsKey(COLUMN_ID_STUDY_MEMBERSHIPS));

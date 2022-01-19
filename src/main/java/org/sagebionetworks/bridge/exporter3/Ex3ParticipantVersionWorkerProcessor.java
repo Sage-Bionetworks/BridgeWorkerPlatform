@@ -49,6 +49,8 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
     public static final String COLUMN_NAME_STUDY_MEMBERSHIPS = "studyMemberships";
     public static final String COLUMN_NAME_CLIENT_TIME_ZONE = "clientTimeZone";
 
+    private static final int MAX_LANGUAGES = 10;
+
     private BridgeHelper bridgeHelper;
     private SynapseHelper synapseHelper;
 
@@ -136,10 +138,16 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
             rowMap.put(columnNameToId.get(COLUMN_NAME_DATA_GROUPS), Constants.COMMA_JOINER.join(dataGroupCopy));
         }
         if (participantVersion.getLanguages() != null) {
+            List<String> languageList = participantVersion.getLanguages();
+
+            // If we have more languages than the max, we truncate.
+            if (languageList.size() > MAX_LANGUAGES) {
+                languageList = languageList.subList(0, MAX_LANGUAGES);
+            }
+
             // Order *does* matter for languages. Also, the format for a string list in Synapse appears to be a JSON
             // array.
-            String serializedLanguages = DefaultObjectMapper.INSTANCE.writeValueAsString(participantVersion
-                    .getLanguages());
+            String serializedLanguages = DefaultObjectMapper.INSTANCE.writeValueAsString(languageList);
             rowMap.put(columnNameToId.get(COLUMN_NAME_LANGUAGES), serializedLanguages);
         }
         if (participantVersion.getSharingScope() != null) {
