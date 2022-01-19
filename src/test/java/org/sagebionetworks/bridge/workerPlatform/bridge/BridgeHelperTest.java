@@ -34,6 +34,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
+import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyList;
 import org.testng.annotations.BeforeClass;
@@ -84,6 +85,7 @@ public class BridgeHelperTest {
     private static final List<String> DUMMY_MESSAGE_LIST = ImmutableList.of("This is a message");
     private static final String EMAIL = "eggplant@example.com";
     private static final String HEALTH_CODE = "test-health-code";
+    private static final int PARTICIPANT_VERSION = 13;
     private static final Phone PHONE = new Phone().regionCode("US").number("4082588569");
     private static final String RECORD_ID = "dummy-record";
     private static final String REPORT_ID = "test-report";
@@ -415,6 +417,20 @@ public class BridgeHelperTest {
         assertSame(outputReportDataList.get(0), dummyReport);
 
         verify(mockWorkerApi).getParticipantReportsForParticipant(APP_ID, USER_ID, REPORT_ID, START_DATE, END_DATE);
+    }
+
+    @Test
+    public void getParticipantVersion() throws Exception {
+        // Set up mocks.
+        ParticipantVersion participantVersion = new ParticipantVersion();
+        Call<ParticipantVersion> mockCall = mockCallForValue(participantVersion);
+        when(mockWorkerApi.getParticipantVersion(APP_ID, USER_ID, PARTICIPANT_VERSION)).thenReturn(mockCall);
+
+        // Execute and validate.
+        ParticipantVersion result = bridgeHelper.getParticipantVersion(APP_ID, USER_ID, PARTICIPANT_VERSION);
+        assertSame(result, participantVersion);
+
+        verify(mockWorkerApi).getParticipantVersion(APP_ID, USER_ID, PARTICIPANT_VERSION);
     }
 
     @Test
