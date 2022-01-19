@@ -2,14 +2,25 @@ package org.sagebionetworks.bridge.participantroster;
 
 import au.com.bytecode.opencsv.CSVReader;
 import au.com.bytecode.opencsv.CSVWriter;
+
+import com.amazonaws.HttpMethod;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+
+import org.joda.time.DateTime;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+import org.mockito.Spy;
+import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.rest.model.Role;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.udd.helper.SesHelper;
 import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
@@ -23,25 +34,17 @@ import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.lang.reflect.Field;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
+import static org.sagebionetworks.bridge.participantroster.DownloadParticipantRosterWorkerProcessor.CONFIG_KEY_PARTICIPANTROSTER_BUCKET;
 import static org.testng.Assert.assertEquals;
 
-public class DownloadParticipantRosterWorkerProcessorTest {
+public class DownloadParticipantRosterWorkerProcessorTest extends Mockito {
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
     private static final String APP_ID = "test-app";
     private static final String USER_ID = "test-user-id";
@@ -49,36 +52,50 @@ public class DownloadParticipantRosterWorkerProcessorTest {
     private static final String ORG_ID = "test-org-id";
     private static final String STUDY_ID = "test-study-id";
     private static final int PAGE_SIZE = 100;
+    private static final DateTime NOW = DateTime.now();
+    private static final String S3_FILE_NAME = APP_ID + "/" + STUDY_ID + "/ABCABC/user_data.zip";
+    private static final String DOWNLOAD_URL = "https://s3/" + S3_FILE_NAME;
 
+    @Mock
     private DynamoHelper mockDynamoHelper;
+    @Mock
     private BridgeHelper mockBridgeHelper;
+    @Mock
     private SesHelper mockSesHelper;
-    private InMemoryFileHelper fileHelper;
+    @Mock
     private ZipHelper mockZipHelper;
-
+    @Mock
+    private S3Helper mockS3Helper;
+    @Mock
+    private Config mockConfig;
+    // mocked manually
+    private InMemoryFileHelper fileHelper;
+    @Spy
+    @InjectMocks
     private DownloadParticipantRosterWorkerProcessor processor;
 
     @BeforeMethod
     public void before() {
-        mockDynamoHelper = mock(DynamoHelper.class);
-        mockBridgeHelper = mock(BridgeHelper.class);
-        mockSesHelper = mock(SesHelper.class);
+        MockitoAnnotations.initMocks(this);
         fileHelper = new InMemoryFileHelper();
-        mockZipHelper = mock(ZipHelper.class);
-
-        processor = spy(new DownloadParticipantRosterWorkerProcessor());
-        processor.setDynamoHelper(mockDynamoHelper);
-        processor.setSesHelper(mockSesHelper);
         processor.setFileHelper(fileHelper);
-        processor.setBridgeHelper(mockBridgeHelper);
-        processor.setZipHelper(mockZipHelper);
+        processor.setPageSize(PAGE_SIZE);
+        
+        when(mockConfig.get(CONFIG_KEY_PARTICIPANTROSTER_BUCKET)).thenReturn("participant-roster-bucket");
+        processor.setBridgeConfig(mockConfig);
+        
+        when(processor.getNextToken()).thenReturn("ABC");
+        when(processor.getDateTime()).thenReturn(NOW);
     }
 
     @Test
     public void notResearcherOrCoordinator() throws Exception {
         // initialize participant with no Researcher or Study Coordinator role
         StudyParticipant participant = new StudyParticipant();
-
+        participant.setRoles(ImmutableList.of());
+        participant.setEmail("example@example.org");
+        participant.setEmailVerified(true);
+        
         testParticipantRequirements(participant, makeValidRequestNode());
     }
 
@@ -88,7 +105,6 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         participant.addRolesItem(Role.RESEARCHER);
 
         testParticipantRequirements(participant, makeValidRequestNode());
-
     }
 
     @Test
@@ -117,7 +133,7 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         StudyParticipant participant = new StudyParticipant();
         participant.setEmail("example@example.org");
         participant.setEmailVerified(true);
-        participant.addRolesItem(Role.RESEARCHER);
+        participant.addRolesItem(Role.STUDY_COORDINATOR);
         participant.setOrgMembership(ORG_ID);
 
         ObjectNode requestNode = makeValidRequestNode();
@@ -145,15 +161,137 @@ public class DownloadParticipantRosterWorkerProcessorTest {
     }
 
     @Test
-    public void processWithoutStudyId() throws Exception {
-        process(null);
+    public void processWithResearcher() throws Exception {
+        // set up participant
+        StudyParticipant participant = new StudyParticipant();
+        participant.setEmail("example@example.org");
+        participant.setEmailVerified(true);
+        participant.addRolesItem(Role.RESEARCHER);
+
+        // set up files
+        File tmpDir = fileHelper.createTempDir();
+        File csvFile = fileHelper.newFile(tmpDir, "participant_roster.csv");
+        File zipFile = fileHelper.newFile(tmpDir, "user_data.zip");
+
+        // set up request
+        DownloadParticipantRosterRequest request = new DownloadParticipantRosterRequest.Builder()
+                .withUserId(USER_ID).withAppId(APP_ID).withPassword(PASSWORD).withStudyId(STUDY_ID).build();
+
+        // set up mocks
+        doReturn(participant).when(mockBridgeHelper).getParticipant(APP_ID, USER_ID, false);
+
+        Study study = new Study();
+        study.setIdentifier(STUDY_ID);
+        List<Study> studies = ImmutableList.of(study);
+        doReturn(studies).when(mockBridgeHelper).getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, PAGE_SIZE);
+        
+        when(mockS3Helper.generatePresignedUrl("participant-roster-bucket", S3_FILE_NAME, NOW.plusDays(3),
+                HttpMethod.GET)).thenReturn(new URL(DOWNLOAD_URL));
+
+        List<StudyParticipant> studyParticipants = ImmutableList.of(makeStudyParticipant(1), makeStudyParticipant(2), makeStudyParticipant(3));
+        doReturn(studyParticipants).when(mockBridgeHelper).getStudyParticipantsForStudy(APP_ID, STUDY_ID, 0, PAGE_SIZE);
+        doReturn(ImmutableList.of()).when(mockBridgeHelper).getStudyParticipantsForStudy(APP_ID, STUDY_ID, PAGE_SIZE, PAGE_SIZE);
+
+        AppInfo appInfo = new AppInfo.Builder().withAppId(APP_ID).withName("test-name").withSupportEmail("example@example.org").build();
+        doReturn(appInfo).when(mockDynamoHelper).getApp(APP_ID);
+
+        AccountInfo accountInfo = new AccountInfo.Builder().withUserId(USER_ID).withEmailAddress("example@example.org").build();
+        doReturn(accountInfo).when(mockBridgeHelper).getAccountInfo(APP_ID, USER_ID);
+
+        // we want to evaluate the files before they're cleaned up
+        doNothing().when(processor).cleanupFiles(csvFile, zipFile, tmpDir);
+
+        // process
+        processor.process(request, csvFile, zipFile, tmpDir);
+
+        // verify file contents
+        String csvContent = new String(fileHelper.getBytes(csvFile), StandardCharsets.UTF_8);
+        assertCsvContent(csvContent);
+
+        // verify that the csv is written to the file
+        verify(processor).writeStudyParticipants(any(CSVWriter.class), eq(studyParticipants), eq(0), eq(APP_ID), eq(STUDY_ID));
+
+        // verify that the file is zipped
+        verify(mockZipHelper).zipWithPassword(ImmutableList.of(csvFile), zipFile, PASSWORD);
+
+        // verify that the email with attachment is sent
+        verify(mockSesHelper).sendEmailWithTempDownloadLinkToAccount(appInfo, accountInfo, DOWNLOAD_URL, "3 days");
+
+        // cleanup files
+        processor.cleanupFiles(csvFile, zipFile, tmpDir);
     }
 
     @Test
-    public void processWithStudyId() throws Exception {
-        process(STUDY_ID);
-    }
+    public void processWithStudyCoordinator() throws Exception {
+        // set up participant
+        StudyParticipant participant = new StudyParticipant();
+        participant.setEmail("example@example.org");
+        participant.setEmailVerified(true);
+        participant.addRolesItem(Role.STUDY_COORDINATOR);
+        participant.setOrgMembership(ORG_ID);
 
+        // set up files
+        File tmpDir = fileHelper.createTempDir();
+        File csvFile = fileHelper.newFile(tmpDir, "participant_roster.csv");
+        File zipFile = fileHelper.newFile(tmpDir, "user_data.zip");
+
+        // set up request
+        DownloadParticipantRosterRequest request = new DownloadParticipantRosterRequest.Builder()
+                .withUserId(USER_ID).withAppId(APP_ID).withPassword(PASSWORD).withStudyId(STUDY_ID).build();
+
+        // set up mocks
+        doReturn(participant).when(mockBridgeHelper).getParticipant(APP_ID, USER_ID, false);
+
+        // the original implementation did not look past the first page of records. Put the relevant
+        // study on the second page to verify this is found.
+        processor.setPageSize(1);
+        
+        Study study1 = new Study();
+        study1.setIdentifier("some-other-study");
+        doReturn(ImmutableList.of(study1)).when(mockBridgeHelper)
+            .getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, 1);
+        
+        Study study2 = new Study();
+        study2.setIdentifier(STUDY_ID);
+        doReturn(ImmutableList.of(study2)).when(mockBridgeHelper)
+            .getSponsoredStudiesForApp(APP_ID, ORG_ID, 1, 1);
+        
+        when(mockS3Helper.generatePresignedUrl("participant-roster-bucket", S3_FILE_NAME, NOW.plusDays(3),
+                HttpMethod.GET)).thenReturn(new URL(DOWNLOAD_URL));
+
+        List<StudyParticipant> studyParticipants = ImmutableList.of(makeStudyParticipant(1), makeStudyParticipant(2), makeStudyParticipant(3));
+        doReturn(studyParticipants).when(mockBridgeHelper).getStudyParticipantsForStudy(APP_ID, STUDY_ID, 0, 1);
+        doReturn(ImmutableList.of()).when(mockBridgeHelper).getStudyParticipantsForStudy(APP_ID, STUDY_ID, 1, 1);
+
+        AppInfo appInfo = new AppInfo.Builder().withAppId(APP_ID).withName("test-name").withSupportEmail("example@example.org").build();
+        doReturn(appInfo).when(mockDynamoHelper).getApp(APP_ID);
+
+        AccountInfo accountInfo = new AccountInfo.Builder().withUserId(USER_ID).withEmailAddress("example@example.org").build();
+        doReturn(accountInfo).when(mockBridgeHelper).getAccountInfo(APP_ID, USER_ID);
+
+        // we want to evaluate the files before they're cleaned up
+        doNothing().when(processor).cleanupFiles(csvFile, zipFile, tmpDir);
+
+        // process
+        processor.process(request, csvFile, zipFile, tmpDir);
+
+        // verify file contents
+        String csvContent = new String(fileHelper.getBytes(csvFile), StandardCharsets.UTF_8);
+        assertCsvContent(csvContent);
+
+        // verify that the csv is written to the file
+        verify(processor).writeStudyParticipants(any(CSVWriter.class), eq(studyParticipants), eq(0), eq(APP_ID), eq(STUDY_ID));
+
+        // verify that the file is zipped
+        verify(mockZipHelper).zipWithPassword(ImmutableList.of(csvFile), zipFile, PASSWORD);
+
+        // verify that the email with attachment is sent
+        verify(mockSesHelper).sendEmailWithTempDownloadLinkToAccount(appInfo, accountInfo, DOWNLOAD_URL, "3 days");
+
+        // cleanup files
+        processor.cleanupFiles(csvFile, zipFile, tmpDir);
+    }
+    
     @Test
     public void paginatedProcess() throws Exception {
         // set up participant
@@ -169,20 +307,23 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         File zipFile = fileHelper.newFile(tmpDir, "user_data.zip");
 
         // set up request
-        DownloadParticipantRosterRequest request = new DownloadParticipantRosterRequest.Builder()
-                .withUserId(USER_ID).withAppId(APP_ID).withPassword(PASSWORD).build();
+        DownloadParticipantRosterRequest request = new DownloadParticipantRosterRequest.Builder().withUserId(USER_ID)
+                .withAppId(APP_ID).withStudyId(STUDY_ID).withPassword(PASSWORD).build();
 
         // mock caller
         doReturn(participant).when(mockBridgeHelper).getParticipant(APP_ID, USER_ID, false);
+        
+        doReturn(new URL(DOWNLOAD_URL)).when(mockS3Helper).generatePresignedUrl(
+                "participant-roster-bucket", S3_FILE_NAME, NOW.plusDays(3), HttpMethod.GET);
 
         // mock multiple bridge calls to test pagination
         StudyParticipant participant1 = makeStudyParticipant(1);
         StudyParticipant participant2 = makeStudyParticipant(2);
         StudyParticipant participant3 = makeStudyParticipant(3);
 
-        doReturn(ImmutableList.of(participant1)).when(mockBridgeHelper).getStudyParticipantsForApp(APP_ID, ORG_ID, 0, 1, null);
-        doReturn(ImmutableList.of(participant2)).when(mockBridgeHelper).getStudyParticipantsForApp(APP_ID, ORG_ID, 1, 1, null);
-        doReturn(ImmutableList.of(participant3)).when(mockBridgeHelper).getStudyParticipantsForApp(APP_ID, ORG_ID, 2, 1, null);
+        doReturn(ImmutableList.of(participant1)).when(mockBridgeHelper).getStudyParticipantsForStudy(APP_ID, STUDY_ID, 0, 1);
+        doReturn(ImmutableList.of(participant2)).when(mockBridgeHelper).getStudyParticipantsForStudy(APP_ID, STUDY_ID, 1, 1);
+        doReturn(ImmutableList.of(participant3)).when(mockBridgeHelper).getStudyParticipantsForStudy(APP_ID, STUDY_ID, 2, 1);
 
         AppInfo appInfo = new AppInfo.Builder().withAppId(APP_ID).withName("test-name").withSupportEmail("example@example.org").build();
         doReturn(appInfo).when(mockDynamoHelper).getApp(APP_ID);
@@ -203,70 +344,13 @@ public class DownloadParticipantRosterWorkerProcessorTest {
 
         // verify that the csv is written to the file
         verify(processor).writeStudyParticipants(any(CSVWriter.class), eq(ImmutableList.of(participant1)), eq(0),
-                eq(APP_ID), eq(ORG_ID), eq(null));
+                eq(APP_ID), eq(STUDY_ID));
 
         // verify that the file is zipped
         verify(mockZipHelper).zipWithPassword(ImmutableList.of(csvFile), zipFile, PASSWORD);
 
         // verify that the email with attachment is sent
-        verify(mockSesHelper).sendEmailWithAttachmentToAccount(appInfo, accountInfo, zipFile.getAbsolutePath());
-
-        // cleanup files
-        processor.cleanupFiles(csvFile, zipFile, tmpDir);
-    }
-
-    private void process(String studyId) throws Exception {
-        // set up participant
-        StudyParticipant participant = new StudyParticipant();
-        participant.setEmail("example@example.org");
-        participant.setEmailVerified(true);
-        participant.addRolesItem(Role.RESEARCHER);
-        participant.setOrgMembership(ORG_ID);
-
-        // set up files
-        File tmpDir = fileHelper.createTempDir();
-        File csvFile = fileHelper.newFile(tmpDir, "participant_roster.csv");
-        File zipFile = fileHelper.newFile(tmpDir, "user_data.zip");
-
-        // set up request
-        DownloadParticipantRosterRequest request = new DownloadParticipantRosterRequest.Builder()
-                .withUserId(USER_ID).withAppId(APP_ID).withPassword(PASSWORD).withStudyId(studyId).build();
-
-        // set up mocks
-        doReturn(participant).when(mockBridgeHelper).getParticipant(APP_ID, USER_ID, false);
-
-        Study study = new Study();
-        study.setIdentifier(studyId);
-        List<Study> studies = ImmutableList.of(study);
-        doReturn(studies).when(mockBridgeHelper).getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, PAGE_SIZE);
-
-        List<StudyParticipant> studyParticipants = ImmutableList.of(makeStudyParticipant(1), makeStudyParticipant(2), makeStudyParticipant(3));
-        doReturn(studyParticipants).doReturn(ImmutableList.of()).when(mockBridgeHelper).getStudyParticipantsForApp(APP_ID, ORG_ID, 0, PAGE_SIZE, studyId);
-
-        AppInfo appInfo = new AppInfo.Builder().withAppId(APP_ID).withName("test-name").withSupportEmail("example@example.org").build();
-        doReturn(appInfo).when(mockDynamoHelper).getApp(APP_ID);
-
-        AccountInfo accountInfo = new AccountInfo.Builder().withUserId(USER_ID).withEmailAddress("example@example.org").build();
-        doReturn(accountInfo).when(mockBridgeHelper).getAccountInfo(APP_ID, USER_ID);
-
-        // we want to evaluate the files before they're cleaned up
-        doNothing().when(processor).cleanupFiles(csvFile, zipFile, tmpDir);
-
-        // process
-        processor.process(request, csvFile, zipFile, tmpDir);
-
-        // verify file contents
-        String csvContent = new String(fileHelper.getBytes(csvFile), StandardCharsets.UTF_8);
-        assertCsvContent(csvContent);
-
-        // verify that the csv is written to the file
-        verify(processor).writeStudyParticipants(any(CSVWriter.class), eq(studyParticipants), eq(0), eq(APP_ID), eq(ORG_ID), eq(studyId));
-
-        // verify that the file is zipped
-        verify(mockZipHelper).zipWithPassword(ImmutableList.of(csvFile), zipFile, PASSWORD);
-
-        // verify that the email with attachment is sent
-        verify(mockSesHelper).sendEmailWithAttachmentToAccount(appInfo, accountInfo, zipFile.getAbsolutePath());
+        verify(mockSesHelper).sendEmailWithTempDownloadLinkToAccount(appInfo, accountInfo, DOWNLOAD_URL, "3 days");
 
         // cleanup files
         processor.cleanupFiles(csvFile, zipFile, tmpDir);
@@ -329,6 +413,7 @@ public class DownloadParticipantRosterWorkerProcessorTest {
         requestNode.put("appId", APP_ID);
         requestNode.put("userId", USER_ID);
         requestNode.put("password", PASSWORD);
+        requestNode.put("studyId", STUDY_ID);
 
         return requestNode;
     }
@@ -368,12 +453,12 @@ public class DownloadParticipantRosterWorkerProcessorTest {
 
     private void testParticipantRequirements(StudyParticipant participant, ObjectNode requestNode) throws Exception {
         doReturn(participant).when(mockBridgeHelper).getParticipant(APP_ID, USER_ID, false);
-        doReturn(new ArrayList<StudyParticipant>()).when(mockBridgeHelper).getStudyParticipantsForApp(
-                anyString(), anyString(), anyInt(), anyInt(), anyString());
+        doReturn(new ArrayList<StudyParticipant>()).when(mockBridgeHelper).getStudyParticipantsForStudy(
+                anyString(), anyString(), anyInt(), anyInt());
 
         processor.accept(requestNode);
 
         // verify that this call isn't reached, because study participant does not have a verified email
-        verify(mockBridgeHelper, never()).getStudyParticipantsForApp(anyString(), anyString(), anyInt(), anyInt(), anyString());
+        verify(mockBridgeHelper, never()).getStudyParticipantsForStudy(anyString(), anyString(), anyInt(), anyInt());
     }
 }

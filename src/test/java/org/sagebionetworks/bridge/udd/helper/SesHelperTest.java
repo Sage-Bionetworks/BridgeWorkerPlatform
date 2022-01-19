@@ -105,7 +105,7 @@ public class SesHelperTest {
     }
 
     @Test
-    public void testSendEmailWithAttachmentToAccount() throws MessagingException, IOException {
+    public void testSendEmailWithTempDownloadLinkToAccount() throws MessagingException, IOException {
         // test attachment input by creating a temporary file to attach
         FileHelper fileHelper = new FileHelper();
         File tmpDir = null;
@@ -117,7 +117,7 @@ public class SesHelperTest {
             csvWriter.writeNext("test text");
 
             // execute
-            sesHelper.sendEmailWithAttachmentToAccount(appInfo, accountInfo, tmpFile.getAbsolutePath());
+            sesHelper.sendEmailWithTempDownloadLinkToAccount(appInfo, accountInfo, tmpFile.getAbsolutePath(), "3 days");
 
             SendRawEmailRequest rawSesRequest = sesRawRequestCaptor.getValue();
             RawMessage rawMessage = rawSesRequest.getRawMessage();
@@ -131,8 +131,10 @@ public class SesHelperTest {
             assertTrue(message.contains("From: support@sagebase.org"));
             assertTrue(message.contains("To: dummy-email@example.com"));
             assertTrue(message.contains("Subject: Your requested data from Test App"));
-            assertTrue(message.contains("Your requested data is now available. To download your requested data, " +
-                    "please click on the file attached in this email."));
+            assertTrue(message.contains("Your requested data is now available. To "
+                    +"download your requested data, please click on this link (which expires "
+                    +"after 3 days):\n"));
+            assertTrue(message.contains(tmpFile.getAbsolutePath()));
 
         } finally {
             // clean up temp files

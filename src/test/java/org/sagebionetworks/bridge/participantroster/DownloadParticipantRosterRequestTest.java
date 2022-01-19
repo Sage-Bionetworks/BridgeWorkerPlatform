@@ -19,29 +19,39 @@ public class DownloadParticipantRosterRequestTest {
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = "appId must be specified")
     public void emptyAppId() {
-        new DownloadParticipantRosterRequest.Builder().withAppId("").withUserId(USER_ID).withPassword(PASSWORD).build();
+        new DownloadParticipantRosterRequest.Builder().withAppId("").withStudyId(STUDY_ID).withUserId(USER_ID).withPassword(PASSWORD).build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = "userId must be specified")
     public void nullUsername() {
-        new DownloadParticipantRosterRequest.Builder().withAppId(APP_ID).withPassword(PASSWORD).build();
+        new DownloadParticipantRosterRequest.Builder().withAppId(APP_ID).withStudyId(STUDY_ID).withPassword(PASSWORD).build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = "userId must be specified")
     public void emptyUsername() {
-        new DownloadParticipantRosterRequest.Builder().withAppId(APP_ID).withUserId("").withPassword(PASSWORD).build();
+        new DownloadParticipantRosterRequest.Builder().withAppId(APP_ID).withStudyId(STUDY_ID).withUserId("").withPassword(PASSWORD).build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = "password must be specified")
     public void nullPassword() {
-        new DownloadParticipantRosterRequest.Builder().withAppId(APP_ID).withUserId(USER_ID).build();
+        new DownloadParticipantRosterRequest.Builder().withAppId(APP_ID).withStudyId(STUDY_ID).withUserId(USER_ID).build();
     }
 
     @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = "password must be specified")
     public void emptyPassword() {
-        new DownloadParticipantRosterRequest.Builder().withAppId(APP_ID).withUserId(USER_ID).withPassword("").build();
+        new DownloadParticipantRosterRequest.Builder().withAppId(APP_ID).withStudyId(STUDY_ID).withUserId(USER_ID).withPassword("").build();
     }
 
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = "studyId must be specified")
+    public void nullStudyId() {
+        new DownloadParticipantRosterRequest.Builder().withAppId(APP_ID).withUserId(USER_ID).withPassword(PASSWORD).build();
+    }
+    
+    @Test(expectedExceptions = IllegalStateException.class, expectedExceptionsMessageRegExp = "studyId must be specified")
+    public void emptyStudyId() {
+        new DownloadParticipantRosterRequest.Builder().withAppId(APP_ID).withStudyId("").withUserId(USER_ID).withPassword(PASSWORD).build();
+    }
+    
     @Test
     public void jsonSerializationWithUserId() throws Exception {
         // start with JSON
