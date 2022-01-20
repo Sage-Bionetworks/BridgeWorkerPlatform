@@ -67,8 +67,10 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
             
             while(studyIterator.hasNext()) {
                 Study study = studyIterator.next();
-                // This excludes legacy studies, and thus excludes all older apps
-                if (ACTIVE_PHASES.contains(study.getPhase())) {
+                // This excludes legacy studies, and thus excludes all older apps, and well as any studies
+                // that have no schedules. Right now this is hundreds of studies with thousands of users, but
+                // we will need to continue to define limits to this processing as the system grows. 
+                if (ACTIVE_PHASES.contains(study.getPhase()) && study.getScheduleGuid() != null) {
                     studyThresholds.put(study.getIdentifier(), getThresholdPercentage(study));
                 }
             }
