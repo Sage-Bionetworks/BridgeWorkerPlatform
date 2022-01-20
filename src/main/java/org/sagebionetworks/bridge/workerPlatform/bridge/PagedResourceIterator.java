@@ -5,6 +5,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,6 +20,8 @@ import com.google.common.collect.ImmutableList;
 public class PagedResourceIterator<T> implements Iterator<T> {
     private static final Logger LOG = LoggerFactory.getLogger(PagedResourceIterator.class);
     
+    private static final int NUMBER_RETRIES = 3;
+    
     @FunctionalInterface
     public interface IOFunction<S, T, R> {
         R apply(S s, T t) throws IOException;
@@ -30,25 +33,59 @@ public class PagedResourceIterator<T> implements Iterator<T> {
     private List<T> page;
     private int nextIndex;
     private int offsetBy;
+    private int retryDelayInSeconds;
     
-    public PagedResourceIterator(IOFunction<Integer, Integer, List<T>> func, int pageSize) {
+    public PagedResourceIterator(IOFunction<Integer, Integer, List<T>> func, int pageSize, int retryDelayInSeconds) {
         this.func = func;
         this.pageSize = pageSize;
-        getNextPage();
+        this.retryDelayInSeconds = retryDelayInSeconds;
+        loadNextPage();
+    }
+    
+    public PagedResourceIterator(IOFunction<Integer, Integer, List<T>> func, int pageSize) {
+        this(func, pageSize, 5);
     }
     
     /**
-     * The iterator fails on the first page that encounters an error, ending the iteration. 
+     * If the iterator encounters a potentially transient error, including Request
+     * Timeout (408), Too Many Requests (429), Bad Gateway (502), Service
+     * Unavailable (503), or Gateway Timeout (504), it will retry up to three times
+     * with exponential back-off. Other exceptions cause the iterator to stop iteration.
      */
-    private void getNextPage() {
-        try {
-            page = func.apply(offsetBy, pageSize);
-        } catch (IOException e) {
-            page = ImmutableList.of();
-            LOG.error("Error while calling paged iterator", e);
+    private void loadNextPage() {
+        page = ImmutableList.of(); // a failure will stop iteration.
+        for (int i=0; i <= NUMBER_RETRIES; i++) {
+            if (i > 0) { // this is a retry
+                try {
+                    long timeout = (long)Math.pow(retryDelayInSeconds, i);
+                    LOG.info("Recoverable exception, retrying request in " + timeout + " seconds");
+                    Thread.sleep( timeout * 1000L );
+                } catch (InterruptedException e1) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            try {
+                page = func.apply(offsetBy, pageSize);
+                break;
+            } catch(BridgeSDKException e) {
+                if (nonRecoverableException( e.getStatusCode() )) {
+                    LOG.error("Non-recoverable exception while calling paged iterator", e);
+                    break;
+                } else if (i == NUMBER_RETRIES) {
+                    LOG.info("Aborting request after "+NUMBER_RETRIES+" retries", e);
+                    break;
+                }
+            } catch(Throwable t) {
+                LOG.error("Non-recoverable exception while calling paged iterator", t);
+                break;
+            }
         }
         this.offsetBy += pageSize;
         this.nextIndex = 0;
+    }
+    
+    private boolean nonRecoverableException(int statusCode) {
+        return statusCode != 408 && statusCode != 429 && statusCode != 502 && statusCode != 503 && statusCode != 504;
     }
 
     @Override
@@ -63,7 +100,7 @@ public class PagedResourceIterator<T> implements Iterator<T> {
         }
         T element = page.get(nextIndex++);
         if (nextIndex >= page.size()) {
-            getNextPage();
+            loadNextPage();
         }
         return element;
     }

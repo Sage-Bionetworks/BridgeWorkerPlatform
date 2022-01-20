@@ -56,7 +56,7 @@ public class DownloadParticipantRosterWorkerProcessorTest extends Mockito {
     private static final String STUDY_ID = "test-study-id";
     private static final int PAGE_SIZE = 100;
     private static final DateTime NOW = DateTime.now();
-    private static final String S3_FILE_NAME = APP_ID + "/" + STUDY_ID + "/ABCABC/user_data.zip";
+    private static final String S3_FILE_NAME = APP_ID + "/" + STUDY_ID + "/ABC/user_data.zip";
     private static final String DOWNLOAD_URL = "https://s3/" + S3_FILE_NAME;
 
     @Mock

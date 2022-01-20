@@ -154,7 +154,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         process(request, csvFile, zipFile, tmpDir);
 
         LOG.info("request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
-                " seconds for userId =" + request.getUserId() + ", app=" + request.getAppId());
+                " seconds for userId=" + request.getUserId() + ", app=" + request.getAppId());
     }
 
     void process(DownloadParticipantRosterRequest request, File csvFile, File zipFile, File tmpDir) throws Exception {
@@ -191,7 +191,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             metadata.setContentType(CONTENT_TYPE_ZIP);
             metadata.setContentDisposition("attachment; filename=\""+ZIP_FILE_NAME+"\"");
             
-            String s3Key = appId + "/" + studyId + "/" + getNextToken() + getNextToken() + "/" + ZIP_FILE_NAME;
+            String s3Key = appId + "/" + studyId + "/" + getNextToken() + "/" + ZIP_FILE_NAME;
             
             s3Helper.writeFileToS3(participantRosterBucket, s3Key, zipFile, metadata);
 
