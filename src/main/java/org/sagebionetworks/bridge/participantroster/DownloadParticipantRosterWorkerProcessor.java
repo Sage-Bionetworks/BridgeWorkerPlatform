@@ -246,14 +246,8 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
     }
     
     private PagedResourceIterator<Study> createStudyIterator(String appId, String orgId) {
-        return new PagedResourceIterator<>((offsetBy) -> {
-            try {
-                return bridgeHelper.getSponsoredStudiesForApp(appId, orgId, offsetBy, pageSize);
-            } catch (IOException e) {
-                LOG.error("Error while retrieving studies for app " + appId, e);
-            }
-            return ImmutableList.of();
-        }, pageSize);
+        return new PagedResourceIterator<>((ob, ps) -> 
+            bridgeHelper.getSponsoredStudiesForApp(appId, orgId, ob, ps), pageSize);
     }
     
     /** Write all of the study participants to the CSV file */

@@ -1,11 +1,14 @@
 package org.sagebionetworks.bridge.workerPlatform.bridge;
 
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.fail;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -13,6 +16,7 @@ import org.mockito.MockitoAnnotations;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyList;
+import org.sagebionetworks.bridge.workerPlatform.bridge.PagedResourceIterator.IOFunction;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -61,20 +65,48 @@ public class PagedResourceIteratorTest extends Mockito {
         mockCall(expectedValues, 20, 3);
         mockCall(expectedValues, 30, 0);
         
-        PagedResourceIterator<Study> iterator = new PagedResourceIterator<>((offsetBy) -> {
-            try {
-                return mockWorkersApi.getSponsoredStudiesForApp("api", "orgId", 
-                        offsetBy, 10).execute().body().getItems();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }, 10);
+        PagedResourceIterator<Study> iterator = new PagedResourceIterator<>((ob, ps) -> 
+            mockWorkersApi.getSponsoredStudiesForApp("api", "orgId", ob, ps).execute().body().getItems(), 10);
         
         List<String> retValues = new ArrayList<>();
         while(iterator.hasNext()) {
             retValues.add(iterator.next().getIdentifier());
         }
         assertEquals(retValues, expectedValues);
+        
+        // One more time throws an error
+        try {
+            iterator.next();
+            fail("Should have thrown exeption");
+        } catch(NoSuchElementException e) {
+        }
+    }
+    
+    @Test
+    public void testFunctionThrowsAnException() throws Exception {
+        IOFunction<Integer, Integer, List<Study>> func = (Integer ob, Integer ps) -> {
+            throw new IOException(); 
+        };
+        
+        PagedResourceIterator<Study> iterator = new PagedResourceIterator<Study>(func, 10);
+        
+        assertFalse(iterator.hasNext());
+        try {
+            iterator.next();
+            fail("Should have thrown exeption");
+        } catch(NoSuchElementException e) {
+            
+        }
+        
+        // Calling these out of order, the result is the same.
+        iterator = new PagedResourceIterator<Study>(func, 10);
+        try {
+            iterator.next();
+            fail("Should have thrown exeption");
+        } catch(NoSuchElementException e) {
+            
+        }
+        assertFalse(iterator.hasNext());
     }
     
     private static void setVariableValueInObject(Object object, String variable, Object value) throws IllegalAccessException {
