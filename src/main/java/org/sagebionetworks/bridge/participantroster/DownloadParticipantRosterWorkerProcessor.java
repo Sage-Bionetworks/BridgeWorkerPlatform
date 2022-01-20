@@ -232,7 +232,9 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             return false;
         }
         if (participantRoles.contains(STUDY_COORDINATOR)) {
-            PagedResourceIterator<Study> studyIter = createStudyIterator(appId, orgMembership);
+            PagedResourceIterator<Study> studyIter = new PagedResourceIterator<>((ob, ps) -> 
+                bridgeHelper.getSponsoredStudiesForApp(appId, orgMembership, ob, ps), pageSize);
+
             while(studyIter.hasNext()) {
                 Study study = studyIter.next();
                 if (study.getIdentifier().equals(studyId)) {
@@ -243,17 +245,6 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             return false;
         }
         return true;
-    }
-    
-    private PagedResourceIterator<Study> createStudyIterator(String appId, String orgId) {
-        return new PagedResourceIterator<>((offsetBy) -> {
-            try {
-                return bridgeHelper.getSponsoredStudiesForApp(appId, orgId, offsetBy, pageSize);
-            } catch (IOException e) {
-                LOG.error("Error while retrieving studies for app " + appId, e);
-            }
-            return ImmutableList.of();
-        }, pageSize);
     }
     
     /** Write all of the study participants to the CSV file */
