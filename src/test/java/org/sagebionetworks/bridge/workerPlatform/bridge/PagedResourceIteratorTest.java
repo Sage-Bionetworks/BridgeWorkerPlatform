@@ -9,11 +9,13 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
+import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyList;
 import org.sagebionetworks.bridge.workerPlatform.bridge.PagedResourceIterator.IOFunction;
@@ -58,21 +60,21 @@ public class PagedResourceIteratorTest extends Mockito {
     
     @Test
     public void test() throws Exception {
-        List<String> expectedValues = new ArrayList<>();
+        List<String> expectedStudyIds = new ArrayList<>();
         
-        mockCall(expectedValues, 0, 10);
-        mockCall(expectedValues, 10, 10);
-        mockCall(expectedValues, 20, 3);
-        mockCall(expectedValues, 30, 0);
+        mockCall(expectedStudyIds, 0, 10);
+        mockCall(expectedStudyIds, 10, 10);
+        mockCall(expectedStudyIds, 20, 3);
+        mockCall(expectedStudyIds, 30, 0);
         
         PagedResourceIterator<Study> iterator = new PagedResourceIterator<>((ob, ps) -> 
             mockWorkersApi.getSponsoredStudiesForApp("api", "orgId", ob, ps).execute().body().getItems(), 10);
         
-        List<String> retValues = new ArrayList<>();
+        List<String> returnedStudyIds = new ArrayList<>();
         while(iterator.hasNext()) {
-            retValues.add(iterator.next().getIdentifier());
+            returnedStudyIds.add(iterator.next().getIdentifier());
         }
-        assertEquals(retValues, expectedValues);
+        assertEquals(returnedStudyIds, expectedStudyIds);
         
         // One more time throws an error
         try {
@@ -83,13 +85,15 @@ public class PagedResourceIteratorTest extends Mockito {
     }
     
     @Test
-    public void testFunctionThrowsAnException() throws Exception {
+    public void nonRecoverableExceptionIteratesCorrectly() throws Exception {
+        AtomicInteger integer = new AtomicInteger();
         IOFunction<Integer, Integer, List<Study>> func = (Integer ob, Integer ps) -> {
+            integer.incrementAndGet();
             throw new IOException(); 
         };
         
         PagedResourceIterator<Study> iterator = new PagedResourceIterator<Study>(func, 10);
-        
+        assertEquals(integer.intValue(), 1);
         assertFalse(iterator.hasNext());
         try {
             iterator.next();
@@ -107,6 +111,32 @@ public class PagedResourceIteratorTest extends Mockito {
             
         }
         assertFalse(iterator.hasNext());
+    }
+    
+    @Test
+    public void recoverableBridgeSDKExceptionRetries( ) {
+        AtomicInteger integer = new AtomicInteger();
+        IOFunction<Integer, Integer, List<Study>> func = (Integer ob, Integer ps) -> {
+            integer.incrementAndGet();
+            throw new BridgeSDKException("This is a request timeout error", 408); 
+        };
+        
+        // just creating an iterator causes it to call the server.
+        new PagedResourceIterator<Study>(func, 10, 1);
+        assertEquals(integer.intValue(), 4);
+    }
+    
+    @Test
+    public void nonrecoverableBridgeSDKExceptionDoesNotRetry( ) {
+        AtomicInteger integer = new AtomicInteger();
+        IOFunction<Integer, Integer, List<Study>> func = (Integer ob, Integer ps) -> {
+            integer.incrementAndGet();
+            throw new BridgeSDKException("This is a not found error", 404); 
+        };
+        
+        // just creating an iterator causes it to call the server.
+        new PagedResourceIterator<Study>(func, 10, 1);
+        assertEquals(integer.intValue(), 1);
     }
     
     private static void setVariableValueInObject(Object object, String variable, Object value) throws IllegalAccessException {

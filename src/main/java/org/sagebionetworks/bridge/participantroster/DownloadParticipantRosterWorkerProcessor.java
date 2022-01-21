@@ -154,7 +154,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
         process(request, csvFile, zipFile, tmpDir);
 
         LOG.info("request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) +
-                " seconds for userId =" + request.getUserId() + ", app=" + request.getAppId());
+                " seconds for userId=" + request.getUserId() + ", app=" + request.getAppId());
     }
 
     void process(DownloadParticipantRosterRequest request, File csvFile, File zipFile, File tmpDir) throws Exception {
@@ -191,7 +191,7 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             metadata.setContentType(CONTENT_TYPE_ZIP);
             metadata.setContentDisposition("attachment; filename=\""+ZIP_FILE_NAME+"\"");
             
-            String s3Key = appId + "/" + studyId + "/" + getNextToken() + getNextToken() + "/" + ZIP_FILE_NAME;
+            String s3Key = appId + "/" + studyId + "/" + getNextToken() + "/" + ZIP_FILE_NAME;
             
             s3Helper.writeFileToS3(participantRosterBucket, s3Key, zipFile, metadata);
 
@@ -232,7 +232,9 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             return false;
         }
         if (participantRoles.contains(STUDY_COORDINATOR)) {
-            PagedResourceIterator<Study> studyIter = createStudyIterator(appId, orgMembership);
+            PagedResourceIterator<Study> studyIter = new PagedResourceIterator<>((ob, ps) -> 
+                bridgeHelper.getSponsoredStudiesForApp(appId, orgMembership, ob, ps), pageSize);
+
             while(studyIter.hasNext()) {
                 Study study = studyIter.next();
                 if (study.getIdentifier().equals(studyId)) {
@@ -243,11 +245,6 @@ public class DownloadParticipantRosterWorkerProcessor implements ThrowingConsume
             return false;
         }
         return true;
-    }
-    
-    private PagedResourceIterator<Study> createStudyIterator(String appId, String orgId) {
-        return new PagedResourceIterator<>((ob, ps) -> 
-            bridgeHelper.getSponsoredStudiesForApp(appId, orgId, ob, ps), pageSize);
     }
     
     /** Write all of the study participants to the CSV file */

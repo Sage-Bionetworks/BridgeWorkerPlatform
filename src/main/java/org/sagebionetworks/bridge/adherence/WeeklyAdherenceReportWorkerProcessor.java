@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import org.sagebionetworks.bridge.rest.ClientManager;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
@@ -27,14 +28,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableSet;
 
-@Component("WeeklyAdherenceReportWorkerProcessor")
+@Component("WeeklyAdherenceReportWorker")
 public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<JsonNode> {
     private static final Logger LOG = LoggerFactory.getLogger(WeeklyAdherenceReportWorkerProcessor.class);
 
     static final Set<StudyPhase> ACTIVE_PHASES = ImmutableSet.of(DESIGN, RECRUITMENT, IN_FLIGHT);
-    static final int PAGE_SIZE = 200;
+    static final int PAGE_SIZE = 100;
     
     private BridgeHelper bridgeHelper;
     
@@ -52,6 +54,15 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
     
     @Override
     public void accept(JsonNode node) throws Exception {
+        Stopwatch requestStopwatch = Stopwatch.createStarted();
+        try {
+            process(node);
+        } finally {
+            LOG.info("Weekly adherence report caching took " + requestStopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
+        }
+    }
+    
+    private void process(JsonNode node) throws Exception {
         ForWorkersApi workersApi = clientManager.getClient(ForWorkersApi.class);
         
         // Get all the studies that should have reports generated, across all apps.
@@ -69,7 +80,7 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                 Study study = studyIterator.next();
                 // This excludes legacy studies, and thus excludes all older apps, and well as any studies
                 // that have no schedules. Right now this is hundreds of studies with thousands of users, but
-                // we will need to continue to define limits to this processing as the system grows. 
+                // we will need to continue to define limits to this processing as the system grows.
                 if (ACTIVE_PHASES.contains(study.getPhase()) && study.getScheduleGuid() != null) {
                     studyThresholds.put(study.getIdentifier(), getThresholdPercentage(study));
                 }
@@ -78,6 +89,7 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                 LOG.info("Skipping app " + app.getIdentifier() + ": it has no reportable studies");
                 continue;
             }
+            Stopwatch appStopwatch = Stopwatch.createStarted();
             
             // Now go through all accounts that are enrolled in at least one study and push cache a report for each study
             PagedResourceIterator<AccountSummary> acctIterator = new PagedResourceIterator<>((ob, ps) -> {
@@ -92,7 +104,8 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                     if (studyThresholdPercent == null) { // study should not be reported on
                         continue;
                     }
-                        
+                    
+                    LOG.info("Caching report for user " + summary.getId() + " in study " + studyId);
                     WeeklyAdherenceReport report = workersApi.getWeeklyAdherenceReportForWorker(
                             app.getIdentifier(), studyId, summary.getId()).execute().body();
                     
@@ -105,6 +118,8 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                     }
                 }
             }
+            LOG.info("Weekly adherence report caching for app " + app.getIdentifier() + " took "
+                    + appStopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
         }
     }
 
