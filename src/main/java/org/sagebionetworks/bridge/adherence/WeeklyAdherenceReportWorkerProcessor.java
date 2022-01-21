@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import org.joda.time.DateTime;
 import org.sagebionetworks.bridge.rest.ClientManager;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
@@ -37,6 +38,7 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
 
     static final Set<StudyPhase> ACTIVE_PHASES = ImmutableSet.of(DESIGN, RECRUITMENT, IN_FLIGHT);
     static final int PAGE_SIZE = 100;
+    static final long THREAD_SLEEP_INTERVAL = 200L;
     
     private BridgeHelper bridgeHelper;
     
@@ -88,10 +90,12 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
             if (studyThresholds.isEmpty()) {
                 LOG.info("Skipping app " + app.getIdentifier() + ": it has no reportable studies");
                 continue;
+            } else {
+                LOG.info("Caching studies in app " + app.getIdentifier() + " starting at " + DateTime.now());
             }
             Stopwatch appStopwatch = Stopwatch.createStarted();
             
-            // Now go through all accounts that are enrolled in at least one study and push cache a report for each study
+            // Now go through all accounts that are enrolled in at least one study and push cache a report for each study.
             PagedResourceIterator<AccountSummary> acctIterator = new PagedResourceIterator<>((ob, ps) -> {
                 AccountSummarySearch search = new AccountSummarySearch().offsetBy(ob).pageSize(ps).enrollment(ENROLLED);
                 return workersApi.searchAccountSummariesForApp(app.getIdentifier(), search).execute().body().getItems();
@@ -101,7 +105,7 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                 AccountSummary summary = acctIterator.next();
                 for (String studyId : summary.getStudyIds()) {
                     Integer studyThresholdPercent = studyThresholds.get(studyId);
-                    if (studyThresholdPercent == null) { // study should not be reported on
+                    if (studyThresholdPercent == null) { // this study should not be reported on
                         continue;
                     }
                     
@@ -109,13 +113,15 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                     WeeklyAdherenceReport report = workersApi.getWeeklyAdherenceReportForWorker(
                             app.getIdentifier(), studyId, summary.getId()).execute().body();
                     
-                    // mission accomplished, it's been cached, but eventually we'll want to answer
-                    // the next question: are they compliant?
+                    // Mission accomplished, it's been cached, but eventually we'll want to send a 
+                    // notification if the user is not in adherence. Here's the hook for that.
                     int userAdherencePercent = report.getWeeklyAdherencePercent().intValue();
                     if (userAdherencePercent < studyThresholdPercent) {
                         recordOutOfCompliance(userAdherencePercent, studyThresholdPercent,
                                 app.getIdentifier(), studyId, summary.getId());
                     }
+                    // Slight pause between requests
+                    Thread.sleep(THREAD_SLEEP_INTERVAL);
                 }
             }
             LOG.info("Weekly adherence report caching for app " + app.getIdentifier() + " took "
