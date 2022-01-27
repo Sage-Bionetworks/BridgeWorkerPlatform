@@ -85,11 +85,11 @@ public class PagedResourceIteratorTest extends Mockito {
     }
     
     @Test
-    public void nonRecoverableExceptionIteratesCorrectly() throws Exception {
+    public void nonRecoverableExceptionDoesNotRetry() throws Exception {
         AtomicInteger integer = new AtomicInteger();
         IOFunction<Integer, Integer, List<Study>> func = (Integer ob, Integer ps) -> {
             integer.incrementAndGet();
-            throw new IOException(); 
+            throw new UnsupportedOperationException(); // just something we weren't expecting 
         };
         
         PagedResourceIterator<Study> iterator = new PagedResourceIterator<Study>(func, 10);
@@ -119,6 +119,19 @@ public class PagedResourceIteratorTest extends Mockito {
         IOFunction<Integer, Integer, List<Study>> func = (Integer ob, Integer ps) -> {
             integer.incrementAndGet();
             throw new BridgeSDKException("This is a request timeout error", 408); 
+        };
+        
+        // just creating an iterator causes it to call the server.
+        new PagedResourceIterator<Study>(func, 10, 1);
+        assertEquals(integer.intValue(), 4);
+    }
+    
+    @Test
+    public void recoverableIOExceptionRetries( ) {
+        AtomicInteger integer = new AtomicInteger();
+        IOFunction<Integer, Integer, List<Study>> func = (Integer ob, Integer ps) -> {
+            integer.incrementAndGet();
+            throw new IOException("Some form of network error"); 
         };
         
         // just creating an iterator causes it to call the server.

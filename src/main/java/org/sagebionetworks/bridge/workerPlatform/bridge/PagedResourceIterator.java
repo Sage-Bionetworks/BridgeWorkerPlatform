@@ -4,22 +4,30 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 
 /**
- * Iterate over paged APIs so we don't have to load all items into memory, which some methods in
- * the BridgeHelper are doing. Particularly for participants, this is likely to consume a lot of
- * memory. This iterator stops iteration if it encounters an error from the server (rather than
- * retrying or proceeding to the next page...this behavior may be changed in the future).
+ * Iterate over paged APIs (any API with an integer offsetBy and integer
+ * pageSize value that can return a list of elements, which can be called by the
+ * IOFunction lambda interface), so we can iterate over elements without loading
+ * them all into memory. If the iterator encounters a potentially transient
+ * error, including Request Timeout (408), Too Many Requests (429), Internal
+ * Server Error (500), Bad Gateway (502), Service Unavailable (503), Gateway
+ * Timeout (504), or an IOException, it will retry up to three times with
+ * exponential back-off. Other exceptions cause the iterator to stop iteration
+ * and return an empty iterator.
  */
 public class PagedResourceIterator<T> implements Iterator<T> {
     private static final Logger LOG = LoggerFactory.getLogger(PagedResourceIterator.class);
     
+    private static final Set<Integer> RETRYABLE_STATUS_CODES = ImmutableSet.of(408, 429, 500, 502, 503, 504);
     private static final int NUMBER_RETRIES = 3;
     
     @FunctionalInterface
@@ -46,18 +54,12 @@ public class PagedResourceIterator<T> implements Iterator<T> {
         this(func, pageSize, 5);
     }
     
-    /**
-     * If the iterator encounters a potentially transient error, including Request
-     * Timeout (408), Too Many Requests (429), Bad Gateway (502), Service
-     * Unavailable (503), or Gateway Timeout (504), it will retry up to three times
-     * with exponential back-off. Other exceptions cause the iterator to stop iteration.
-     */
     private void loadNextPage() {
         page = ImmutableList.of(); // a failure will stop iteration.
         for (int i=0; i <= NUMBER_RETRIES; i++) {
             if (i > 0) { // this is a retry
                 try {
-                    long timeout = (long)Math.pow(retryDelayInSeconds, i);
+                    long timeout = (long)(retryDelayInSeconds * Math.pow(2, i));
                     LOG.info("Recoverable exception, retrying request in " + timeout + " seconds");
                     Thread.sleep( timeout * 1000L );
                 } catch (InterruptedException e1) {
@@ -71,10 +73,10 @@ public class PagedResourceIterator<T> implements Iterator<T> {
                 if (nonRecoverableException( e.getStatusCode() )) {
                     LOG.error("Non-recoverable exception while calling paged iterator", e);
                     break;
-                } else if (i == NUMBER_RETRIES) {
-                    LOG.info("Aborting request after "+NUMBER_RETRIES+" retries", e);
-                    break;
                 }
+            } catch(IOException ioe) {
+                LOG.error("IOException while calling paged iterator", ioe);
+                // do not break, attempt to retry
             } catch(Throwable t) {
                 LOG.error("Non-recoverable exception while calling paged iterator", t);
                 break;
@@ -83,9 +85,9 @@ public class PagedResourceIterator<T> implements Iterator<T> {
         this.offsetBy += pageSize;
         this.nextIndex = 0;
     }
-    
+
     private boolean nonRecoverableException(int statusCode) {
-        return statusCode != 408 && statusCode != 429 && statusCode != 502 && statusCode != 503 && statusCode != 504;
+        return !RETRYABLE_STATUS_CODES.contains(Integer.valueOf(statusCode));
     }
 
     @Override

@@ -64,12 +64,12 @@ public class SesHelper {
             "</html>";
 
     private static final String ATTACHMENT_BODY_TEMPLATE_TEXT = "Your requested data is now available. " +
-            "To download your requested data, please click on this link (which expires after %s):\n\n%s";
-    private static final String ATTACHMENT_BODY_TEMPLATE_HTML = "<html>\n" +
-            "   <body>\n" +
+            "To download your requested data, please click on this link (which expires after %s):%n%n%s";
+    private static final String ATTACHMENT_BODY_TEMPLATE_HTML = "<html>%n" +
+            "   <body>%n" +
             "<p>Your requested data is now available. To download your requested data, please click on " + 
             "this link (which expires after %s):</p><p><a href='%s'>%s</a></p>" +
-            "   </body>\n" +
+            "   </body>%n" +
             "</html>";
 
     private static final String CHARSET_UTF_8 = "UTF-8";
