@@ -695,36 +695,7 @@ public class BridgeHelperTest {
     }
 
     @Test
-    public void testGetStudyParticipantsForAppStudyId() throws IOException, IllegalAccessException, InterruptedException {
-        testGetStudyParticipantsForApp(STUDY_ID, null);
-    }
-
-    @Test
-    public void testGetStudyParticipantsForAppOrgId() throws IOException, IllegalAccessException, InterruptedException {
-        testGetStudyParticipantsForApp(null, ORG_ID);
-    }
-
-    @Test
-    public void testGetStudiesForApp() throws IOException {
-        // mock SDK get sponsored studies for app call
-        StudyList studyList = mock(StudyList.class);
-        when(studyList.getItems()).thenReturn(ImmutableList.of(new Study()));
-        Response<StudyList> response = Response.success(studyList);
-
-        Call<StudyList> mockCall = mock(Call.class);
-        when(mockCall.execute()).thenReturn(response);
-
-        when(mockWorkerApi.getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, BridgeHelper.MAX_PAGE_SIZE))
-                .thenReturn(mockCall);
-
-        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
-
-        List<Study> retStudiesForApp = bridgeHelper.getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, BridgeHelper.MAX_PAGE_SIZE);
-
-        assertEquals(retStudiesForApp, ImmutableList.of(new Study()));
-    }
-
-    private void testGetStudyParticipantsForApp(String studyId, String orgId) throws IllegalAccessException, IOException, InterruptedException {
+    public void testGetStudyParticipantsForStudy() throws IOException, IllegalAccessException, InterruptedException {
         // mock SDK search account summaries call
         AccountSummary accountSummary = new AccountSummary();
         setVariableValueInObject(accountSummary, "id", USER_ID);
@@ -753,17 +724,36 @@ public class BridgeHelperTest {
         when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
 
         // execute getStudyParticipantForApp
-        List<StudyParticipant> retSummariesForApp = bridgeHelper.getStudyParticipantsForApp(APP_ID, ORG_ID, 0,
-                PAGE_SIZE, studyId);
+        List<StudyParticipant> retSummariesForApp = bridgeHelper.getStudyParticipantsForStudy(APP_ID, STUDY_ID, 0,
+                PAGE_SIZE);
 
         // verify params and outputs
         assertEquals(retSummariesForApp, ImmutableList.of(studyParticipant));
 
         AccountSummarySearch search = accountSummarySearchCaptor.getValue();
         assertEquals(0, search.getOffsetBy().intValue());
-        assertEquals(orgId, search.getOrgMembership());
-        assertEquals(studyId, search.getEnrolledInStudyId());
+        assertEquals(STUDY_ID, search.getEnrolledInStudyId());
         assertEquals(PAGE_SIZE, search.getPageSize().intValue());
+    }
+
+    @Test
+    public void testGetSponsoredStudiesForApp() throws IOException {
+        // mock SDK get sponsored studies for app call
+        StudyList studyList = mock(StudyList.class);
+        when(studyList.getItems()).thenReturn(ImmutableList.of(new Study()));
+        Response<StudyList> response = Response.success(studyList);
+
+        Call<StudyList> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenReturn(response);
+
+        when(mockWorkerApi.getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, BridgeHelper.MAX_PAGE_SIZE))
+                .thenReturn(mockCall);
+
+        when(mockClientManager.getClient(ForWorkersApi.class)).thenReturn(mockWorkerApi);
+
+        List<Study> retStudiesForApp = bridgeHelper.getSponsoredStudiesForApp(APP_ID, ORG_ID, 0, BridgeHelper.MAX_PAGE_SIZE);
+
+        assertEquals(retStudiesForApp, ImmutableList.of(new Study()));
     }
 
     private void mockUploadComplete(UploadValidationStatus status) throws Exception {

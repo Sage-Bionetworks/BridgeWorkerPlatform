@@ -68,6 +68,10 @@ public class DownloadParticipantRosterRequest {
                 throw new IllegalStateException("appId must be specified");
             }
 
+            if (Strings.isNullOrEmpty(studyId)) {
+                throw new IllegalStateException("studyId must be specified");
+            }
+
             if (Strings.isNullOrEmpty(userId)) {
                 throw new IllegalStateException("userId must be specified");
             }

@@ -300,21 +300,15 @@ public class BridgeHelper {
         return clientManager.getClient(ForWorkersApi.class).getUploadByRecordId(recordId).execute().body();
     }
 
-    /** Get account summaries by caller's appId and org */
-    public List<StudyParticipant> getStudyParticipantsForApp(String appId, String orgId, int offsetBy, int pageSize,
-                                                             String studyId) throws IOException, InterruptedException {
-        AccountSummarySearch search = new AccountSummarySearch().offsetBy(offsetBy);
-
-        if (studyId != null) {
-            search.enrolledInStudyId(studyId);
-        } else if (orgId != null) {
-            search.orgMembership(orgId);
-        }
-
+    /** Get account summaries by caller's appId and enrollment in a study. */
+    public List<StudyParticipant> getStudyParticipantsForStudy(String appId, String studyId, int offsetBy, int pageSize)
+            throws IOException, InterruptedException {
+        AccountSummarySearch search = new AccountSummarySearch();
+        search.offsetBy(offsetBy);
+        search.enrolledInStudyId(studyId);
         if (pageSize > 0) {
             search.pageSize(pageSize);
         }
-
         List<AccountSummary> accountSummaries = clientManager.getClient(ForWorkersApi.class)
                 .searchAccountSummariesForApp(appId, search).execute().body().getItems();
 

@@ -19,9 +19,6 @@ import org.sagebionetworks.bridge.udd.s3.PresignedUrlInfo;
 import org.sagebionetworks.bridge.workerPlatform.bridge.AccountInfo;
 import org.sagebionetworks.bridge.workerPlatform.dynamodb.AppInfo;
 
-import javax.activation.DataHandler;
-import javax.activation.DataSource;
-import javax.activation.FileDataSource;
 import javax.mail.MessagingException;
 import javax.mail.Session;
 import javax.mail.internet.InternetAddress;
@@ -67,12 +64,11 @@ public class SesHelper {
             "</html>";
 
     private static final String ATTACHMENT_BODY_TEMPLATE_TEXT = "Your requested data is now available. " +
-            "To download your requested data, please click on the file attached in this email.";
+            "To download your requested data, please click on this link (which expires after %s):\n\n%s";
     private static final String ATTACHMENT_BODY_TEMPLATE_HTML = "<html>\n" +
             "   <body>\n" +
-            "       <p>\n" +
-            ATTACHMENT_BODY_TEMPLATE_TEXT +
-            "       </p>\n" +
+            "<p>Your requested data is now available. To download your requested data, please click on " + 
+            "this link (which expires after %s):</p><p><a href='%s'>%s</a></p>" +
             "   </body>\n" +
             "</html>";
 
@@ -81,7 +77,6 @@ public class SesHelper {
     private static final String CONTENT_SUBTYPE_MIXED= "mixed";
     private static final String CONTENT_TYPE_TEXT_HTML = "text/html; charset=UTF-8";
     private static final String CONTENT_TYPE_TEXT_PLAIN = "text/plain";
-    private static final String CONTENT_TYPE_ZIP = "application/zip";
 
     private AmazonSimpleEmailServiceClient sesClient;
 
@@ -134,12 +129,14 @@ public class SesHelper {
      *          app info, used to construct the email message, must be non-null
      * @param accountInfo
      *          account to send the attachment to, must be non-null
-     * @param attachment
-     *          attachment which should be sent to the specified account, must be non-null
+     * @param downloadURL
+     *          pre-signed S3 download URL (good for a limited period of time)
+     * @param expirationDescription
+     *          an English-language description of the period that the link will be valid (e.g. "24 hours")
      */
-    public void sendEmailWithAttachmentToAccount(AppInfo appInfo, AccountInfo accountInfo, String attachment) throws MessagingException, IOException {
+    public void sendEmailWithTempDownloadLinkToAccount(AppInfo appInfo, AccountInfo accountInfo, String downloadURL, String expirationDescription) throws MessagingException, IOException {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        MimeMessage message = makeRawEmailMessage(appInfo, accountInfo, attachment);
+        MimeMessage message = makeRawEmailMessage(appInfo, accountInfo, downloadURL, expirationDescription);
         message.writeTo(outputStream);
         RawMessage rawMessage = new RawMessage(ByteBuffer.wrap(outputStream.toByteArray()));
 
@@ -181,7 +178,7 @@ public class SesHelper {
                 sendEmailResult.getMessageId());
     }
 
-    private MimeMessage makeRawEmailMessage(AppInfo appInfo, AccountInfo accountInfo, String attachment) throws MessagingException {
+    private MimeMessage makeRawEmailMessage(AppInfo appInfo, AccountInfo accountInfo, String downloadURL, String expiration) throws MessagingException {
         // from address
         String fromAddress = appInfo.getSupportEmail();
 
@@ -206,10 +203,12 @@ public class SesHelper {
         MimeBodyPart wrap = new MimeBodyPart();
 
         MimeBodyPart textPart = new MimeBodyPart();
-        textPart.setContent(ATTACHMENT_BODY_TEMPLATE_TEXT, CONTENT_TYPE_TEXT_PLAIN);
+        textPart.setContent(String.format(ATTACHMENT_BODY_TEMPLATE_TEXT, expiration, downloadURL), 
+                CONTENT_TYPE_TEXT_PLAIN);
 
         MimeBodyPart htmlPart = new MimeBodyPart();
-        htmlPart.setContent(ATTACHMENT_BODY_TEMPLATE_HTML, CONTENT_TYPE_TEXT_HTML);
+        htmlPart.setContent(String.format(ATTACHMENT_BODY_TEMPLATE_HTML, expiration, downloadURL, downloadURL),
+                CONTENT_TYPE_TEXT_HTML);
 
         // add text and HTML parts to child container
         messageBody.addBodyPart(textPart);
@@ -226,16 +225,6 @@ public class SesHelper {
 
         // add multipart/alternative part to message
         mimeMessage.addBodyPart(wrap);
-
-        // define attachment
-        MimeBodyPart mimeAttachment = new MimeBodyPart();
-        DataSource dataSource = new FileDataSource(attachment);
-        mimeAttachment.setDataHandler(new DataHandler(dataSource));
-        mimeAttachment.setFileName(dataSource.getName());
-        mimeAttachment.setHeader("Content-Type", CONTENT_TYPE_ZIP);
-
-        // add attachment to message
-        mimeMessage.addBodyPart(mimeAttachment);
 
         return message;
     }
