@@ -5,6 +5,7 @@ import static org.sagebionetworks.bridge.rest.model.StudyPhase.DESIGN;
 import static org.sagebionetworks.bridge.rest.model.StudyPhase.IN_FLIGHT;
 import static org.sagebionetworks.bridge.rest.model.StudyPhase.RECRUITMENT;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +13,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.joda.time.DateTime;
+import org.sagebionetworks.bridge.exporter3.Ex3ParticipantVersionRequest;
+import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.ClientManager;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
@@ -20,6 +23,7 @@ import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyPhase;
 import org.sagebionetworks.bridge.rest.model.WeeklyAdherenceReport;
+import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.PagedResourceIterator;
@@ -30,6 +34,7 @@ import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 
 @Component("WeeklyAdherenceReportWorker")
@@ -56,21 +61,34 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
     
     @Override
     public void accept(JsonNode node) throws Exception {
+        WeeklyAdherenceReportRequest request;
+        try {
+            request = DefaultObjectMapper.INSTANCE.treeToValue(node, WeeklyAdherenceReportRequest.class);
+        } catch (IOException e) {
+            throw new PollSqsWorkerBadRequestException("Error parsing request: " + e.getMessage(), e);
+        }
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         try {
-            process(node);
+            if (request.getAppId() != null || request.getStudyId() != null) {
+                LOG.info("Limiting weekly adherence report caching to appId=" + request.getAppId() + ", studyId="
+                        + request.getStudyId());
+            }
+            process(request);
         } finally {
             LOG.info("Weekly adherence report caching took " + requestStopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
         }
     }
     
-    private void process(JsonNode node) throws Exception {
+    private void process(WeeklyAdherenceReportRequest request) throws Exception {
         ForWorkersApi workersApi = clientManager.getClient(ForWorkersApi.class);
         
-        // Get all the studies that should have reports generated, across all apps.
-        List<App> appList = bridgeHelper.getAllApps();
+        List<App> appList = null;
+        if (request.getAppId() != null) {
+            appList = ImmutableList.of( bridgeHelper.getApp(request.getAppId()) );
+        } else {
+            appList = bridgeHelper.getAllApps();    
+        }
         for (App app : appList) {
-            
             Map<String, Integer> studyThresholds = new HashMap<>();
             
             // First go through the studies and select the studies which should have reports generated, and note their
@@ -104,6 +122,9 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
             while (acctIterator.hasNext()) {
                 AccountSummary summary = acctIterator.next();
                 for (String studyId : summary.getStudyIds()) {
+                    if (request.getStudyId() != null && !studyId.equals(request.getStudyId())) {
+                        continue;
+                    }
                     Integer studyThresholdPercent = studyThresholds.get(studyId);
                     if (studyThresholdPercent == null) { // this study should not be reported on
                         continue;
