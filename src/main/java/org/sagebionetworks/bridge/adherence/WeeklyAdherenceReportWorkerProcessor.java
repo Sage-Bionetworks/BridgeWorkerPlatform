@@ -6,6 +6,7 @@ import static org.sagebionetworks.bridge.rest.model.StudyPhase.IN_FLIGHT;
 import static org.sagebionetworks.bridge.rest.model.StudyPhase.RECRUITMENT;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,9 +70,8 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
         }
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         try {
-            if (request.getAppId() != null || request.getStudyId() != null) {
-                LOG.info("Limiting weekly adherence report caching to appId=" + request.getAppId() + ", studyId="
-                        + request.getStudyId());
+            if (!request.getSelectedStudies().isEmpty()) {
+                LOG.info("Limiting weekly adherence report caching to these apps and studies: " + request.getSelectedStudies());
             }
             process(request);
         } finally {
@@ -83,13 +83,19 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
         ForWorkersApi workersApi = clientManager.getClient(ForWorkersApi.class);
         
         List<App> appList = null;
-        if (request.getAppId() != null) {
-            appList = ImmutableList.of( bridgeHelper.getApp(request.getAppId()) );
+        if (!request.getSelectedStudies().isEmpty()) {
+            appList = new ArrayList<>();
+            for (String appId : request.getSelectedStudies().keySet()) {
+                App app = bridgeHelper.getApp(appId);
+                appList.add(app);
+            }
         } else {
-            appList = bridgeHelper.getAllApps();    
+            appList = bridgeHelper.getAllApps();   
         }
         for (App app : appList) {
             Map<String, Integer> studyThresholds = new HashMap<>();
+            
+            Set<String> selectedStudies = request.getSelectedStudies().get(app.getIdentifier());
             
             // First go through the studies and select the studies which should have reports generated, and note their
             // threshold criteria if it is set 
@@ -99,9 +105,11 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
             while(studyIterator.hasNext()) {
                 Study study = studyIterator.next();
                 // This excludes legacy studies, and thus excludes all older apps, and well as any studies
-                // that have no schedules. Right now this is hundreds of studies with thousands of users, but
-                // we will need to continue to define limits to this processing as the system grows.
-                if (ACTIVE_PHASES.contains(study.getPhase()) && study.getScheduleGuid() != null) {
+                // that have no schedules. It also excludes the study if a specific list was given for this app,
+                // and this study is not one of them. Right now this is hundreds of studies with thousands of users, 
+                // but we will need to continue to define limits to this processing as the system grows.
+                boolean isSelected = (selectedStudies == null || selectedStudies.contains(study.getIdentifier()));
+                if (isSelected && ACTIVE_PHASES.contains(study.getPhase()) && study.getScheduleGuid() != null) {
                     studyThresholds.put(study.getIdentifier(), getThresholdPercentage(study));
                 }
             }
@@ -122,9 +130,6 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
             while (acctIterator.hasNext()) {
                 AccountSummary summary = acctIterator.next();
                 for (String studyId : summary.getStudyIds()) {
-                    if (request.getStudyId() != null && !studyId.equals(request.getStudyId())) {
-                        continue;
-                    }
                     Integer studyThresholdPercent = studyThresholds.get(studyId);
                     if (studyThresholdPercent == null) { // this study should not be reported on
                         continue;

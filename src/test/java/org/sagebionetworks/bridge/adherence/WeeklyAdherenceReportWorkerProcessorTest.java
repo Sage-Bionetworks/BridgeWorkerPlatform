@@ -29,7 +29,11 @@ import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 
 import retrofit2.Call;
 import retrofit2.Response;
@@ -158,7 +162,7 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
         when(mockWorkersApi.getWeeklyAdherenceReportForWorker("target", "study-target2", "user2")).thenReturn(failedReportCall);
         when(mockWorkersApi.getWeeklyAdherenceReportForWorker("target", "study-target3", "user2")).thenReturn(failedReportCall);
         
-        processor.accept(null); // we're doing everything, and that's it.
+        processor.accept(JsonNodeFactory.instance.objectNode()); // we're doing everything, and that's it.
         
         verify(mockWorkersApi, times(2)).searchAccountSummariesForApp(eq("target"), searchCaptor.capture());
         
@@ -188,6 +192,106 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
         
         // One error. study 3 is defaulted to zero and doesn't appear here.  
         verify(processor).recordOutOfCompliance(20, 60, "target", "study-target2", "user2");
+    }
+    
+    @SuppressWarnings("unchecked")
+    @Test
+    public void limitsScanToProvidedAppsAndStudies() throws Exception {
+        App app1 = new App();
+        app1.setIdentifier("app1");
+        
+        App app2 = new App();
+        app2.setIdentifier("app2");
+        
+        when(mockBridgeHelper.getApp("app1")).thenReturn(app1);
+        when(mockBridgeHelper.getApp("app2")).thenReturn(app2);
+        
+        // app1
+        Study study1a = new Study();
+        study1a.setIdentifier("study1a");
+        study1a.setPhase(DESIGN);
+        setVariableValueInObject(study1a, "scheduleGuid", "guid1");
+        
+        Study study1b = new Study();
+        study1b.setIdentifier("study1b");
+        study1b.setPhase(DESIGN);
+        setVariableValueInObject(study1b, "scheduleGuid", "guid2");
+        
+        StudyList app1StudyList1 = new StudyList();
+        setVariableValueInObject(app1StudyList1, "items", ImmutableList.of(study1a, study1b));
+        Call<StudyList> app1Call1 = mockCall(app1StudyList1);
+        when(mockWorkersApi.getAppStudies("app1", 0, PAGE_SIZE, false)).thenReturn(app1Call1);
+        
+        StudyList app1StudyList2 = new StudyList();
+        setVariableValueInObject(app1StudyList2, "items", ImmutableList.of());
+        Call<StudyList> app1Call2 = mockCall(app1StudyList2);
+        when(mockWorkersApi.getAppStudies("app1", PAGE_SIZE, PAGE_SIZE, false)).thenReturn(app1Call2);
+        
+        // app2
+        Study study2a = new Study();
+        study2a.setIdentifier("study2a");
+        study2a.setPhase(DESIGN);
+        setVariableValueInObject(study2a, "scheduleGuid", "guid1");
+        
+        Study study2b = new Study();
+        study2b.setIdentifier("study2b");
+        study2b.setPhase(IN_FLIGHT);
+        setVariableValueInObject(study2b, "scheduleGuid", "guid2");
+        
+        StudyList app2StudyList1 = new StudyList();
+        setVariableValueInObject(app2StudyList1, "items", ImmutableList.of(study2a, study2b));
+        Call<StudyList> app2Call1 = mockCall(app2StudyList1);
+        when(mockWorkersApi.getAppStudies("app2", 0, PAGE_SIZE, false)).thenReturn(app2Call1);
+        
+        StudyList app2StudyList2 = new StudyList();
+        setVariableValueInObject(app2StudyList2, "items", ImmutableList.of());
+        Call<StudyList> app2Call2 = mockCall(app2StudyList2);
+        when(mockWorkersApi.getAppStudies("app2", PAGE_SIZE, PAGE_SIZE, false)).thenReturn(app2Call2);
+
+        AccountSummary summary = new AccountSummary();
+        setVariableValueInObject(summary, "id", "user1");
+        setVariableValueInObject(summary, "studyIds", 
+                ImmutableList.of("study1a", "study1b", "study2a", "study2b"));
+        
+        AccountSummaryList summaryList1 = new AccountSummaryList();
+        setVariableValueInObject(summaryList1, "items", ImmutableList.of(summary));
+        Call<AccountSummaryList> summaryCall1 = mockCall(summaryList1);
+        
+        AccountSummaryList summaryList2 = new AccountSummaryList();
+        setVariableValueInObject(summaryList2, "items", ImmutableList.of());
+        Call<AccountSummaryList> summaryCall2 = mockCall(summaryList2);
+        when(mockWorkersApi.searchAccountSummariesForApp(eq("app1"), any()))
+            .thenReturn(summaryCall1, summaryCall2);
+        when(mockWorkersApi.searchAccountSummariesForApp(eq("app2"), any()))
+            .thenReturn(summaryCall1, summaryCall2);
+        
+        WeeklyAdherenceReport successfulReport = new WeeklyAdherenceReport();
+        setVariableValueInObject(successfulReport, "weeklyAdherencePercent", Integer.valueOf(100));
+        Call<WeeklyAdherenceReport> successfulReportCall = mockCall(successfulReport);
+        
+        when(mockWorkersApi.getWeeklyAdherenceReportForWorker("app1", "study1a", "user1")).thenReturn(successfulReportCall);
+        when(mockWorkersApi.getWeeklyAdherenceReportForWorker("app2", "study2a", "user1")).thenReturn(successfulReportCall);
+        
+        WeeklyAdherenceReportRequest request = new WeeklyAdherenceReportRequest();
+        request.getSelectedStudies().put("app1", ImmutableSet.of("study1a"));
+        request.getSelectedStudies().put("app2", ImmutableSet.of("study2a"));
+        JsonNode node = new ObjectMapper().valueToTree(request);
+        
+        processor.accept(node);
+        
+        verify(mockBridgeHelper).getApp("app1");
+        verify(mockBridgeHelper).getApp("app2");
+        // This is never called, we're getting specific apps
+        verify(mockBridgeHelper, never()).getAllApps();
+        verifyNoMoreInteractions(mockBridgeHelper);
+        
+        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app1", "study1a", "user1");
+        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study2a", "user1");
+        // These are not called for because they are not listed in the request, despite the fact that
+        // they are listed for the user (in both apps) and they come back in the paginated APIs
+        // of studies
+        verify(mockWorkersApi, never()).getWeeklyAdherenceReportForWorker("app1", "study1b", "user1");
+        verify(mockWorkersApi, never()).getWeeklyAdherenceReportForWorker("app2", "study2b", "user1");
     }
 
     @SuppressWarnings("unchecked")

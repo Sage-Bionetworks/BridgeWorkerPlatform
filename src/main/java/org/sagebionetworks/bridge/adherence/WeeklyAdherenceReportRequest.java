@@ -1,27 +1,24 @@
 package org.sagebionetworks.bridge.adherence;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
 /**
  * If empty, do everything. If set, only do the study in the specified app. This is mostly
  * to ensure the integration test doesn't slow down in live environents.
  */
 public class WeeklyAdherenceReportRequest {
 
-    private String appId;
-    private String studyId;
+    private Map<String, Set<String>> selectedStudies;
     
-    public String getAppId() {
-        return appId;
+    public Map<String, Set<String>> getSelectedStudies() {
+        if (selectedStudies == null) {
+            selectedStudies = new HashMap<>();
+        }
+        return selectedStudies;
     }
-    public void setAppId(String appId) {
-        this.appId = appId;
+    public void setSelectedStudies(Map<String, Set<String>> selectedStudies) {
+        this.selectedStudies = selectedStudies;
     }
-    public String getStudyId() {
-        return studyId;
-    }
-    public void setStudyId(String studyId) {
-        this.studyId = studyId;
-    }
-    
-    
-    
 }
