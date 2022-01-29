@@ -114,10 +114,10 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                 }
             }
             if (studyThresholds.isEmpty()) {
-                LOG.info("Skipping app " + app.getIdentifier() + ": it has no reportable studies");
+                LOG.info("Skipping app “" + app.getIdentifier() + "”: it has no reportable studies");
                 continue;
             } else {
-                LOG.info("Caching studies in app " + app.getIdentifier() + " starting at " + DateTime.now());
+                LOG.info("Caching studies in app “" + app.getIdentifier() + "” starting at " + DateTime.now());
             }
             Stopwatch appStopwatch = Stopwatch.createStarted();
             
