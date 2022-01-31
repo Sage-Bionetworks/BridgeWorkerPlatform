@@ -48,6 +48,7 @@ import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
@@ -62,6 +63,7 @@ import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 /** Worker for Exporter 3.0. */
 @Component("Exporter3Worker")
 public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
+
     // Helper inner class to store context that needs to be passed around for export.
     private static class ExportContext {
         private String hexMd5;
@@ -96,6 +98,8 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     static final String METADATA_KEY_PARTICIPANT_VERSION = "participantVersion";
     static final String METADATA_KEY_RECORD_ID = "recordId";
     static final String METADATA_KEY_UPLOADED_ON = "uploadedOn";
+    static final String METADATA_KEY_EVENT_TIMESTAMP = "sessionStartEventTimestamp";
+
     // Valid characters are alphanumeric, underscores, and periods. This pattern is used to match invalid characters to
     // convert them to underscores.
     private static final Pattern METADATA_NAME_REPLACEMENT_PATTERN = Pattern.compile("[^\\w\\.]");
@@ -321,7 +325,18 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         metadataMap.put(METADATA_KEY_UPLOADED_ON, record.getCreatedOn().toString());
 
         // In the future, assessment stuff, study-specific stuff, and participant version would go here.
-
+        try {
+            if (record.getEventTimestamp() != null) {
+                metadataMap.put(METADATA_KEY_EVENT_TIMESTAMP, record.getEventTimestamp().toString());    
+            }
+            if (record.getInstanceGuid() != null) {
+                TimelineMetadata timelineMetadata = bridgeHelper.getTimelineMetadata(record.getAppId(), record.getInstanceGuid());
+                metadataMap.putAll(timelineMetadata.getMetadata());
+            }
+        } catch(IOException ioe) {
+            LOG.error("Error retrieving timeline metadata, instanceGuid=" + 
+                    record.getInstanceGuid() + " for app=" + record.getAppId(), ioe);
+        }
         return metadataMap;
     }
 
