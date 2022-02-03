@@ -26,6 +26,7 @@ import org.sagebionetworks.bridge.rest.model.RequestInfo;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
 import org.sagebionetworks.bridge.rest.model.SmsTemplate;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.UploadList;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
@@ -319,6 +320,11 @@ public class BridgeHelper {
     public List<Study> getSponsoredStudiesForApp(String appId, String orgId, int offsetBy, int pageSize) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getSponsoredStudiesForApp(appId, orgId, offsetBy, pageSize)
                 .execute().body().getItems();
+    }
+    
+    public TimelineMetadata getTimelineMetadata(String appId, String instanceGuid) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getTimelineMetadata(appId, instanceGuid)
+                .execute().body();
     }
 
     private List<StudyParticipant> getStudyParticipantsFromAccountSummaries(List<AccountSummary> accountSummaries) throws IOException, InterruptedException {

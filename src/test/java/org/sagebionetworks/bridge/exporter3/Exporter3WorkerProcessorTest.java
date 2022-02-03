@@ -5,9 +5,11 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.sagebionetworks.bridge.exporter3.Exporter3WorkerProcessor.METADATA_KEY_INSTANCE_GUID;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -24,6 +26,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.shiro.codec.Hex;
@@ -51,6 +54,7 @@ import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
@@ -82,7 +86,10 @@ public class Exporter3WorkerProcessorTest {
     private static final String TODAYS_DATE_STRING = "2021-08-23";
     private static final String TODAYS_FOLDER_ID = "syn7777";
     private static final String UPLOAD_BUCKET = "upload-bucket";
-
+    private static final String INSTANCE_GUID = "instanceGuid";
+    private static final String ASSESSMENT_INSTANCE_GUID = "assessmentInstanceGuid";
+    private static final String SESSION_GUID = "session-guid";
+    
     private static final long MOCK_NOW_MILLIS = DateTime.parse(TODAYS_DATE_STRING + "T15:32:38.914-0700")
             .getMillis();
     private static final DateTime UPLOADED_ON = DateTime.parse(TODAYS_DATE_STRING + "T15:27:28.647-0700");
@@ -332,6 +339,9 @@ public class Exporter3WorkerProcessorTest {
 
         // Verify services.
         verify(mockS3Helper).downloadS3File(eq(UPLOAD_BUCKET), eq(RECORD_ID), any());
+        
+        // This isn't called because there's no instanceGuid in the user's metadata map
+        verify(mockBridgeHelper, never()).getTimelineMetadata(any(), any());
 
         ArgumentCaptor<InputStream> encryptedInputStreamCaptor = ArgumentCaptor.forClass(InputStream.class);
         verify(mockEncryptor).decrypt(encryptedInputStreamCaptor.capture());
@@ -372,6 +382,61 @@ public class Exporter3WorkerProcessorTest {
 
         verifySynapseExport();
         verifyUpdatedRecord();
+    }
+    
+    @Test
+    public void schedulingMetadataAddedToExport() throws Exception {
+        TimelineMetadata meta = mock(TimelineMetadata.class);
+        when(meta.getMetadata()).thenReturn(ImmutableMap.of(
+                "assessmentInstanceGuid", ASSESSMENT_INSTANCE_GUID, "sessionGuid", SESSION_GUID));
+        when(mockBridgeHelper.getTimelineMetadata(APP_ID, INSTANCE_GUID)).thenReturn(meta);
+
+        HealthDataRecordEx3 record = makeRecord();
+        record.setAppId(APP_ID);
+        record.putMetadataItem(METADATA_KEY_INSTANCE_GUID, INSTANCE_GUID);
+        
+        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(record);
+        when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
+                .thenReturn(makeParticipant());
+        when(mockDigestUtils.digest(any(File.class))).thenReturn(DUMMY_MD5_BYTES);
+
+        Upload mockUpload = mockUpload(true);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
+
+        doAnswer(invocation -> {
+            File file = invocation.getArgumentAt(2, File.class);
+            inMemoryFileHelper.writeBytes(file, DUMMY_ENCRYPTED_FILE_BYTES);
+            return null;
+        }).when(mockS3Helper).downloadS3File(eq(UPLOAD_BUCKET), eq(RECORD_ID), any());
+
+        CmsEncryptor mockEncryptor = mock(CmsEncryptor.class);
+        when(mockEncryptor.decrypt(any(InputStream.class))).thenReturn(new ByteArrayInputStream(
+                DUMMY_UNENCRYPTED_FILE_BYTES));
+        processor.setCmsEncryptorCache(SingletonCacheLoader.makeLoadingCache(mockEncryptor));
+
+        // Don't actually buffer the input stream, as this breaks the test.
+        doAnswer(invocation -> invocation.getArgumentAt(0, InputStream.class)).when(processor)
+                .getBufferedInputStream(any());
+
+        doAnswer(invocation -> {
+            File file = invocation.getArgumentAt(2, File.class);
+            writtenToS3 = inMemoryFileHelper.getBytes(file);
+            return null;
+        }).when(mockS3Helper).writeFileToS3(eq(RAW_DATA_BUCKET), eq(EXPECTED_S3_KEY), any(), any());
+
+        mockSynapseHelper();
+
+        // Execute.
+        processor.process(makeRequest());
+        
+        ArgumentCaptor<ObjectMetadata> s3MetadataCaptor = ArgumentCaptor.forClass(ObjectMetadata.class);
+        verify(mockS3Helper).writeFileToS3(eq(RAW_DATA_BUCKET), eq(EXPECTED_S3_KEY), any(),
+                s3MetadataCaptor.capture());
+        
+        Map<String, String> userMetadataMap = s3MetadataCaptor.getValue().getUserMetadata();
+        assertEquals(userMetadataMap.get("assessmentInstanceGuid"), ASSESSMENT_INSTANCE_GUID);
+        assertEquals(userMetadataMap.get("sessionGuid"), SESSION_GUID);
     }
 
     private void mockSynapseHelper() throws Exception {
