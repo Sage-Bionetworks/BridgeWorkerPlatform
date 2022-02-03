@@ -62,6 +62,7 @@ import org.sagebionetworks.bridge.rest.model.RequestParams;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
 import org.sagebionetworks.bridge.rest.model.SmsTemplate;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.UploadList;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
@@ -77,6 +78,7 @@ import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTimeoutExceptio
 
 @SuppressWarnings("unchecked")
 public class BridgeHelperTest {
+    private static final String INSTANCE_GUID = "instanceGuid";
     private static final String ACCESS_TOKEN = "test-token";
     private static final LocalDate START_DATE = LocalDate.parse("2018-10-31");
     private static final LocalDate END_DATE = LocalDate.parse("2018-11-01");
@@ -831,6 +833,22 @@ public class BridgeHelperTest {
         assertSame(outputUpload, upload);
 
         verify(mockWorkerApi).getUploadByRecordId(RECORD_ID);
+    }
+    
+    @Test
+    public void getTimelineMetadata() throws IOException {
+        TimelineMetadata metadata = new TimelineMetadata();
+        Response<TimelineMetadata> response = Response.success(metadata);
+
+        Call<TimelineMetadata> call = mock(Call.class);
+        when(call.execute()).thenReturn(response);
+
+        when(mockWorkerApi.getTimelineMetadata(any(), any())).thenReturn(call);
+        
+        TimelineMetadata retValue = bridgeHelper.getTimelineMetadata(APP_ID, INSTANCE_GUID);
+        assertSame(metadata, retValue);
+        
+        verify(mockWorkerApi).getTimelineMetadata(APP_ID, INSTANCE_GUID);
     }
 
     private static AccountSummary mockAccountSummary(String id, String email) {
