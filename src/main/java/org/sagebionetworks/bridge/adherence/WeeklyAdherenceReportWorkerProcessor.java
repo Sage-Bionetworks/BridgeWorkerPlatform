@@ -146,9 +146,11 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                         recordOutOfCompliance(userAdherencePercent, studyThresholdPercent,
                                 app.getIdentifier(), studyId, summary.getId());
                     }
-                    // Slight pause between requests
-                    Thread.sleep(THREAD_SLEEP_INTERVAL);
+                    // sleeping between studies isn't needed at this point as the vast majority of 
+                    // accounts are only enrolled in one study.
                 }
+                // Slight pause between processing of accounts
+                Thread.sleep(THREAD_SLEEP_INTERVAL);
             }
             LOG.info("Weekly adherence report caching for app " + app.getIdentifier() + " took "
                     + appStopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
