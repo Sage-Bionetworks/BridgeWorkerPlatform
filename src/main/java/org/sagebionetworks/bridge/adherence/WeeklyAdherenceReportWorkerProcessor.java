@@ -1,5 +1,6 @@
 package org.sagebionetworks.bridge.adherence;
 
+import static java.lang.Boolean.TRUE;
 import static org.sagebionetworks.bridge.rest.model.EnrollmentFilter.ENROLLED;
 import static org.sagebionetworks.bridge.rest.model.StudyPhase.DESIGN;
 import static org.sagebionetworks.bridge.rest.model.StudyPhase.IN_FLIGHT;
@@ -14,7 +15,6 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.joda.time.DateTime;
-import org.sagebionetworks.bridge.exporter3.Ex3ParticipantVersionRequest;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.ClientManager;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
@@ -35,7 +35,6 @@ import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 
 @Component("WeeklyAdherenceReportWorker")
@@ -123,7 +122,8 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
             
             // Now go through all accounts that are enrolled in at least one study and push cache a report for each study.
             PagedResourceIterator<AccountSummary> acctIterator = new PagedResourceIterator<>((ob, ps) -> {
-                AccountSummarySearch search = new AccountSummarySearch().offsetBy(ob).pageSize(ps).enrollment(ENROLLED);
+                AccountSummarySearch search = new AccountSummarySearch().offsetBy(ob).pageSize(ps)
+                        .enrollment(ENROLLED).inUse(TRUE);
                 return workersApi.searchAccountSummariesForApp(app.getIdentifier(), search).execute().body().getItems();
             }, PAGE_SIZE);
             
