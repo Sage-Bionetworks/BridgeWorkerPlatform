@@ -48,6 +48,7 @@ import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
+import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
@@ -96,6 +97,9 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     static final String METADATA_KEY_PARTICIPANT_VERSION = "participantVersion";
     static final String METADATA_KEY_RECORD_ID = "recordId";
     static final String METADATA_KEY_UPLOADED_ON = "uploadedOn";
+    static final String METADATA_KEY_INSTANCE_GUID = "instanceGuid";
+    static final String METADATA_KEY_EVENT_TIMESTAMP = "eventTimestamp";
+
     // Valid characters are alphanumeric, underscores, and periods. This pattern is used to match invalid characters to
     // convert them to underscores.
     private static final Pattern METADATA_NAME_REPLACEMENT_PATTERN = Pattern.compile("[^\\w\\.]");
@@ -320,8 +324,17 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         metadataMap.put(METADATA_KEY_RECORD_ID, record.getId());
         metadataMap.put(METADATA_KEY_UPLOADED_ON, record.getCreatedOn().toString());
 
-        // In the future, assessment stuff, study-specific stuff, and participant version would go here.
-
+        // Schedule context metadata can be added if instanceGuid has been provided.
+        String instanceGuid = metadataMap.get(METADATA_KEY_INSTANCE_GUID);
+        if (instanceGuid != null) {
+            try {
+                TimelineMetadata timelineMeta = bridgeHelper.getTimelineMetadata(record.getAppId(), instanceGuid);
+                metadataMap.putAll(timelineMeta.getMetadata());
+            } catch(Exception e) {
+                LOG.error("Error retrieving timeline metadata, instanceGuid=" + instanceGuid + " app="
+                        + record.getAppId(), ", user=" + record.getHealthCode(), e);
+            }
+        }
         return metadataMap;
     }
 
