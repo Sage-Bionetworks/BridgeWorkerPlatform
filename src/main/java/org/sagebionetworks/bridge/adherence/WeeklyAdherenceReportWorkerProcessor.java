@@ -1,5 +1,6 @@
 package org.sagebionetworks.bridge.adherence;
 
+import static java.lang.Boolean.TRUE;
 import static org.sagebionetworks.bridge.rest.model.EnrollmentFilter.ENROLLED;
 import static org.sagebionetworks.bridge.rest.model.StudyPhase.DESIGN;
 import static org.sagebionetworks.bridge.rest.model.StudyPhase.IN_FLIGHT;
@@ -121,7 +122,8 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
             
             // Now go through all accounts that are enrolled in at least one study and push cache a report for each study.
             PagedResourceIterator<AccountSummary> acctIterator = new PagedResourceIterator<>((ob, ps) -> {
-                AccountSummarySearch search = new AccountSummarySearch().offsetBy(ob).pageSize(ps).enrollment(ENROLLED);
+                AccountSummarySearch search = new AccountSummarySearch().offsetBy(ob).pageSize(ps)
+                        .enrollment(ENROLLED).inUse(TRUE);
                 return workersApi.searchAccountSummariesForApp(app.getIdentifier(), search).execute().body().getItems();
             }, PAGE_SIZE);
             

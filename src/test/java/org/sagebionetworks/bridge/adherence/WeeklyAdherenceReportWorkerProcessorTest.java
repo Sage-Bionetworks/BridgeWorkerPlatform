@@ -168,6 +168,7 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
         
         AccountSummarySearch search = searchCaptor.getAllValues().get(0);
         assertEquals(search.getEnrollment(), EnrollmentFilter.ENROLLED);
+        assertEquals(search.isInUse(), Boolean.TRUE);
         assertEquals(search.getOffsetBy(), Integer.valueOf(0));
         assertEquals(search.getPageSize(), Integer.valueOf(PAGE_SIZE));
         
