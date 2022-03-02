@@ -389,11 +389,23 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         fileHandle = synapseHelper.createS3FileHandleWithRetry(fileHandle);
 
         // Create FileEntity.
-        FileEntity fileEntity = new FileEntity();
-        fileEntity.setDataFileHandleId(fileHandle.getId());
-        fileEntity.setName(filename);
-        fileEntity.setParentId(folderId);
-        fileEntity = synapseHelper.createEntityWithRetry(fileEntity);
+        String existingEntityId = synapseHelper.lookupChildWithRetry(folderId, filename);
+        FileEntity fileEntity;
+        if (existingEntityId != null) {
+            // This could come up in a redrive, or if the export task fails and is automatically re-sent by SQS.
+            fileEntity = synapseHelper.getEntityWithRetry(existingEntityId, FileEntity.class);
+            fileEntity.setDataFileHandleId(fileHandle.getId());
+            fileEntity.setName(filename);
+            fileEntity.setParentId(folderId);
+            fileEntity = synapseHelper.updateEntityWithRetry(fileEntity);
+        } else {
+            // New file entity.
+            fileEntity = new FileEntity();
+            fileEntity.setDataFileHandleId(fileHandle.getId());
+            fileEntity.setName(filename);
+            fileEntity.setParentId(folderId);
+            fileEntity = synapseHelper.createEntityWithRetry(fileEntity);
+        }
         String fileEntityId = fileEntity.getId();
 
         // Add annotations.
