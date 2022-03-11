@@ -7,9 +7,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.security.cert.CertificateEncodingException;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -20,6 +24,7 @@ import com.google.common.base.Stopwatch;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Sets;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import org.apache.commons.codec.binary.Hex;
@@ -47,6 +52,7 @@ import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
+import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.Upload;
@@ -63,30 +69,6 @@ import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 /** Worker for Exporter 3.0. */
 @Component("Exporter3Worker")
 public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
-    // Helper inner class to store context that needs to be passed around for export.
-    private static class ExportContext {
-        private String hexMd5;
-        private Map<String, String> metadataMap;
-
-        /** Hex MD5. Synapse needs this to create File Handles. */
-        public String getHexMd5() {
-            return hexMd5;
-        }
-
-        public void setHexMd5(String hexMd5) {
-            this.hexMd5 = hexMd5;
-        }
-
-        /** Metadata map. This lives in S3 as metadata and in Synapse as File Annotations. */
-        public Map<String, String> getMetadataMap() {
-            return metadataMap;
-        }
-
-        public void setMetadataMap(Map<String, String> metadataMap) {
-            this.metadataMap = metadataMap;
-        }
-    }
-
     private static final Logger LOG = LoggerFactory.getLogger(Exporter3WorkerProcessor.class);
 
     static final String CONFIG_KEY_RAW_HEALTH_DATA_BUCKET = "health.data.bucket.raw";
@@ -96,9 +78,9 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     static final String METADATA_KEY_HEALTH_CODE = "healthCode";
     static final String METADATA_KEY_PARTICIPANT_VERSION = "participantVersion";
     static final String METADATA_KEY_RECORD_ID = "recordId";
+    static final String METADATA_KEY_SCHEDULE_GUID = "scheduleGuid";
     static final String METADATA_KEY_UPLOADED_ON = "uploadedOn";
     static final String METADATA_KEY_INSTANCE_GUID = "instanceGuid";
-    static final String METADATA_KEY_EVENT_TIMESTAMP = "eventTimestamp";
 
     // Valid characters are alphanumeric, underscores, and periods. This pattern is used to match invalid characters to
     // convert them to underscores.
@@ -181,11 +163,12 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
         // Check that app is configured for export.
         App app = bridgeHelper.getApp(appId);
-        Exporter3Configuration exporter3Config = app.getExporter3Configuration();
-        if (!BridgeUtils.isExporter3Configured(app)) {
-            // Exporter not enabled. Skip.
+        if (app.isExporter3Enabled() == null || !app.isExporter3Enabled()) {
+            // Exporter 3.0 is not enabled for the app. Skip. (We don't care if it's configured, since the studies can
+            // be individually configured.
             return;
         }
+        boolean exportForApp = BridgeUtils.isExporter3Configured(app);
 
         // Set the exportedOn time on the record. This will be propagated to both S3 and Synapse.
         HealthDataRecordEx3 record = bridgeHelper.getHealthDataRecordForExporter3(appId, recordId);
@@ -203,26 +186,64 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             return;
         }
 
+        // Which study is this export for?
+        Set<String> studyIdSet;
+        Set<String> participantStudyIdSet = new HashSet<>(participant.getStudyIds());
+        Map<String, String> metadataMap = makeMetadataFromRecord(record);
+        String scheduleGuid = metadataMap.get(METADATA_KEY_SCHEDULE_GUID);
+        if (scheduleGuid != null) {
+            // If the timeline metadata contains a schedule Guid, filter the participant's studies by the studies that
+            // this health data is a part of.
+            List<String> timelineStudyIdList = bridgeHelper.getStudyIdsUsingSchedule(appId, scheduleGuid);
+            Set<String> timelineStudyIdSet = new HashSet<>(timelineStudyIdList);
+            studyIdSet = Sets.intersection(participantStudyIdSet, timelineStudyIdSet);
+        } else {
+            // If there is no timeline metadata, just export over all of the participant's studies.
+            studyIdSet = participantStudyIdSet;
+        }
+
+        // Filter sets even futher, based on which ones are configured.
+        List<Study> studiesToExport = new ArrayList<>();
+        for (String studyId : studyIdSet) {
+            Study study = bridgeHelper.getStudy(appId, studyId);
+            if (BridgeUtils.isExporter3Configured(study)) {
+                studiesToExport.add(study);
+            }
+        }
+
+        if (!exportForApp && studiesToExport.isEmpty()) {
+            // No destinations to export to. Skip.
+            return;
+        }
+
         // Copy the file to the raw health data bucket. This includes folderization.
         // Note that in Exporter 3.0, upload ID is the same as record ID.
         Upload upload = bridgeHelper.getUploadByUploadId(recordId);
-        ExportContext exportContext;
+        String hexMd5;
         if (upload.isEncrypted()) {
-            exportContext = decryptAndUploadFile(appId, upload, record);
+            hexMd5 = decryptAndUploadFile(app, upload, record, metadataMap, exportForApp, studiesToExport);
         } else {
-            exportContext = copyUploadToHealthDataBucket(appId, upload, record);
+            hexMd5 = copyUploadToHealthDataBucket(app, upload, record, metadataMap, exportForApp, studiesToExport);
         }
 
         // Upload to Synapse.
-        exportToSynapse(appId, exporter3Config, upload, record, exportContext);
+        if (exportForApp) {
+            exportToSynapse(appId, null, app.getExporter3Configuration(), upload, record, metadataMap, hexMd5);
+        }
+        for (Study study : studiesToExport) {
+            exportToSynapse(appId, study.getIdentifier(), study.getExporter3Configuration(), upload, record,
+                    metadataMap, hexMd5);
+        }
 
         // Mark record as exported.
         record.setExported(true);
         bridgeHelper.createOrUpdateHealthDataRecordForExporter3(appId, record);
     }
 
-    private ExportContext decryptAndUploadFile(String appId, Upload upload, HealthDataRecordEx3 record)
+    private String decryptAndUploadFile(App app, Upload upload, HealthDataRecordEx3 record,
+            Map<String, String> metadataMap, boolean exportForApp, List<Study> studiesToExport)
             throws IOException, PollSqsWorkerBadRequestException, WorkerException {
+        String appId = app.getIdentifier();
         String uploadId = upload.getUploadId();
 
         File tempDir = fileHelper.createTempDir();
@@ -256,19 +277,20 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             }
 
             // Step 3: Upload it to the raw uploads bucket.
-            Map<String, String> metadataMap = makeMetadataFromRecord(record);
             ObjectMetadata s3Metadata = makeS3Metadata(upload, record, metadataMap);
-            String s3Key = getRawS3KeyForUpload(appId, upload, record);
-            s3Helper.writeFileToS3(rawHealthDataBucket, s3Key, decryptedFile, s3Metadata);
+            if (exportForApp) {
+                String s3Key = getRawS3KeyForUpload(appId, null, upload, record);
+                s3Helper.writeFileToS3(rawHealthDataBucket, s3Key, decryptedFile, s3Metadata);
+            }
+            for (Study study : studiesToExport) {
+                String s3Key = getRawS3KeyForUpload(appId, study.getIdentifier(), upload, record);
+                s3Helper.writeFileToS3(rawHealthDataBucket, s3Key, decryptedFile, s3Metadata);
+            }
 
             // Step 4: While we have the file on disk, calculate the MD5 (hex-encoded). We'll need this for Synapse.
             byte[] md5 = md5DigestUtils.digest(decryptedFile);
             String hexMd5 = Hex.encodeHexString(md5);
-
-            ExportContext exportContext = new ExportContext();
-            exportContext.setHexMd5(hexMd5);
-            exportContext.setMetadataMap(metadataMap);
-            return exportContext;
+            return hexMd5;
         } finally {
             // Cleanup: Delete the temp dir.
             try {
@@ -280,23 +302,26 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         }
     }
 
-    private ExportContext copyUploadToHealthDataBucket(String appId, Upload upload, HealthDataRecordEx3 record) {
+    private String copyUploadToHealthDataBucket(App app, Upload upload, HealthDataRecordEx3 record,
+            Map<String, String> metadataMap, boolean exportForApp, List<Study> studiesToExport) {
+        String appId = app.getIdentifier();
         String uploadId = upload.getUploadId();
 
         // Copy the file to the health data bucket.
-        Map<String, String> metadataMap = makeMetadataFromRecord(record);
         ObjectMetadata s3Metadata = makeS3Metadata(upload, record, metadataMap);
-        String s3Key = getRawS3KeyForUpload(appId, upload, record);
-        s3Helper.copyS3File(uploadBucket, uploadId, rawHealthDataBucket, s3Key, s3Metadata);
+        if (exportForApp) {
+            String s3Key = getRawS3KeyForUpload(appId, null, upload, record);
+            s3Helper.copyS3File(uploadBucket, uploadId, rawHealthDataBucket, s3Key, s3Metadata);
+        }
+        for (Study study : studiesToExport) {
+            String s3Key = getRawS3KeyForUpload(appId, study.getIdentifier(), upload, record);
+            s3Helper.copyS3File(uploadBucket, uploadId, rawHealthDataBucket, s3Key, s3Metadata);
+        }
 
         // The upload object has the MD5 in Base64 encoding. We need it in hex encoding.
         byte[] md5 = Base64.getDecoder().decode(upload.getContentMd5());
         String hexMd5 = Hex.encodeHexString(md5);
-
-        ExportContext exportContext = new ExportContext();
-        exportContext.setHexMd5(hexMd5);
-        exportContext.setMetadataMap(metadataMap);
-        return exportContext;
+        return hexMd5;
     }
 
     private Map<String, String> makeMetadataFromRecord(HealthDataRecordEx3 record) {
@@ -363,8 +388,8 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         return metadata;
     }
 
-    private void exportToSynapse(String appId, Exporter3Configuration exporter3Config, Upload upload,
-            HealthDataRecordEx3 record, ExportContext exportContext)
+    private void exportToSynapse(String appId, String studyId, Exporter3Configuration exporter3Config, Upload upload,
+            HealthDataRecordEx3 record, Map<String, String> metadataMap, String hexMd5)
             throws SynapseException {
         // Exports are folderized by calendar date (YYYY-MM-DD). Create that folder if it doesn't already exist.
         // Folder limits are documented in https://sagebionetworks.jira.com/browse/PLFM-6365
@@ -372,7 +397,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         String folderId = synapseHelper.createFolderIfNotExists(exporter3Config.getRawDataFolderId(), dateStr);
 
         String filename = getFilenameForUpload(upload);
-        String s3Key = getRawS3KeyForUpload(appId, upload, record);
+        String s3Key = getRawS3KeyForUpload(appId, studyId, upload, record);
 
         // Create Synapse S3 file handle.
         S3FileHandle fileHandle = new S3FileHandle();
@@ -384,7 +409,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
         // This is different because our upload takes in Base64 MD5, but Synapse needs a hexadecimal MD5. This was
         // pre-computed in a previous step and passed in.
-        fileHandle.setContentMd5(exportContext.getHexMd5());
+        fileHandle.setContentMd5(hexMd5);
 
         fileHandle = synapseHelper.createS3FileHandleWithRetry(fileHandle);
 
@@ -401,7 +426,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         // there are ways to do this in SQL, even with Synapse's limited SQL. This way, we can avoid storing type
         // information in Bridge and doing parsing and validation, which is one of the problems we had in Exporter 2.0.
         Map<String, AnnotationsValue> annotationMap = new HashMap<>();
-        for (Map.Entry<String, String> metadataEntry : exportContext.getMetadataMap().entrySet()) {
+        for (Map.Entry<String, String> metadataEntry : metadataMap.entrySet()) {
             AnnotationsValue value = new AnnotationsValue();
             value.setType(AnnotationsValueType.STRING);
             value.setValue(ImmutableList.of(metadataEntry.getValue()));
@@ -420,10 +445,23 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         synapseHelper.addAnnotationsToEntity(fileEntityId, annotationMap);
     }
 
-    private String getRawS3KeyForUpload(String appId, Upload upload, HealthDataRecordEx3 record) {
-        String filename = getFilenameForUpload(upload);
+    private String getRawS3KeyForUpload(String appId, String studyId, Upload upload, HealthDataRecordEx3 record) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(appId);
+        builder.append('/');
+        if (studyId != null) {
+            builder.append(studyId);
+            builder.append('/');
+        }
+
         String dateStr = getCalendarDateForRecord(record);
-        return appId + '/' + dateStr + '/' + filename;
+        builder.append(dateStr);
+        builder.append('/');
+
+        String filename = getFilenameForUpload(upload);
+        builder.append(filename);
+
+        return builder.toString();
     }
 
     private String getFilenameForUpload(Upload upload) {

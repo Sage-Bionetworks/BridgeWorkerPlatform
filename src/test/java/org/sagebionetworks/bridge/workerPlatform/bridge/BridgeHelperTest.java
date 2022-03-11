@@ -35,6 +35,7 @@ import org.mockito.MockitoAnnotations;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
+import org.sagebionetworks.bridge.rest.model.StringList;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyList;
 import org.testng.annotations.BeforeClass;
@@ -91,6 +92,7 @@ public class BridgeHelperTest {
     private static final Phone PHONE = new Phone().regionCode("US").number("4082588569");
     private static final String RECORD_ID = "dummy-record";
     private static final String REPORT_ID = "test-report";
+    private static final String SCHEDULE_GUID = "dummy-schedule-guid";
     private static final DateTime SCHEDULED_ON_START = DateTime.parse("2018-04-27T00:00-0700");
     private static final DateTime SCHEDULED_ON_END = DateTime.parse("2018-04-28T23:59:59.999-0700");
     private static final String APP_ID = "test-app";
@@ -511,6 +513,36 @@ public class BridgeHelperTest {
         // Execute and validate
         App retVal = bridgeHelper.getApp("my-app");
         assertEquals(retVal, app);
+    }
+
+    @Test
+    public void getStudy() throws Exception {
+        // Mock client manager.
+        Study study = new Study().identifier(STUDY_ID);
+        Call<Study> mockCall = mockCallForValue(study);
+        when(mockWorkerApi.getStudyForWorker(APP_ID, STUDY_ID)).thenReturn(mockCall);
+
+        // Execute and validate.
+        Study retVal = bridgeHelper.getStudy(APP_ID, STUDY_ID);
+        assertSame(retVal, study);
+
+        verify(mockWorkerApi).getStudyForWorker(APP_ID, STUDY_ID);
+    }
+
+    @Test
+    public void getStudyIdsUsingSchedule() throws Exception {
+        // Mock client manager.
+        List<String> studyIdList = ImmutableList.of(STUDY_ID);
+        StringList mockStringList = mock(StringList.class);
+        when(mockStringList.getItems()).thenReturn(studyIdList);
+        Call<StringList> mockCall = mockCallForValue(mockStringList);
+        when(mockWorkerApi.getStudyIdsUsingSchedule(APP_ID, SCHEDULE_GUID)).thenReturn(mockCall);
+
+        // Execute and validate.
+        List<String> retVal = bridgeHelper.getStudyIdsUsingSchedule(APP_ID, SCHEDULE_GUID);
+        assertEquals(retVal, studyIdList);
+
+        verify(mockWorkerApi).getStudyIdsUsingSchedule(APP_ID, SCHEDULE_GUID);
     }
 
     @Test

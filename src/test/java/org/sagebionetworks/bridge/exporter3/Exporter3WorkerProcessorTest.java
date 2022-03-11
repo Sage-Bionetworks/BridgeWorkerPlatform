@@ -6,6 +6,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -26,6 +27,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -53,6 +55,7 @@ import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
+import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.Upload;
@@ -64,7 +67,6 @@ import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class Exporter3WorkerProcessorTest {
-    private static final String APP_ID = "test-app";
     private static final String CLIENT_INFO = "dummy client info";
     private static final String CONTENT_TYPE = "text/plain";
     private static final String CUSTOM_METADATA_KEY = "custom-metadata-key";
@@ -83,6 +85,7 @@ public class Exporter3WorkerProcessorTest {
     private static final int PARTICIPANT_VERSION = 42;
     private static final String RAW_DATA_BUCKET = "raw-data-bucket";
     private static final String RECORD_ID = "test-record";
+    private static final String SCHEDULE_GUID = "test-schedule-guid";
     private static final String TODAYS_DATE_STRING = "2021-08-23";
     private static final String TODAYS_FOLDER_ID = "syn7777";
     private static final String UPLOAD_BUCKET = "upload-bucket";
@@ -96,7 +99,9 @@ public class Exporter3WorkerProcessorTest {
     private static final long UPLOADED_ON_MILLIS = UPLOADED_ON.getMillis();
 
     private static final String FULL_FILENAME = RECORD_ID + '-' + FILENAME;
-    private static final String EXPECTED_S3_KEY = APP_ID + '/' + TODAYS_DATE_STRING + '/' + FULL_FILENAME;
+    private static final String EXPECTED_S3_KEY = Exporter3TestUtil.APP_ID + '/' + TODAYS_DATE_STRING + '/' + FULL_FILENAME;
+    private static final String EXPECTED_S3_KEY_FOR_STUDY = Exporter3TestUtil.APP_ID + '/' + Exporter3TestUtil.STUDY_ID + '/' + TODAYS_DATE_STRING + '/' +
+            FULL_FILENAME;
 
     private static class EmptyCacheLoader extends CacheLoader<String, CmsEncryptor> {
         public static final LoadingCache<String, CmsEncryptor> LOADING_CACHE_INSTANCE = CacheBuilder.newBuilder()
@@ -198,23 +203,41 @@ public class Exporter3WorkerProcessorTest {
         verify(processor).process(requestArgumentCaptor.capture());
 
         Exporter3Request capturedRequest = requestArgumentCaptor.getValue();
-        assertEquals(capturedRequest.getAppId(), APP_ID);
+        assertEquals(capturedRequest.getAppId(), Exporter3TestUtil.APP_ID);
         assertEquals(capturedRequest.getRecordId(), RECORD_ID);
     }
 
     @Test
-    public void ex3NotEnabled() throws Exception {
+    public void ex3EnabledNull() throws Exception {
         // Mock services.
         App app = Exporter3TestUtil.makeAppWithEx3Config();
-        app.setExporter3Enabled(false);
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(app);
+        app.setExporter3Enabled(null);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
 
         // Execute.
         processor.process(makeRequest());
 
         // Verify calls to services.
         verify(mockSynapseHelper).checkSynapseWritableOrThrow();
-        verify(mockBridgeHelper).getApp(APP_ID);
+        verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
+
+        // Verify no more interactions with backend services.
+        verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
+    }
+
+    @Test
+    public void ex3EnabledFalse() throws Exception {
+        // Mock services.
+        App app = Exporter3TestUtil.makeAppWithEx3Config();
+        app.setExporter3Enabled(false);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Verify calls to services.
+        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
+        verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
 
         // Verify no more interactions with backend services.
         verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
@@ -223,19 +246,19 @@ public class Exporter3WorkerProcessorTest {
     @Test
     public void recordNoSharing() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
 
         HealthDataRecordEx3 record = makeRecord();
         record.setSharingScope(SharingScope.NO_SHARING);
-        when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(record);
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(record);
 
         // Execute.
         processor.process(makeRequest());
 
         // Verify calls to services.
         verify(mockSynapseHelper).checkSynapseWritableOrThrow();
-        verify(mockBridgeHelper).getApp(APP_ID);
-        verify(mockBridgeHelper).getHealthDataRecordForExporter3(APP_ID, RECORD_ID);
+        verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
+        verify(mockBridgeHelper).getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID);
 
         // Verify no more interactions with backend services.
         verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
@@ -244,12 +267,12 @@ public class Exporter3WorkerProcessorTest {
     @Test
     public void participantNoSharing() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
-        when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(makeRecord());
 
-        StudyParticipant participant = makeParticipant();
-        participant.setSharingScope(SharingScope.NO_SHARING);
-        when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
+        StudyParticipant participant = mockParticipant();
+        when(participant.getSharingScope()).thenReturn(SharingScope.NO_SHARING);
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
                 .thenReturn(participant);
 
         // Execute.
@@ -257,9 +280,9 @@ public class Exporter3WorkerProcessorTest {
 
         // Verify calls to services.
         verify(mockSynapseHelper).checkSynapseWritableOrThrow();
-        verify(mockBridgeHelper).getApp(APP_ID);
-        verify(mockBridgeHelper).getHealthDataRecordForExporter3(APP_ID, RECORD_ID);
-        verify(mockBridgeHelper).getParticipantByHealthCode(APP_ID, HEALTH_CODE, false);
+        verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
+        verify(mockBridgeHelper).getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID);
+        verify(mockBridgeHelper).getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false);
 
         // Verify no more interactions with backend services.
         verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
@@ -268,10 +291,11 @@ public class Exporter3WorkerProcessorTest {
     @Test(expectedExceptions = WorkerException.class)
     public void encryptedUpload_ErrorGettingEncryptor() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
-        when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
-        when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
-                .thenReturn(makeParticipant());
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(makeRecord());
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
 
         Upload mockUpload = mockUpload(true);
         when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
@@ -285,10 +309,11 @@ public class Exporter3WorkerProcessorTest {
     @Test(expectedExceptions = PollSqsWorkerBadRequestException.class)
     public void encryptedUpload_EncryptorNotFound() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
-        when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
-        when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
-                .thenReturn(makeParticipant());
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(makeRecord());
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
 
         Upload mockUpload = mockUpload(true);
         when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
@@ -302,10 +327,11 @@ public class Exporter3WorkerProcessorTest {
     @Test
     public void encryptedUpload() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
-        when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
-        when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
-                .thenReturn(makeParticipant());
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(makeRecord());
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
         when(mockDigestUtils.digest(any(File.class))).thenReturn(DUMMY_MD5_BYTES);
 
         Upload mockUpload = mockUpload(true);
@@ -354,17 +380,18 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(writtenToS3, DUMMY_UNENCRYPTED_FILE_BYTES);
         verifyS3Metadata(s3MetadataCaptor.getValue());
 
-        verifySynapseExport();
+        verifySynapseExport(EXPECTED_S3_KEY);
         verifyUpdatedRecord();
     }
 
     @Test
     public void nonEncryptedUpload() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
-        when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(makeRecord());
-        when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
-                .thenReturn(makeParticipant());
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(makeRecord());
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
 
         Upload mockUpload = mockUpload(false);
         when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
@@ -380,25 +407,25 @@ public class Exporter3WorkerProcessorTest {
                 s3MetadataCaptor.capture());
         verifyS3Metadata(s3MetadataCaptor.getValue());
 
-        verifySynapseExport();
+        verifySynapseExport(EXPECTED_S3_KEY);
         verifyUpdatedRecord();
     }
-    
+
     @Test
     public void schedulingMetadataAddedToExport() throws Exception {
         TimelineMetadata meta = mock(TimelineMetadata.class);
         when(meta.getMetadata()).thenReturn(ImmutableMap.of(
                 "assessmentInstanceGuid", ASSESSMENT_INSTANCE_GUID, "sessionGuid", SESSION_GUID));
-        when(mockBridgeHelper.getTimelineMetadata(APP_ID, INSTANCE_GUID)).thenReturn(meta);
+        when(mockBridgeHelper.getTimelineMetadata(Exporter3TestUtil.APP_ID, INSTANCE_GUID)).thenReturn(meta);
 
         HealthDataRecordEx3 record = makeRecord();
-        record.setAppId(APP_ID);
         record.putMetadataItem(METADATA_KEY_INSTANCE_GUID, INSTANCE_GUID);
-        
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
-        when(mockBridgeHelper.getHealthDataRecordForExporter3(APP_ID, RECORD_ID)).thenReturn(record);
-        when(mockBridgeHelper.getParticipantByHealthCode(APP_ID, HEALTH_CODE, false))
-                .thenReturn(makeParticipant());
+
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(record);
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
         when(mockDigestUtils.digest(any(File.class))).thenReturn(DUMMY_MD5_BYTES);
 
         Upload mockUpload = mockUpload(true);
@@ -439,6 +466,194 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(userMetadataMap.get("sessionGuid"), SESSION_GUID);
     }
 
+    @Test
+    public void encryptedUploadForStudy() throws Exception {
+        // Mock services.
+        App app = new App();
+        app.setIdentifier(Exporter3TestUtil.APP_ID);
+        app.setExporter3Enabled(true);
+        app.setExporter3Configuration(null);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockParticipant.getStudyIds()).thenReturn(ImmutableList.of(Exporter3TestUtil.STUDY_ID));
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
+
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, Exporter3TestUtil.STUDY_ID)).thenReturn(Exporter3TestUtil.makeStudyWithEx3Config());
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(makeRecord());
+        when(mockDigestUtils.digest(any(File.class))).thenReturn(DUMMY_MD5_BYTES);
+
+        Upload mockUpload = mockUpload(true);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
+
+        doAnswer(invocation -> {
+            File file = invocation.getArgumentAt(2, File.class);
+            inMemoryFileHelper.writeBytes(file, DUMMY_ENCRYPTED_FILE_BYTES);
+            return null;
+        }).when(mockS3Helper).downloadS3File(eq(UPLOAD_BUCKET), eq(RECORD_ID), any());
+
+        CmsEncryptor mockEncryptor = mock(CmsEncryptor.class);
+        when(mockEncryptor.decrypt(any(InputStream.class))).thenReturn(new ByteArrayInputStream(
+                DUMMY_UNENCRYPTED_FILE_BYTES));
+        processor.setCmsEncryptorCache(SingletonCacheLoader.makeLoadingCache(mockEncryptor));
+
+        // Don't actually buffer the input stream, as this breaks the test.
+        doAnswer(invocation -> invocation.getArgumentAt(0, InputStream.class)).when(processor)
+                .getBufferedInputStream(any());
+
+        doAnswer(invocation -> {
+            File file = invocation.getArgumentAt(2, File.class);
+            writtenToS3 = inMemoryFileHelper.getBytes(file);
+            return null;
+        }).when(mockS3Helper).writeFileToS3(eq(RAW_DATA_BUCKET), eq(EXPECTED_S3_KEY_FOR_STUDY), any(), any());
+
+        mockSynapseHelper();
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Verify services.
+        verify(mockS3Helper).downloadS3File(eq(UPLOAD_BUCKET), eq(RECORD_ID), any());
+
+        // This isn't called because there's no instanceGuid in the user's metadata map
+        verify(mockBridgeHelper, never()).getTimelineMetadata(any(), any());
+
+        ArgumentCaptor<InputStream> encryptedInputStreamCaptor = ArgumentCaptor.forClass(InputStream.class);
+        verify(mockEncryptor).decrypt(encryptedInputStreamCaptor.capture());
+        InputStream encryptedInputStream = encryptedInputStreamCaptor.getValue();
+        assertEquals(ByteStreams.toByteArray(encryptedInputStream), DUMMY_ENCRYPTED_FILE_BYTES);
+
+        ArgumentCaptor<ObjectMetadata> s3MetadataCaptor = ArgumentCaptor.forClass(ObjectMetadata.class);
+        verify(mockS3Helper).writeFileToS3(eq(RAW_DATA_BUCKET), eq(EXPECTED_S3_KEY_FOR_STUDY), any(),
+                s3MetadataCaptor.capture());
+        assertEquals(writtenToS3, DUMMY_UNENCRYPTED_FILE_BYTES);
+        verifyS3Metadata(s3MetadataCaptor.getValue());
+
+        verifySynapseExport(EXPECTED_S3_KEY_FOR_STUDY);
+        verifyUpdatedRecord();
+    }
+
+    @Test
+    public void nonEncryptedUploadForStudy() throws Exception {
+        // Mock services.
+        App app = new App();
+        app.setIdentifier(Exporter3TestUtil.APP_ID);
+        app.setExporter3Enabled(true);
+        app.setExporter3Configuration(null);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockParticipant.getStudyIds()).thenReturn(ImmutableList.of(Exporter3TestUtil.STUDY_ID));
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
+
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, Exporter3TestUtil.STUDY_ID)).thenReturn(Exporter3TestUtil.makeStudyWithEx3Config());
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(makeRecord());
+
+        Upload mockUpload = mockUpload(false);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
+
+        mockSynapseHelper();
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Verify services.
+        ArgumentCaptor<ObjectMetadata> s3MetadataCaptor = ArgumentCaptor.forClass(ObjectMetadata.class);
+        verify(mockS3Helper).copyS3File(eq(UPLOAD_BUCKET), eq(RECORD_ID), eq(RAW_DATA_BUCKET),
+                eq(EXPECTED_S3_KEY_FOR_STUDY), s3MetadataCaptor.capture());
+        verifyS3Metadata(s3MetadataCaptor.getValue());
+
+        verifySynapseExport(EXPECTED_S3_KEY_FOR_STUDY);
+        verifyUpdatedRecord();
+    }
+
+    @Test
+    public void nonEncryptedUploadForStudyFromTimeline() throws Exception {
+        // Mock services.
+        App app = new App();
+        app.setIdentifier(Exporter3TestUtil.APP_ID);
+        app.setExporter3Enabled(true);
+        app.setExporter3Configuration(null);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockParticipant.getStudyIds()).thenReturn(ImmutableList.of(Exporter3TestUtil.STUDY_ID, "non-timeline-study"));
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
+
+        TimelineMetadata meta = mock(TimelineMetadata.class);
+        when(meta.getMetadata()).thenReturn(ImmutableMap.of(Exporter3WorkerProcessor.METADATA_KEY_SCHEDULE_GUID,
+                SCHEDULE_GUID));
+        when(mockBridgeHelper.getTimelineMetadata(Exporter3TestUtil.APP_ID, INSTANCE_GUID)).thenReturn(meta);
+
+        HealthDataRecordEx3 record = makeRecord();
+        record.putMetadataItem(METADATA_KEY_INSTANCE_GUID, INSTANCE_GUID);
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(record);
+
+        when(mockBridgeHelper.getStudyIdsUsingSchedule(Exporter3TestUtil.APP_ID, SCHEDULE_GUID)).thenReturn(ImmutableList.of(
+                Exporter3TestUtil.STUDY_ID,
+                "non-participant-study"));
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, Exporter3TestUtil.STUDY_ID)).thenReturn(Exporter3TestUtil.makeStudyWithEx3Config());
+
+        Upload mockUpload = mockUpload(false);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
+
+        mockSynapseHelper();
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Just verify that we only export for study STUDY_ID, and not non-timeline-study or non-participant-study/
+        verify(mockS3Helper).copyS3File(eq(UPLOAD_BUCKET), eq(RECORD_ID), eq(RAW_DATA_BUCKET),
+                eq(EXPECTED_S3_KEY_FOR_STUDY), any());
+        verifyNoMoreInteractions(mockS3Helper);
+
+        // Verify create file handle.
+        ArgumentCaptor<S3FileHandle> fileHandleCaptor = ArgumentCaptor.forClass(S3FileHandle.class);
+        verify(mockSynapseHelper, times(1)).createS3FileHandleWithRetry(fileHandleCaptor
+                .capture());
+
+        S3FileHandle fileHandle = fileHandleCaptor.getValue();
+        assertEquals(fileHandle.getKey(), EXPECTED_S3_KEY_FOR_STUDY);
+    }
+
+    @Test
+    public void appAndStudiesNotConfigured() throws Exception {
+        // Mock services.
+        App app = new App();
+        app.setIdentifier(Exporter3TestUtil.APP_ID);
+        app.setExporter3Enabled(true);
+        app.setExporter3Configuration(null);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockParticipant.getStudyIds()).thenReturn(ImmutableList.of("study1", "study2"));
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
+
+        Study study = new Study();
+        study.setExporter3Enabled(false);
+        when(mockBridgeHelper.getStudy(eq(Exporter3TestUtil.APP_ID), any())).thenReturn(study);
+
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(makeRecord());
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Verify calls to services.
+        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
+        verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
+        verify(mockBridgeHelper).getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID);
+        verify(mockBridgeHelper).getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false);
+        verify(mockBridgeHelper).getStudy(Exporter3TestUtil.APP_ID, "study1");
+        verify(mockBridgeHelper).getStudy(Exporter3TestUtil.APP_ID, "study2");
+
+        // Verify no more interactions with backend services.
+        verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
+    }
+
     private void mockSynapseHelper() throws Exception {
         // Mock create folder.
         when(mockSynapseHelper.createFolderIfNotExists(Exporter3TestUtil.RAW_FOLDER_ID, TODAYS_DATE_STRING))
@@ -473,7 +688,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(userMetadataMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE_CLEAN);
     }
 
-    private void verifySynapseExport() throws Exception {
+    private void verifySynapseExport(String expectedS3Key) throws Exception {
         // Verify create file handle.
         ArgumentCaptor<S3FileHandle> fileHandleCaptor = ArgumentCaptor.forClass(S3FileHandle.class);
         verify(mockSynapseHelper).createS3FileHandleWithRetry(fileHandleCaptor.capture());
@@ -482,7 +697,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(fileHandle.getBucketName(), RAW_DATA_BUCKET);
         assertEquals(fileHandle.getContentType(), CONTENT_TYPE);
         assertEquals(fileHandle.getFileName(), FULL_FILENAME);
-        assertEquals(fileHandle.getKey(), EXPECTED_S3_KEY);
+        assertEquals(fileHandle.getKey(), expectedS3Key);
         assertEquals(fileHandle.getStorageLocationId().longValue(), Exporter3TestUtil.STORAGE_LOCATION_ID);
         assertEquals(Hex.decode(fileHandle.getContentMd5()), DUMMY_MD5_BYTES);
 
@@ -534,7 +749,7 @@ public class Exporter3WorkerProcessorTest {
 
     private void verifyUpdatedRecord() throws Exception {
         ArgumentCaptor<HealthDataRecordEx3> recordCaptor = ArgumentCaptor.forClass(HealthDataRecordEx3.class);
-        verify(mockBridgeHelper).createOrUpdateHealthDataRecordForExporter3(eq(APP_ID), recordCaptor.capture());
+        verify(mockBridgeHelper).createOrUpdateHealthDataRecordForExporter3(eq(Exporter3TestUtil.APP_ID), recordCaptor.capture());
 
         HealthDataRecordEx3 record = recordCaptor.getValue();
         assertEquals(record.getExportedOn().getMillis(), MOCK_NOW_MILLIS);
@@ -543,13 +758,14 @@ public class Exporter3WorkerProcessorTest {
 
     private static Exporter3Request makeRequest() {
         Exporter3Request request = new Exporter3Request();
-        request.setAppId(APP_ID);
+        request.setAppId(Exporter3TestUtil.APP_ID);
         request.setRecordId(RECORD_ID);
         return request;
     }
 
     private static HealthDataRecordEx3 makeRecord() {
         HealthDataRecordEx3 record = new HealthDataRecordEx3();
+        record.setAppId(Exporter3TestUtil.APP_ID);
         record.setId(RECORD_ID);
 
         record.setClientInfo(CLIENT_INFO);
@@ -579,9 +795,13 @@ public class Exporter3WorkerProcessorTest {
         return upload;
     }
 
-    private static StudyParticipant makeParticipant() {
-        StudyParticipant participant = new StudyParticipant();
-        participant.setSharingScope(SharingScope.ALL_QUALIFIED_RESEARCHERS);
+    private static StudyParticipant mockParticipant() {
+        StudyParticipant participant = mock(StudyParticipant.class);
+        when(participant.getSharingScope()).thenReturn(SharingScope.ALL_QUALIFIED_RESEARCHERS);
+
+        // This isn't realistic, but for test purposes, let's use an empty list for study IDs.
+        when(participant.getStudyIds()).thenReturn(ImmutableList.of());
+
         return participant;
     }
 }

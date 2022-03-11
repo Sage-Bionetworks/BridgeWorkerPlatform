@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
@@ -27,6 +28,7 @@ import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
+import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
@@ -80,7 +82,7 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
         try {
             process(request);
         } finally {
-            LOG.info("Export request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) + " seconds for app " +
+            LOG.info("Participant version export request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) + " seconds for app " +
                     request.getAppId() + " healthcode " + request.getHealthCode() + " version " +
                     request.getParticipantVersion());
         }
@@ -97,16 +99,48 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
 
         // Check that app is configured for export.
         App app = bridgeHelper.getApp(appId);
-        if (!BridgeUtils.isExporter3Configured(app)) {
-            // Exporter not enabled. Skip.
+        if (app.isExporter3Enabled() == null || !app.isExporter3Enabled()) {
+            // Exporter 3.0 is not enabled for the app. Skip. (We don't care if it's configured, since the studies can
+            // be individually configured.
             return;
         }
-        Exporter3Configuration exporter3Config = app.getExporter3Configuration();
-        String participantVersionTableId = exporter3Config.getParticipantVersionTableId();
+        boolean exportForApp = BridgeUtils.isExporter3Configured(app);
 
         // Get participant version.
         ParticipantVersion participantVersion = bridgeHelper.getParticipantVersion(appId,
                 "healthCode:" + healthCode, versionNum);
+
+        // Which study is this export for?
+        List<Study> studiesToExport = new ArrayList<>();
+        if (participantVersion.getStudyMemberships() != null) {
+            for (String studyId : participantVersion.getStudyMemberships().keySet()) {
+                Study study = bridgeHelper.getStudy(appId, studyId);
+                if (BridgeUtils.isExporter3Configured(study)) {
+                    studiesToExport.add(study);
+                }
+            }
+        }
+
+        if (!exportForApp && studiesToExport.isEmpty()) {
+            // No destinations to export to. Skip.
+            return;
+        }
+
+        if (exportForApp) {
+            process(appId, null, app.getExporter3Configuration(), participantVersion);
+        }
+        for (Study study : studiesToExport) {
+            process(appId, study.getIdentifier(), study.getExporter3Configuration(), participantVersion);
+        }
+    }
+
+    private void process(String appId, String studyId, Exporter3Configuration exporter3Config,
+            ParticipantVersion participantVersion) throws BridgeSynapseException, JsonProcessingException,
+            SynapseException {
+        String healthCode = participantVersion.getHealthCode();
+        Integer versionNum = participantVersion.getParticipantVersion();
+
+        String participantVersionTableId = exporter3Config.getParticipantVersionTableId();
 
         Map<String, String> columnNameToId = getColumnNameToIdMap(participantVersionTableId);
 
@@ -154,7 +188,8 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
             rowMap.put(columnNameToId.get(COLUMN_NAME_SHARING_SCOPE), participantVersion.getSharingScope().getValue());
         }
         // serializeStudyMemberships is null-safe, and it converts to null if there are no values.
-        String serializedStudyMemberships = serializeStudyMemberships(participantVersion.getStudyMemberships());
+        String serializedStudyMemberships = serializeStudyMemberships(studyId,
+                participantVersion.getStudyMemberships());
         if (serializedStudyMemberships != null) {
             rowMap.put(columnNameToId.get(COLUMN_NAME_STUDY_MEMBERSHIPS), serializedStudyMemberships);
         }
@@ -194,15 +229,23 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
      * This method serializes study memberships into a string. Study memberships are a map where the key is the
      * study ID and the value is the external ID, or "<none>" if not present. This is serialized into a form that
      * looks like: "|studyA=ext-A|studyB=|studyC=ext-C|" (Assuming studyB has no external ID.)
+     *
+     * If a study ID filter is specified, we serialize only that one study's memberships.
      */
-    private static String serializeStudyMemberships(Map<String, String> studyMemberships) {
+    private static String serializeStudyMemberships(String studyIdFilter, Map<String, String> studyMemberships) {
         if (studyMemberships == null || studyMemberships.isEmpty()) {
             return null;
         }
 
-        // Get the study IDs in alphabetical order, so that it's easier to test.
-        List<String> studyIdList = new ArrayList<>(studyMemberships.keySet());
-        Collections.sort(studyIdList);
+        List<String> studyIdList;
+        if (studyIdFilter != null) {
+            // Just the one study.
+            studyIdList = ImmutableList.of(studyIdFilter);
+        } else {
+            // Get the study IDs in alphabetical order, so that it's easier to test.
+            studyIdList = new ArrayList<>(studyMemberships.keySet());
+            Collections.sort(studyIdList);
+        }
 
         List<String> pairs = new ArrayList<>();
         for (String studyId : studyIdList) {

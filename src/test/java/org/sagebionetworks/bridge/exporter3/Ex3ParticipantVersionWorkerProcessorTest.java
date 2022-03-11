@@ -1,8 +1,10 @@
 package org.sagebionetworks.bridge.exporter3;
 
+import static org.mockito.AdditionalMatchers.not;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -35,11 +37,11 @@ import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
+import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
 public class Ex3ParticipantVersionWorkerProcessorTest {
-    private static final String APP_ID = "test-app";
     private static final List<String> DATA_GROUPS = ImmutableList.of("bbb-group", "aaa-group");
     private static final String HEALTH_CODE = "health-code";
     private static final List<String> LANGUAGES = ImmutableList.of("es-ES", "en-UK");
@@ -131,7 +133,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         verify(processor).process(requestArgumentCaptor.capture());
 
         Ex3ParticipantVersionRequest capturedRequest = requestArgumentCaptor.getValue();
-        assertEquals(capturedRequest.getAppId(), APP_ID);
+        assertEquals(capturedRequest.getAppId(), Exporter3TestUtil.APP_ID);
         assertEquals(capturedRequest.getHealthCode(), HEALTH_CODE);
         assertEquals(capturedRequest.getParticipantVersion(), PARTICIPANT_VERSION);
     }
@@ -139,10 +141,14 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
     @Test
     public void process() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
 
-        when(mockBridgeHelper.getParticipantVersion(APP_ID, "healthCode:" + HEALTH_CODE, PARTICIPANT_VERSION))
+        when(mockBridgeHelper.getParticipantVersion(Exporter3TestUtil.APP_ID, "healthCode:" + HEALTH_CODE, PARTICIPANT_VERSION))
                 .thenReturn(makeParticipantVersion());
+
+        Study study = new Study();
+        study.setExporter3Enabled(false);
+        when(mockBridgeHelper.getStudy(any(), any())).thenReturn(study);
 
         // Execute.
         processor.process(makeRequest());
@@ -178,6 +184,70 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
     }
 
     @Test
+    public void processForStudy() throws Exception {
+        // Mock services.
+        App app = new App();
+        app.setIdentifier(Exporter3TestUtil.APP_ID);
+        app.setExporter3Enabled(true);
+        app.setExporter3Configuration(null);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        when(mockBridgeHelper.getParticipantVersion(Exporter3TestUtil.APP_ID, "healthCode:" + HEALTH_CODE,
+                PARTICIPANT_VERSION)).thenReturn(makeParticipantVersion());
+
+        // Only studyA is enabled.
+        Study studyA = Exporter3TestUtil.makeStudyWithEx3Config();
+        studyA.setIdentifier("studyA");
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, "studyA")).thenReturn(studyA);
+
+        Study otherStudy = new Study();
+        otherStudy.setExporter3Enabled(false);
+        when(mockBridgeHelper.getStudy(eq(Exporter3TestUtil.APP_ID), not(eq("studyA")))).thenReturn(otherStudy);
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Validate. The main difference is we filter out other studies in the Study Membership field.
+        ArgumentCaptor<AppendableRowSet> rowSetCaptor = ArgumentCaptor.forClass(AppendableRowSet.class);
+        verify(mockSynapseHelper).appendRowsToTable(rowSetCaptor.capture(),
+                eq(Exporter3TestUtil.PARTICIPANT_VERSION_TABLE_ID));
+
+        PartialRowSet rowSet = (PartialRowSet) rowSetCaptor.getValue();
+        Map<String, String> rowValueMap = rowSet.getRows().get(0).getValues();
+        assertEquals(rowValueMap.get(COLUMN_ID_STUDY_MEMBERSHIPS), "|studyA=extA|");
+    }
+
+    @Test
+    public void appAndStudiesNotConfigured() throws Exception {
+        // Mock services.
+        App app = new App();
+        app.setIdentifier(Exporter3TestUtil.APP_ID);
+        app.setExporter3Enabled(true);
+        app.setExporter3Configuration(null);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        when(mockBridgeHelper.getParticipantVersion(Exporter3TestUtil.APP_ID, "healthCode:" + HEALTH_CODE,
+                PARTICIPANT_VERSION)).thenReturn(makeParticipantVersion());
+
+        Study study = new Study();
+        study.setExporter3Enabled(false);
+        when(mockBridgeHelper.getStudy(any(), any())).thenReturn(study);
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Verify calls to services.
+        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
+        verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
+        verify(mockBridgeHelper).getParticipantVersion(Exporter3TestUtil.APP_ID, "healthCode:" + HEALTH_CODE,
+                PARTICIPANT_VERSION);
+        verify(mockBridgeHelper, times(3)).getStudy(eq(Exporter3TestUtil.APP_ID), any());
+
+        // Verify no more interactions with backend services.
+        verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
+    }
+
+    @Test
     public void tooManyLanguages() throws Exception {
         // Max is 10. Make 11 fake languages of the form fake#.
         List<String> languageList = new ArrayList<>();
@@ -189,10 +259,14 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         participantVersion.setLanguages(languageList);
 
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
 
-        when(mockBridgeHelper.getParticipantVersion(APP_ID, "healthCode:" + HEALTH_CODE, PARTICIPANT_VERSION))
+        when(mockBridgeHelper.getParticipantVersion(Exporter3TestUtil.APP_ID, "healthCode:" + HEALTH_CODE, PARTICIPANT_VERSION))
                 .thenReturn(participantVersion);
+
+        Study study = new Study();
+        study.setExporter3Enabled(false);
+        when(mockBridgeHelper.getStudy(any(), any())).thenReturn(study);
 
         // Execute.
         processor.process(makeRequest());
@@ -216,9 +290,10 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
     @Test
     public void emptyParticipantVersion() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
 
-        when(mockBridgeHelper.getParticipantVersion(APP_ID, "healthCode:" + HEALTH_CODE, PARTICIPANT_VERSION))
+        // Participant Version will still have health code and participant version.
+        when(mockBridgeHelper.getParticipantVersion(Exporter3TestUtil.APP_ID, "healthCode:" + HEALTH_CODE, PARTICIPANT_VERSION))
                 .thenReturn(new ParticipantVersion());
 
         // Execute.
@@ -238,11 +313,11 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
     @Test
     public void emptySubstudyMemberships() throws Exception {
         // Mock services.
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
 
         ParticipantVersion participantVersion = makeParticipantVersion();
         participantVersion.setStudyMemberships(ImmutableMap.of());
-        when(mockBridgeHelper.getParticipantVersion(APP_ID, "healthCode:" + HEALTH_CODE, PARTICIPANT_VERSION))
+        when(mockBridgeHelper.getParticipantVersion(Exporter3TestUtil.APP_ID, "healthCode:" + HEALTH_CODE, PARTICIPANT_VERSION))
                 .thenReturn(participantVersion);
 
         // Execute.
@@ -260,18 +335,36 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
     }
 
     @Test
-    public void ex3NotEnabled() throws Exception {
+    public void ex3EnabledNull() throws Exception {
         // Mock services.
         App app = Exporter3TestUtil.makeAppWithEx3Config();
-        app.setExporter3Enabled(false);
-        when(mockBridgeHelper.getApp(APP_ID)).thenReturn(app);
+        app.setExporter3Enabled(null);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
 
         // Execute.
         processor.process(makeRequest());
 
         // Verify calls to services.
         verify(mockSynapseHelper).checkSynapseWritableOrThrow();
-        verify(mockBridgeHelper).getApp(APP_ID);
+        verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
+
+        // Verify no more interactions with backend services.
+        verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
+    }
+
+    @Test
+    public void ex3EnabledFalse() throws Exception {
+        // Mock services.
+        App app = Exporter3TestUtil.makeAppWithEx3Config();
+        app.setExporter3Enabled(false);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Verify calls to services.
+        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
+        verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
 
         // Verify no more interactions with backend services.
         verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
@@ -279,7 +372,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
 
     private static Ex3ParticipantVersionRequest makeRequest() {
         Ex3ParticipantVersionRequest request = new Ex3ParticipantVersionRequest();
-        request.setAppId(APP_ID);
+        request.setAppId(Exporter3TestUtil.APP_ID);
         request.setHealthCode(HEALTH_CODE);
         request.setParticipantVersion(PARTICIPANT_VERSION);
         return request;
@@ -287,7 +380,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
 
     private static ParticipantVersion makeParticipantVersion() {
         ParticipantVersion participantVersion = new ParticipantVersion();
-        participantVersion.setAppId(APP_ID);
+        participantVersion.setAppId(Exporter3TestUtil.APP_ID);
         participantVersion.setHealthCode(HEALTH_CODE);
         participantVersion.setParticipantVersion(PARTICIPANT_VERSION);
         participantVersion.setCreatedOn(CREATED_ON);
