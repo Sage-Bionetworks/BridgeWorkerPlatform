@@ -412,6 +412,50 @@ public class Exporter3WorkerProcessorTest {
     }
 
     @Test
+    public void fileAlreadyExists() throws Exception {
+        // Mock services.
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(makeRecord());
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
+
+        Upload mockUpload = mockUpload(false);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
+
+        when(mockSynapseHelper.createFolderIfNotExists(Exporter3TestUtil.RAW_FOLDER_ID, TODAYS_DATE_STRING))
+                .thenReturn(TODAYS_FOLDER_ID);
+
+        S3FileHandle createdFileHandle = new S3FileHandle();
+        createdFileHandle.setId(EXPORTED_FILE_HANDLE_ID);
+        when(mockSynapseHelper.createS3FileHandleWithRetry(any())).thenReturn(createdFileHandle);
+
+        when(mockSynapseHelper.lookupChildWithRetry(TODAYS_FOLDER_ID, FULL_FILENAME))
+                .thenReturn(EXPORTED_FILE_ENTITY_ID);
+
+        FileEntity existingFileEntity = new FileEntity();
+        existingFileEntity.setId(EXPORTED_FILE_ENTITY_ID);
+        when(mockSynapseHelper.getEntityWithRetry(EXPORTED_FILE_ENTITY_ID, FileEntity.class))
+                .thenReturn(existingFileEntity);
+
+        FileEntity updateFileEntity = new FileEntity();
+        updateFileEntity.setId(EXPORTED_FILE_ENTITY_ID);
+        when(mockSynapseHelper.updateEntityWithRetry(any(FileEntity.class))).thenReturn(updateFileEntity);
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Just verify call to updateEntity().
+        ArgumentCaptor<FileEntity> fileEntityCaptor = ArgumentCaptor.forClass(FileEntity.class);
+        verify(mockSynapseHelper).updateEntityWithRetry(fileEntityCaptor.capture());
+
+        FileEntity fileEntity = fileEntityCaptor.getValue();
+        assertEquals(fileEntity.getDataFileHandleId(), EXPORTED_FILE_HANDLE_ID);
+        assertEquals(fileEntity.getName(), FULL_FILENAME);
+        assertEquals(fileEntity.getParentId(), TODAYS_FOLDER_ID);
+    }
+
+    @Test
     public void schedulingMetadataAddedToExport() throws Exception {
         TimelineMetadata meta = mock(TimelineMetadata.class);
         when(meta.getMetadata()).thenReturn(ImmutableMap.of(
