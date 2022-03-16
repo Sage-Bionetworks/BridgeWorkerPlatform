@@ -188,6 +188,8 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
             rowMap.put(columnNameToId.get(COLUMN_NAME_SHARING_SCOPE), participantVersion.getSharingScope().getValue());
         }
         // serializeStudyMemberships is null-safe, and it converts to null if there are no values.
+        // participantVersion.getStudyMemberships() comes from account.getActiveEnrollments(), which excludes
+        // withdrawn enrollments.
         String serializedStudyMemberships = serializeStudyMemberships(studyId,
                 participantVersion.getStudyMemberships());
         if (serializedStudyMemberships != null) {

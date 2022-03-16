@@ -8,7 +8,6 @@ import org.testng.annotations.Test;
 import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
 import org.sagebionetworks.bridge.rest.model.Study;
-import org.sagebionetworks.bridge.rest.model.StudyPhase;
 
 public class BridgeUtilsTest {
     @Test
@@ -77,13 +76,6 @@ public class BridgeUtilsTest {
     }
 
     @Test
-    public void isExported3ConfiguredForStudy_WrongPhase() {
-        Study study = makeEx3EnabledStudy();
-        study.setPhase(StudyPhase.DESIGN);
-        assertFalse(BridgeUtils.isExporter3Configured(study));
-    }
-
-    @Test
     public void isExported3ConfiguredForStudy_ConfigObjectNull() {
         Study study = makeEx3EnabledStudy();
         study.setExporter3Configuration(null);
@@ -117,7 +109,6 @@ public class BridgeUtilsTest {
         Study study = new Study();
         study.setExporter3Configuration(ex3Config);
         study.setExporter3Enabled(true);
-        study.setPhase(StudyPhase.RECRUITMENT);
         return study;
     }
 }
