@@ -4,9 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
-import com.jcabi.aspects.Cacheable;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
@@ -208,19 +206,16 @@ public class BridgeHelper {
     }
 
     /** Gets the app for the given ID. */
-    @Cacheable(lifetime = 5, unit = TimeUnit.MINUTES)
     public App getApp(String appId) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getApp(appId).execute().body();
     }
 
     /** Gets the study for the given app and study IDs. */
-    @Cacheable(lifetime = 5, unit = TimeUnit.MINUTES)
     public Study getStudy(String appId, String studyId) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getStudyForWorker(appId, studyId).execute().body();
     }
 
     /** Returns a list of all study IDs in the given app that use the given schedule. */
-    @Cacheable(lifetime = 5, unit = TimeUnit.MINUTES)
     public List<String> getStudyIdsUsingSchedule(String appId, String scheduleGuid) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getStudyIdsUsingSchedule(appId, scheduleGuid).execute()
                 .body().getItems();
