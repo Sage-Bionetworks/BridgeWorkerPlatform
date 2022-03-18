@@ -7,6 +7,7 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
+import org.sagebionetworks.bridge.rest.model.Study;
 
 public class BridgeUtilsTest {
     @Test
@@ -58,5 +59,56 @@ public class BridgeUtilsTest {
         app.setExporter3Configuration(ex3Config);
         app.setExporter3Enabled(true);
         return app;
+    }
+
+    @Test
+    public void isExported3ConfiguredForStudy_IsExporter3EnabledNull() {
+        Study study = makeEx3EnabledStudy();
+        study.setExporter3Enabled(null);
+        assertFalse(BridgeUtils.isExporter3Configured(study));
+    }
+
+    @Test
+    public void isExported3ConfiguredForStudy_IsExporter3EnabledFalse() {
+        Study study = makeEx3EnabledStudy();
+        study.setExporter3Enabled(false);
+        assertFalse(BridgeUtils.isExporter3Configured(study));
+    }
+
+    @Test
+    public void isExported3ConfiguredForStudy_ConfigObjectNull() {
+        Study study = makeEx3EnabledStudy();
+        study.setExporter3Configuration(null);
+        assertFalse(BridgeUtils.isExporter3Configured(study));
+    }
+
+    @Test
+    public void isExported3ConfiguredForStudy_ConfiguredNull() {
+        Study study = makeEx3EnabledStudy();
+        study.getExporter3Configuration().setConfigured(null);
+        assertFalse(BridgeUtils.isExporter3Configured(study));
+    }
+
+    @Test
+    public void isExported3ConfiguredForStudy_ConfiguredFalse() {
+        Study study = makeEx3EnabledStudy();
+        study.getExporter3Configuration().setConfigured(false);
+        assertFalse(BridgeUtils.isExporter3Configured(study));
+    }
+
+    @Test
+    public void isExported3ConfiguredForStudy_ConfiguredTrue() {
+        Study study = makeEx3EnabledStudy();
+        assertTrue(BridgeUtils.isExporter3Configured(study));
+    }
+
+    private static Study makeEx3EnabledStudy() {
+        Exporter3Configuration ex3Config = new Exporter3Configuration();
+        ex3Config.setConfigured(true);
+
+        Study study = new Study();
+        study.setExporter3Configuration(ex3Config);
+        study.setExporter3Enabled(true);
+        return study;
     }
 }

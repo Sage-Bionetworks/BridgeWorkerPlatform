@@ -210,6 +210,17 @@ public class BridgeHelper {
         return clientManager.getClient(ForWorkersApi.class).getApp(appId).execute().body();
     }
 
+    /** Gets the study for the given app and study IDs. */
+    public Study getStudy(String appId, String studyId) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getStudyForWorker(appId, studyId).execute().body();
+    }
+
+    /** Returns a list of all study IDs in the given app that use the given schedule. */
+    public List<String> getStudyIdsUsingSchedule(String appId, String scheduleGuid) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getStudyIdsUsingSchedule(appId, scheduleGuid).execute()
+                .body().getItems();
+    }
+
     /**
      * Get the user's survey history for the given user, app, survey GUID, and time range. Note that since
      * getSurveyHistory is a paginated API, the iterator may continue to call the server.
