@@ -141,10 +141,13 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                     
                     // Mission accomplished, it's been cached, but eventually we'll want to send a 
                     // notification if the user is not in adherence. Here's the hook for that.
-                    int userAdherencePercent = report.getWeeklyAdherencePercent().intValue();
-                    if (userAdherencePercent < studyThresholdPercent) {
-                        recordOutOfCompliance(userAdherencePercent, studyThresholdPercent,
-                                app.getIdentifier(), studyId, summary.getId());
+                    Integer weeklyAdherencePercent = report.getWeeklyAdherencePercent();
+                    if (weeklyAdherencePercent != null) {
+                        int userPercent = weeklyAdherencePercent.intValue();
+                        if (userPercent < studyThresholdPercent) {
+                            recordOutOfCompliance(userPercent, studyThresholdPercent,
+                                    app.getIdentifier(), studyId, summary.getId());
+                        }
                     }
                     // sleeping between studies isn't needed at this point as the vast majority of 
                     // accounts are only enrolled in one study.

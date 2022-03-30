@@ -135,9 +135,13 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
         setVariableValueInObject(summary2, "id", "user2");
         setVariableValueInObject(summary2, "studyIds", 
                 ImmutableList.of("study-api1", "study-target1", "study-target2", "study-target3"));
-        
+
+        AccountSummary summary3 = new AccountSummary();
+        setVariableValueInObject(summary3, "id", "user3");
+        setVariableValueInObject(summary3, "studyIds", ImmutableList.of("study-api1", "study-target2"));
+
         AccountSummaryList summaryList1 = new AccountSummaryList();
-        setVariableValueInObject(summaryList1, "items", ImmutableList.of(summary1, summary2));
+        setVariableValueInObject(summaryList1, "items", ImmutableList.of(summary1, summary2, summary3));
         Call<AccountSummaryList> summaryCall1 = mockCall(summaryList1);
         
         AccountSummaryList summaryList2 = new AccountSummaryList();
@@ -154,13 +158,18 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
         WeeklyAdherenceReport failedReport = new WeeklyAdherenceReport();
         setVariableValueInObject(failedReport, "weeklyAdherencePercent", Integer.valueOf(20));
         Call<WeeklyAdherenceReport> failedReportCall = mockCall(failedReport);
-        
+
+        // This report has not weeklyAdherencePercent and has no impact on the final reports that are generated.
+        WeeklyAdherenceReport inactiveReport = new WeeklyAdherenceReport();
+        Call<WeeklyAdherenceReport> inactiveReportCall = mockCall(inactiveReport);
+
         when(mockWorkersApi.getWeeklyAdherenceReportForWorker("target", "study-target1", "user1")).thenReturn(successfulReportCall);
         when(mockWorkersApi.getWeeklyAdherenceReportForWorker("target", "study-target2", "user1")).thenReturn(successfulReportCall);
         when(mockWorkersApi.getWeeklyAdherenceReportForWorker("target", "study-target3", "user1")).thenReturn(successfulReportCall);
         when(mockWorkersApi.getWeeklyAdherenceReportForWorker("target", "study-target1", "user2")).thenReturn(successfulReportCall);
         when(mockWorkersApi.getWeeklyAdherenceReportForWorker("target", "study-target2", "user2")).thenReturn(failedReportCall);
         when(mockWorkersApi.getWeeklyAdherenceReportForWorker("target", "study-target3", "user2")).thenReturn(failedReportCall);
+        when(mockWorkersApi.getWeeklyAdherenceReportForWorker("target", "study-target2", "user3")).thenReturn(inactiveReportCall);
         
         processor.accept(JsonNodeFactory.instance.objectNode()); // we're doing everything, and that's it.
         
@@ -188,10 +197,12 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
         verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("target", "study-target1", "user2");
         verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("target", "study-target2", "user2");
         verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("target", "study-target3", "user2");
+        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("target", "study-target2", "user3");
         
         verifyNoMoreInteractions(mockWorkersApi);
         
-        // One error. study 3 is defaulted to zero and doesn't appear here.  
+        // One error. study 3 is defaulted to zero and doesn't appear here. The inactive user is 
+        // not reported.
         verify(processor).recordOutOfCompliance(20, 60, "target", "study-target2", "user2");
     }
     
