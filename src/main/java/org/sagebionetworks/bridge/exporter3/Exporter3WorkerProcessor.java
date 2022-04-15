@@ -58,6 +58,7 @@ import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
+import org.sagebionetworks.bridge.sqs.PollSqsWorkerRetryableException;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.time.DateUtils;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
@@ -132,7 +133,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
     @Override
     public void accept(JsonNode jsonNode) throws BridgeSynapseException, IOException, PollSqsWorkerBadRequestException,
-            SynapseException, WorkerException{
+            PollSqsWorkerRetryableException, SynapseException, WorkerException{
         // Parse request.
         Exporter3Request request;
         try {
@@ -152,11 +153,13 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     }
 
     // Package-scoped for unit tests.
-    void process(Exporter3Request request) throws BridgeSynapseException, IOException, PollSqsWorkerBadRequestException,
-            SynapseException, WorkerException {
+    void process(Exporter3Request request) throws IOException, PollSqsWorkerBadRequestException,
+            PollSqsWorkerRetryableException, SynapseException, WorkerException {
         // Check to see that Synapse is up and availabe for read/write. If it isn't, throw an exception, so the
         // PollSqsWorker can re-cycle the request until Synapse is available again.
-        synapseHelper.checkSynapseWritableOrThrow();
+        if (!synapseHelper.isSynapseWritable()) {
+            throw new PollSqsWorkerRetryableException("Synapse is not writable");
+        }
 
         String appId = request.getAppId();
         String recordId = request.getRecordId();
