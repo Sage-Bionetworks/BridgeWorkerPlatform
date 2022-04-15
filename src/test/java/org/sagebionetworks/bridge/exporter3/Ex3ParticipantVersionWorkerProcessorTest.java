@@ -38,6 +38,7 @@ import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
 import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.sqs.PollSqsWorkerRetryableException;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 
@@ -106,6 +107,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         MockitoAnnotations.initMocks(this);
 
         // Mock shared dependencies.
+        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
         when(mockSynapseHelper.getColumnModelsForTableWithRetry(Exporter3TestUtil.PARTICIPANT_VERSION_TABLE_ID))
                 .thenReturn(COLUMN_MODEL_LIST);
 
@@ -136,6 +138,15 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         assertEquals(capturedRequest.getAppId(), Exporter3TestUtil.APP_ID);
         assertEquals(capturedRequest.getHealthCode(), HEALTH_CODE);
         assertEquals(capturedRequest.getParticipantVersion(), PARTICIPANT_VERSION);
+    }
+
+    @Test(expectedExceptions = PollSqsWorkerRetryableException.class)
+    public void synapseNotWritable() throws Exception {
+        // Mock services.
+        when(mockSynapseHelper.isSynapseWritable()).thenReturn(false);
+
+        // Execute.
+        processor.process(makeRequest());
     }
 
     @Test
@@ -237,7 +248,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         processor.process(makeRequest());
 
         // Verify calls to services.
-        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
+        verify(mockSynapseHelper).isSynapseWritable();
         verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
         verify(mockBridgeHelper).getParticipantVersion(Exporter3TestUtil.APP_ID, "healthCode:" + HEALTH_CODE,
                 PARTICIPANT_VERSION);
@@ -345,7 +356,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         processor.process(makeRequest());
 
         // Verify calls to services.
-        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
+        verify(mockSynapseHelper).isSynapseWritable();
         verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
 
         // Verify no more interactions with backend services.
@@ -363,7 +374,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         processor.process(makeRequest());
 
         // Verify calls to services.
-        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
+        verify(mockSynapseHelper).isSynapseWritable();
         verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
 
         // Verify no more interactions with backend services.

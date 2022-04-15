@@ -61,6 +61,7 @@ import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.Upload;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
+import org.sagebionetworks.bridge.sqs.PollSqsWorkerRetryableException;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
@@ -165,7 +166,7 @@ public class Exporter3WorkerProcessorTest {
     }
 
     @BeforeMethod
-    public void beforeMethod() {
+    public void beforeMethod() throws Exception {
         MockitoAnnotations.initMocks(this);
 
         // Use InMemoryFileHelper for FileHelper.
@@ -177,6 +178,9 @@ public class Exporter3WorkerProcessorTest {
         when(mockConfig.get(Exporter3WorkerProcessor.CONFIG_KEY_RAW_HEALTH_DATA_BUCKET)).thenReturn(RAW_DATA_BUCKET);
         when(mockConfig.get(Exporter3WorkerProcessor.CONFIG_KEY_UPLOAD_BUCKET)).thenReturn(UPLOAD_BUCKET);
         processor.setBridgeConfig(mockConfig);
+
+        // Mock SynapseHelper.isSynapseWritable().
+        when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
 
         // Reset byte array.
         writtenToS3 = null;
@@ -207,6 +211,15 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(capturedRequest.getRecordId(), RECORD_ID);
     }
 
+    @Test(expectedExceptions = PollSqsWorkerRetryableException.class)
+    public void synapseNotWritable() throws Exception {
+        // Mock services.
+        when(mockSynapseHelper.isSynapseWritable()).thenReturn(false);
+
+        // Execute.
+        processor.process(makeRequest());
+    }
+
     @Test
     public void ex3EnabledNull() throws Exception {
         // Mock services.
@@ -218,7 +231,7 @@ public class Exporter3WorkerProcessorTest {
         processor.process(makeRequest());
 
         // Verify calls to services.
-        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
+        verify(mockSynapseHelper).isSynapseWritable();
         verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
 
         // Verify no more interactions with backend services.
@@ -236,7 +249,7 @@ public class Exporter3WorkerProcessorTest {
         processor.process(makeRequest());
 
         // Verify calls to services.
-        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
+        verify(mockSynapseHelper).isSynapseWritable();
         verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
 
         // Verify no more interactions with backend services.
@@ -256,7 +269,7 @@ public class Exporter3WorkerProcessorTest {
         processor.process(makeRequest());
 
         // Verify calls to services.
-        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
+        verify(mockSynapseHelper).isSynapseWritable();
         verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
         verify(mockBridgeHelper).getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID);
 
@@ -279,7 +292,7 @@ public class Exporter3WorkerProcessorTest {
         processor.process(makeRequest());
 
         // Verify calls to services.
-        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
+        verify(mockSynapseHelper).isSynapseWritable();
         verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
         verify(mockBridgeHelper).getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID);
         verify(mockBridgeHelper).getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false);
@@ -687,7 +700,7 @@ public class Exporter3WorkerProcessorTest {
         processor.process(makeRequest());
 
         // Verify calls to services.
-        verify(mockSynapseHelper).checkSynapseWritableOrThrow();
+        verify(mockSynapseHelper).isSynapseWritable();
         verify(mockBridgeHelper).getApp(Exporter3TestUtil.APP_ID);
         verify(mockBridgeHelper).getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID);
         verify(mockBridgeHelper).getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false);

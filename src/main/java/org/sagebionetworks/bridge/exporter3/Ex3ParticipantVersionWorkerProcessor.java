@@ -30,6 +30,7 @@ import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
+import org.sagebionetworks.bridge.sqs.PollSqsWorkerRetryableException;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
@@ -68,7 +69,7 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
 
     @Override
     public void accept(JsonNode jsonNode) throws BridgeSynapseException, IOException, PollSqsWorkerBadRequestException,
-            SynapseException {
+            PollSqsWorkerRetryableException, SynapseException {
         // Parse request.
         Ex3ParticipantVersionRequest request;
         try {
@@ -89,9 +90,12 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
     }
 
     // Package-scoped for unit tests.
-    void process(Ex3ParticipantVersionRequest request) throws BridgeSynapseException, IOException, SynapseException {
+    void process(Ex3ParticipantVersionRequest request) throws BridgeSynapseException, IOException,
+            PollSqsWorkerRetryableException, SynapseException {
         // Throw if Synapse is not writable, so the PollSqsWorker can re-send the request.
-        synapseHelper.checkSynapseWritableOrThrow();
+        if (!synapseHelper.isSynapseWritable()) {
+            throw new PollSqsWorkerRetryableException("Synapse is not writable");
+        }
 
         String appId = request.getAppId();
         String healthCode = request.getHealthCode();
