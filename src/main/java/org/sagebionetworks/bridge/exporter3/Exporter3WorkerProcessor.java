@@ -45,6 +45,7 @@ import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.crypto.CmsEncryptor;
+import org.sagebionetworks.bridge.crypto.WrongEncryptionKeyException;
 import org.sagebionetworks.bridge.exceptions.BridgeSynapseException;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
@@ -275,6 +276,10 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
                     OutputStream outputFileStream = new BufferedOutputStream(fileHelper.getOutputStream(
                             decryptedFile))) {
                 ByteStreams.copy(decryptedInputFileStream, outputFileStream);
+            } catch (WrongEncryptionKeyException ex) {
+                LOG.warn("Wrong encryption key for app " + appId + " record " + uploadId);
+                throw new PollSqsWorkerBadRequestException("Wrong encryption key for app " + appId + " record " +
+                        uploadId);
             } catch (CertificateEncodingException | CMSException ex) {
                 throw new WorkerException(ex);
             }
