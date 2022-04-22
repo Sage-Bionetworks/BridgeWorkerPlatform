@@ -50,6 +50,7 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.crypto.CmsEncryptor;
+import org.sagebionetworks.bridge.crypto.WrongEncryptionKeyException;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.App;
@@ -332,6 +333,36 @@ public class Exporter3WorkerProcessorTest {
         when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
 
         processor.setCmsEncryptorCache(EmptyCacheLoader.LOADING_CACHE_INSTANCE);
+
+        // Execute.
+        processor.process(makeRequest());
+    }
+
+    @Test(expectedExceptions = PollSqsWorkerBadRequestException.class)
+    public void encryptedUpload_WrongEncryptionKey() throws Exception {
+        // Mock services.
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(makeRecord());
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
+
+        Upload mockUpload = mockUpload(true);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
+
+        doAnswer(invocation -> {
+            File file = invocation.getArgumentAt(2, File.class);
+            inMemoryFileHelper.writeBytes(file, DUMMY_ENCRYPTED_FILE_BYTES);
+            return null;
+        }).when(mockS3Helper).downloadS3File(eq(UPLOAD_BUCKET), eq(RECORD_ID), any());
+
+        CmsEncryptor mockEncryptor = mock(CmsEncryptor.class);
+        when(mockEncryptor.decrypt(any(InputStream.class))).thenThrow(WrongEncryptionKeyException.class);
+        processor.setCmsEncryptorCache(SingletonCacheLoader.makeLoadingCache(mockEncryptor));
+
+        // Don't actually buffer the input stream, as this breaks the test.
+        doAnswer(invocation -> invocation.getArgumentAt(0, InputStream.class)).when(processor)
+                .getBufferedInputStream(any());
 
         // Execute.
         processor.process(makeRequest());
