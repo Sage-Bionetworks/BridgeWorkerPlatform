@@ -26,7 +26,7 @@ public class WeeklyAdherenceReportRequestTest {
         assertEquals(request.getSelectedStudies().get("foo"), ImmutableSet.of("study1", "study2"));
         assertEquals(request.getReportingHours(), ImmutableSet.of(5, 12, 15));
         
-        // Let's test the serialization because we want to use it in other tests
+        // Let's test the serialization because we want to use it in the integration tests
         JsonNode node = new ObjectMapper().valueToTree(request);
         assertEquals(node.get("defaultZoneId").textValue(), "America/Denver");
         assertEquals(node.get("selectedStudies").get("foo").get(0).textValue(), "study1");

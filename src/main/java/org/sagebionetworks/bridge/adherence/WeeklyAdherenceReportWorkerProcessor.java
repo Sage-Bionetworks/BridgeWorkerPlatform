@@ -80,7 +80,7 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
             }
             process(request);
         } catch(Exception e) {
-            LOG.error("Error while process adherence job", e);
+            LOG.error("Error while processing adherence job", e);
         } finally {
             LOG.info("Weekly adherence report caching took " + requestStopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
         }
