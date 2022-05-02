@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.ClientManager;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
@@ -42,6 +43,7 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
     private static final Logger LOG = LoggerFactory.getLogger(WeeklyAdherenceReportWorkerProcessor.class);
 
     static final Set<StudyPhase> ACTIVE_PHASES = ImmutableSet.of(DESIGN, RECRUITMENT, IN_FLIGHT);
+    
     static final int PAGE_SIZE = 100;
     static final long THREAD_SLEEP_INTERVAL = 200L;
     
@@ -59,6 +61,10 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
         this.clientManager = clientManager;
     }
     
+    DateTime getDateTime() {
+        return DateTime.now();
+    }
+    
     @Override
     public void accept(JsonNode node) throws Exception {
         WeeklyAdherenceReportRequest request;
@@ -73,6 +79,8 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                 LOG.info("Limiting weekly adherence report caching to these apps and studies: " + request.getSelectedStudies());
             }
             process(request);
+        } catch(Exception e) {
+            LOG.error("Error while process adherence job", e);
         } finally {
             LOG.info("Weekly adherence report caching took " + requestStopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
         }
@@ -97,7 +105,7 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
             Set<String> selectedStudies = request.getSelectedStudies().get(app.getIdentifier());
             
             // First go through the studies and select the studies which should have reports generated, and note their
-            // threshold criteria if it is set 
+            // threshold criteria if it is set
             PagedResourceIterator<Study> studyIterator = new PagedResourceIterator<>((ob, ps) -> 
                 workersApi.getAppStudies(app.getIdentifier(), ob, ps, false).execute().body().getItems(), PAGE_SIZE);
             
@@ -108,7 +116,11 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                 // and this study is not one of them. Right now this is hundreds of studies with thousands of users, 
                 // but we will need to continue to define limits to this processing as the system grows.
                 boolean isSelected = (selectedStudies == null || selectedStudies.contains(study.getIdentifier()));
-                if (isSelected && ACTIVE_PHASES.contains(study.getPhase()) && study.getScheduleGuid() != null) {
+                
+                // Is this hour of execution the correct hour of the day in the local time of the study?
+                boolean atReportingHour = isReportingHourInLocale(study, request);
+                
+                if (atReportingHour && isSelected && study.getScheduleGuid() != null && ACTIVE_PHASES.contains(study.getPhase())) {
                     studyThresholds.put(study.getIdentifier(), getThresholdPercentage(study));
                 }
             }
@@ -116,11 +128,12 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                 LOG.info("Skipping app “" + app.getIdentifier() + "”: it has no reportable studies");
                 continue;
             } else {
-                LOG.info("Caching studies in app “" + app.getIdentifier() + "” starting at " + DateTime.now());
+                LOG.info("Caching studies in app “" + app.getIdentifier() + "” starting at " + getDateTime());
             }
             Stopwatch appStopwatch = Stopwatch.createStarted();
             
-            // Now go through all accounts that are enrolled in at least one study and push cache a report for each study.
+            // Now go through all accounts that are enrolled in at least one study and that has signed in, 
+            // and push cache a report for each study.
             PagedResourceIterator<AccountSummary> acctIterator = new PagedResourceIterator<>((ob, ps) -> {
                 AccountSummarySearch search = new AccountSummarySearch().offsetBy(ob).pageSize(ps)
                         .enrollment(ENROLLED).inUse(TRUE);
@@ -158,6 +171,15 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
             LOG.info("Weekly adherence report caching for app " + app.getIdentifier() + " took "
                     + appStopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
         }
+    }
+
+    boolean isReportingHourInLocale(Study study, WeeklyAdherenceReportRequest request) {
+        String zoneId = (study.getStudyTimeZone() != null) ? 
+                study.getStudyTimeZone() : request.getDefaultZoneId();
+        DateTimeZone zone = DateTimeZone.forID(zoneId);
+        DateTime now = getDateTime().withZone(zone);
+        
+        return request.getReportingHours().contains(now.getHourOfDay());
     }
 
     void recordOutOfCompliance(int userAdherencePercent, int studyThresholdPercent, String appId, String studyId, String userId) {
