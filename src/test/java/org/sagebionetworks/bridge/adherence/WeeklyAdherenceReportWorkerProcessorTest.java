@@ -68,8 +68,8 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
     
     @Test
     public void test() throws Exception {
-        when(processor.getDateTime()).thenReturn(DateTime.parse("2020-02-02T04:00:00.000")
-                .withZone(DateTimeZone.forID("America/Chicago")));
+        when(processor.getDateTime()).thenReturn(DateTime.parse("2020-02-02T06:00:00.000")
+                .withZoneRetainFields(DateTimeZone.forID("America/Chicago")));
         
         mockServer("America/Los_Angeles", "America/Los_Angeles", "America/Los_Angeles", "America/Los_Angeles",
                 "America/Los_Angeles");
