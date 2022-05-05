@@ -76,8 +76,6 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
         }
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         try {
-            LOG.info("Adherence report request: " + request + ", system time=" + getDateTime() 
-                + ", adjusted time=" + getDateTime().withZone(DateTimeZone.forID(request.getDefaultZoneId())));
             if (!request.getSelectedStudies().isEmpty()) {
                 LOG.info("Limiting weekly adherence report caching to these apps and studies: " + request.getSelectedStudies());
             }
@@ -182,8 +180,6 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
         DateTimeZone zone = DateTimeZone.forID(zoneId);
         DateTime now = getDateTime().withZone(zone);
         
-        LOG.info("study=" + study.getIdentifier() + ", reportingHours=" + 
-                request.getReportingHours() + ", hourOfDay=" + now.getHourOfDay() + ", zone=" + zoneId);
         return request.getReportingHours().contains(now.getHourOfDay());
     }
 
