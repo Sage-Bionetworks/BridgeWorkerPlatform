@@ -125,10 +125,10 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                 }
             }
             if (studyThresholds.isEmpty()) {
-                LOG.info("Skipping app “" + app.getIdentifier() + "”: it has no reportable studies");
+                LOG.info("Skipping app '" + app.getIdentifier() + "': it has no reportable studies");
                 continue;
             } else {
-                LOG.info("Caching studies in app “" + app.getIdentifier() + "” starting at " + getDateTime());
+                LOG.info("Caching studies in app '" + app.getIdentifier() + "' starting at " + getDateTime());
             }
             Stopwatch appStopwatch = Stopwatch.createStarted();
             
@@ -179,6 +179,8 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
         DateTimeZone zone = DateTimeZone.forID(zoneId);
         DateTime now = getDateTime().withZone(zone);
         
+        LOG.info("study=" + study.getIdentifier() + ", reportingHours=" + 
+                request.getReportingHours() + ", hourOfDay=" + now.getHourOfDay());
         return request.getReportingHours().contains(now.getHourOfDay());
     }
 
