@@ -40,6 +40,7 @@ import com.google.common.collect.ImmutableSet;
 
 @Component("WeeklyAdherenceReportWorker")
 public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<JsonNode> {
+    
     private static final Logger LOG = LoggerFactory.getLogger(WeeklyAdherenceReportWorkerProcessor.class);
 
     static final Set<StudyPhase> ACTIVE_PHASES = ImmutableSet.of(DESIGN, RECRUITMENT, IN_FLIGHT);
@@ -182,7 +183,7 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
         DateTime now = getDateTime().withZone(zone);
         
         LOG.info("study=" + study.getIdentifier() + ", reportingHours=" + 
-                request.getReportingHours() + ", hourOfDay=" + now.getHourOfDay());
+                request.getReportingHours() + ", hourOfDay=" + now.getHourOfDay(), ", zone=" + zoneId);
         return request.getReportingHours().contains(now.getHourOfDay());
     }
 
