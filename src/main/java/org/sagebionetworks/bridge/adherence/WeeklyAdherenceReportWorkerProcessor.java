@@ -183,7 +183,7 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
         DateTime now = getDateTime().withZone(zone);
         
         LOG.info("study=" + study.getIdentifier() + ", reportingHours=" + 
-                request.getReportingHours() + ", hourOfDay=" + now.getHourOfDay(), ", zone=" + zoneId);
+                request.getReportingHours() + ", hourOfDay=" + now.getHourOfDay() + ", zone=" + zoneId);
         return request.getReportingHours().contains(now.getHourOfDay());
     }
 
