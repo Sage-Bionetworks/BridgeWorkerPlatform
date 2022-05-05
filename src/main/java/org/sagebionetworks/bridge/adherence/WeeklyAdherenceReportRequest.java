@@ -49,4 +49,9 @@ public class WeeklyAdherenceReportRequest {
     public Map<String, Set<String>> getSelectedStudies() {
         return selectedStudies;
     }
+    @Override
+    public String toString() {
+        return "WeeklyAdherenceReportRequest [defaultZoneId=" + defaultZoneId + ", selectedStudies=" + selectedStudies
+                + ", reportingHours=" + reportingHours + "]";
+    }
 }
