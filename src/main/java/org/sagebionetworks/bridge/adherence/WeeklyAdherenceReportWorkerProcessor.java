@@ -75,6 +75,8 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
         }
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         try {
+            LOG.info("Adherence report request: " + request + ", system time=" + getDateTime() 
+                + ", adjusted time=" + getDateTime().withZone(DateTimeZone.forID(request.getDefaultZoneId())));
             if (!request.getSelectedStudies().isEmpty()) {
                 LOG.info("Limiting weekly adherence report caching to these apps and studies: " + request.getSelectedStudies());
             }
