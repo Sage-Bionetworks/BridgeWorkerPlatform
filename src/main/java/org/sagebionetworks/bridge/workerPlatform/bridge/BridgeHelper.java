@@ -171,6 +171,11 @@ public class BridgeHelper {
                 reportId, startDate, endDate).execute().body().getItems();
     }
 
+    /** Backfills the participant version for a user in a given app. */
+    public void backfillParticipantVersion(String appId, String userId) throws IOException {
+        clientManager.getClient(ForWorkersApi.class).backfillParticipantVersion(appId, userId).execute();
+    }
+
     /** Gets the participant version for the app and user ID and version number. */
     public ParticipantVersion getParticipantVersion(String appId, String userId, int participantVersion)
             throws IOException {
