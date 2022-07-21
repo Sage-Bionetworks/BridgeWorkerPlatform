@@ -424,6 +424,17 @@ public class BridgeHelperTest {
     }
 
     @Test
+    public void backfillParticipantVersion() throws Exception {
+        // Set up mocks.
+        Call<Message> mockCall = mock(Call.class);
+        when(mockWorkerApi.backfillParticipantVersion(APP_ID, USER_ID)).thenReturn(mockCall);
+
+        // Execute and validate.
+        bridgeHelper.backfillParticipantVersion(APP_ID, USER_ID);
+        verify(mockWorkerApi).backfillParticipantVersion(APP_ID, USER_ID);
+    }
+
+    @Test
     public void getParticipantVersion() throws Exception {
         // Set up mocks.
         ParticipantVersion participantVersion = new ParticipantVersion();
