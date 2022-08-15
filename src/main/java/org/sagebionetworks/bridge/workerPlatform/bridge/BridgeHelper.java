@@ -176,6 +176,13 @@ public class BridgeHelper {
         clientManager.getClient(ForWorkersApi.class).backfillParticipantVersion(appId, userId).execute();
     }
 
+    /** Gets all participant versions for the app and user ID. */
+    public List<ParticipantVersion> getAllParticipantVersionsForUser(String appId, String userId) throws IOException {
+        //noinspection ConstantConditions
+        return clientManager.getClient(ForWorkersApi.class).getAllParticipantVersionsForUser(appId, userId).execute()
+                .body().getItems();
+    }
+
     /** Gets the participant version for the app and user ID and version number. */
     public ParticipantVersion getParticipantVersion(String appId, String userId, int participantVersion)
             throws IOException {
