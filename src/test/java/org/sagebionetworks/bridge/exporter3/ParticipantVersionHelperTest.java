@@ -34,7 +34,7 @@ public class ParticipantVersionHelperTest {
     private static final int PARTICIPANT_VERSION = 42;
     private static final String PARTICIPANT_VERSION_TABLE_ID_FOR_APP = "syn11111";
     private static final String PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY = "syn22222";
-    private static final Map<String, String> STUDY_MEMBERSHIPS = ImmutableMap.of("studyC", "<none>",
+    private static final Map<String, String> STUDY_MEMBERSHIPS = ImmutableMap.of("studyC", ParticipantVersionHelper.EXT_ID_NONE,
             "studyB", "extB", "studyA", "extA");
     private static final String TIME_ZONE = "America/Los_Angeles";
 

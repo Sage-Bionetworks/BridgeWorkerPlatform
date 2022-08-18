@@ -33,6 +33,8 @@ public class ParticipantVersionHelper {
     public static final String COLUMN_NAME_STUDY_MEMBERSHIPS = "studyMemberships";
     public static final String COLUMN_NAME_CLIENT_TIME_ZONE = "clientTimeZone";
 
+    static final String EXT_ID_NONE = "<none>";
+
     private static final int MAX_LANGUAGES = 10;
 
     private SynapseHelper synapseHelper;
@@ -149,7 +151,7 @@ public class ParticipantVersionHelper {
         List<String> pairs = new ArrayList<>();
         for (String studyId : studyIdList) {
             String extId = studyMemberships.get(studyId);
-            String value = "<none>".equals(extId) ? "" : extId;
+            String value = EXT_ID_NONE.equals(extId) ? "" : extId;
             pairs.add(studyId + "=" + value);
         }
         Collections.sort(pairs);
