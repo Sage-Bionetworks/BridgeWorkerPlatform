@@ -12,6 +12,8 @@ import com.jcabi.aspects.Cacheable;
 import org.sagebionetworks.client.exceptions.SynapseException;
 import org.sagebionetworks.repo.model.table.ColumnModel;
 import org.sagebionetworks.repo.model.table.PartialRow;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +25,8 @@ import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 /** Helper class that encapsulates exporting a single participant version. */
 @Component
 public class ParticipantVersionHelper {
+    private static final Logger LOG = LoggerFactory.getLogger(ParticipantVersionHelper.class);
+
     public static final String COLUMN_NAME_HEALTH_CODE = "healthCode";
     public static final String COLUMN_NAME_PARTICIPANT_VERSION = "participantVersion";
     public static final String COLUMN_NAME_CREATED_ON = "createdOn";
@@ -35,6 +39,7 @@ public class ParticipantVersionHelper {
 
     static final String EXT_ID_NONE = "<none>";
 
+    private static final int MAX_LANGUAGE_LENGTH = 5;
     private static final int MAX_LANGUAGES = 10;
 
     private SynapseHelper synapseHelper;
@@ -51,6 +56,8 @@ public class ParticipantVersionHelper {
     public PartialRow makeRowForParticipantVersion(String studyId, String participantVersionTableId,
             ParticipantVersion participantVersion) throws JsonProcessingException, SynapseException {
         Map<String, String> columnNameToId = getColumnNameToIdMap(participantVersionTableId);
+        String healthCode = participantVersion.getHealthCode();
+        Integer versionNum = participantVersion.getParticipantVersion();
 
         // Make this into a Synapse row set. Most of these values can't be null, but check anyway in case there's a bug
         // or unexpected input.
@@ -84,7 +91,20 @@ public class ParticipantVersionHelper {
 
             // If we have more languages than the max, we truncate.
             if (languageList.size() > MAX_LANGUAGES) {
+                LOG.warn("Truncating language list; healthcode " + healthCode + " version " + versionNum + " has " +
+                        languageList.size() + " languages");
                 languageList = languageList.subList(0, MAX_LANGUAGES);
+            }
+
+            // Truncate language length, so that an invalid language doesn't fail the entire row.
+            int numLanguages = languageList.size();
+            for (int i = 0; i < numLanguages; i++) {
+                String language = languageList.get(i);
+                if (language.length() > MAX_LANGUAGE_LENGTH) {
+                    LOG.warn("Truncating language; healthcode " + healthCode + " version " + versionNum +
+                            " has invalid language " + language);
+                    languageList.set(i, language.substring(0, MAX_LANGUAGE_LENGTH));
+                }
             }
 
             // Order *does* matter for languages. Also, the format for a string list in Synapse appears to be a JSON

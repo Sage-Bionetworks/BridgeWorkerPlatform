@@ -157,6 +157,27 @@ public class ParticipantVersionHelperTest {
         }
     }
 
+    @Test
+    public void languageTooLong() throws Exception {
+        // Max language string length is 5.
+        List<String> languageList = new ArrayList<>();
+        languageList.add("language");
+
+        ParticipantVersion participantVersion = makeParticipantVersion();
+        participantVersion.setLanguages(languageList);
+
+        // Execute.
+        PartialRow row = participantVersionHelper.makeRowForParticipantVersion(null,
+                PARTICIPANT_VERSION_TABLE_ID_FOR_APP, participantVersion);
+
+        // Just validate language string was truncated.
+        Map<String, String> rowValueMap = row.getValues();
+        JsonNode languagesNode = DefaultObjectMapper.INSTANCE.readTree(rowValueMap.get(COLUMN_ID_LANGUAGES));
+        assertTrue(languagesNode.isArray());
+        assertEquals(languagesNode.size(), 1);
+        assertEquals(languagesNode.get(0).textValue(), "langu");
+    }
+
     // branch coverage
     @Test
     public void emptyParticipantVersion() throws Exception {
