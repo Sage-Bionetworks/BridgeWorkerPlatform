@@ -35,6 +35,7 @@ import org.mockito.MockitoAnnotations;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
+import org.sagebionetworks.bridge.rest.model.ParticipantVersionList;
 import org.sagebionetworks.bridge.rest.model.StringList;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyList;
@@ -421,6 +422,33 @@ public class BridgeHelperTest {
         assertSame(outputReportDataList.get(0), dummyReport);
 
         verify(mockWorkerApi).getParticipantReportsForParticipant(APP_ID, USER_ID, REPORT_ID, START_DATE, END_DATE);
+    }
+
+    @Test
+    public void backfillParticipantVersion() throws Exception {
+        // Set up mocks.
+        Call<Message> mockCall = mock(Call.class);
+        when(mockWorkerApi.backfillParticipantVersion(APP_ID, USER_ID)).thenReturn(mockCall);
+
+        // Execute and validate.
+        bridgeHelper.backfillParticipantVersion(APP_ID, USER_ID);
+        verify(mockWorkerApi).backfillParticipantVersion(APP_ID, USER_ID);
+    }
+
+    @Test
+    public void getAllParticipantVersionsForUser() throws Exception {
+        // Set up mocks.
+        List<ParticipantVersion> participantVersionList = new ArrayList<>();
+        ParticipantVersionList mockList = mock(ParticipantVersionList.class);
+        when(mockList.getItems()).thenReturn(participantVersionList);
+        Call<ParticipantVersionList> mockCall = mockCallForValue(mockList);
+        when(mockWorkerApi.getAllParticipantVersionsForUser(APP_ID, USER_ID)).thenReturn(mockCall);
+
+        // Execute and validate.
+        List<ParticipantVersion> result = bridgeHelper.getAllParticipantVersionsForUser(APP_ID, USER_ID);
+        assertSame(result, participantVersionList);
+
+        verify(mockWorkerApi).getAllParticipantVersionsForUser(APP_ID, USER_ID);
     }
 
     @Test
