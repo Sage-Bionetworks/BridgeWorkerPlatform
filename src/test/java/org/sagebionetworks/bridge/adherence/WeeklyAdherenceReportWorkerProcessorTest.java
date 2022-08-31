@@ -19,6 +19,7 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 import org.sagebionetworks.bridge.rest.ClientManager;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
+import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.AccountSummaryList;
@@ -107,6 +108,41 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
         // One error. study 3 is defaulted to zero and doesn't appear here. The inactive user is 
         // not reported.
         verify(processor).recordOutOfCompliance(20, 60, "app2", "study-app2b", "user2");
+    }
+    
+    @Test
+    public void individualAccountErrorsDoNotPreventOtherAccountsFromRunning() throws Exception {
+        when(processor.getDateTime()).thenReturn(DateTime.parse("2020-02-02T06:00:00.000")
+                .withZoneRetainFields(DateTimeZone.forID("America/Chicago")));
+        
+        mockServer("America/Los_Angeles", "America/Los_Angeles", "America/Los_Angeles", "America/Los_Angeles",
+                "America/Los_Angeles");
+        
+        when(mockWorkersApi.getWeeklyAdherenceReportForWorker("app2", "study-app2a", "user1"))
+                .thenThrow(new BridgeSDKException("Error while processing adherence job", 500, ""));
+    
+        when(mockWorkersApi.getWeeklyAdherenceReportForWorker("app2", "study-app2b", "user2"))
+                .thenThrow(new BridgeSDKException("Error while processing adherence job", 500, ""));
+        
+        processor.accept(JsonNodeFactory.instance.objectNode());
+        
+        verify(mockWorkersApi, times(2)).searchAccountSummariesForApp(eq("app2"), searchCaptor.capture());
+        
+        verify(mockWorkersApi).getAppStudies("app1", 0, PAGE_SIZE, false);
+        verify(mockWorkersApi).getAppStudies("app1", PAGE_SIZE, PAGE_SIZE, false);
+        verify(mockWorkersApi).getAppStudies("app2", 0, PAGE_SIZE, false);
+        verify(mockWorkersApi).getAppStudies("app2", PAGE_SIZE, PAGE_SIZE, false);
+        
+        // Each account runs regardless of BridgeSDKExceptions in previous accounts
+        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2a", "user1");
+        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2b", "user1");
+        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2c", "user1");
+        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2a", "user2");
+        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2b", "user2");
+        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2c", "user2");
+        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2b", "user3");
+        
+        verifyNoMoreInteractions(mockWorkersApi);
     }
     
     @Test

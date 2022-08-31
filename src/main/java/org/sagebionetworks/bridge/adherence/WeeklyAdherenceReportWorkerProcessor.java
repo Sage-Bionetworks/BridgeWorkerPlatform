@@ -19,6 +19,7 @@ import org.joda.time.DateTimeZone;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.ClientManager;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
+import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.AccountSummary;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
 import org.sagebionetworks.bridge.rest.model.App;
@@ -150,8 +151,17 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                     }
                     
                     LOG.info("Caching report for user " + summary.getId() + " in study " + studyId);
-                    WeeklyAdherenceReport report = workersApi.getWeeklyAdherenceReportForWorker(
-                            app.getIdentifier(), studyId, summary.getId()).execute().body();
+                    WeeklyAdherenceReport report = null;
+                    try {
+                        report = workersApi.getWeeklyAdherenceReportForWorker(
+                                app.getIdentifier(), studyId, summary.getId()).execute().body();
+                    } catch (BridgeSDKException e) {
+                        // Catching this specific error to prevent a single account issue from
+                        // stopping the remaining reports
+                        LOG.error("Error while processing adherence job (appId: " + app.getIdentifier() +
+                                ", studyId: " + studyId + ", userId: " + summary.getId() + ")", e);
+                        continue;
+                    }
                     
                     // Mission accomplished, it's been cached, but eventually we'll want to send a 
                     // notification if the user is not in adherence. Here's the hook for that.
