@@ -83,6 +83,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     static final String METADATA_KEY_SCHEDULE_GUID = "scheduleGuid";
     static final String METADATA_KEY_UPLOADED_ON = "uploadedOn";
     static final String METADATA_KEY_INSTANCE_GUID = "instanceGuid";
+    static final String METADATA_KEY_CONTENT_TYPE = "contentType";
 
     // Valid characters are alphanumeric, underscores, and periods. This pattern is used to match invalid characters to
     // convert them to underscores.
@@ -220,9 +221,15 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             return;
         }
 
+        Upload upload = bridgeHelper.getUploadByUploadId(recordId);
+        // Add content type to metadata map so it is added as an annotation.
+        String contentType = upload.getContentType();
+        if (contentType != null) {
+            metadataMap.put(METADATA_KEY_CONTENT_TYPE, contentType);
+        }
+
         // Copy the file to the raw health data bucket. This includes folderization.
         // Note that in Exporter 3.0, upload ID is the same as record ID.
-        Upload upload = bridgeHelper.getUploadByUploadId(recordId);
         String hexMd5;
         if (upload.isEncrypted()) {
             hexMd5 = decryptAndUploadFile(app, upload, record, metadataMap, exportForApp, studiesToExport);
