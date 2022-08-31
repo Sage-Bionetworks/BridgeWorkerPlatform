@@ -787,7 +787,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(s3Metadata.getContentType(), CONTENT_TYPE);
 
         Map<String, String> userMetadataMap = s3Metadata.getUserMetadata();
-        assertEquals(userMetadataMap.size(), 7);
+        assertEquals(userMetadataMap.size(), 8);
         assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO), CLIENT_INFO);
         assertEquals(DateTime.parse(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_EXPORTED_ON)).getMillis(),
                 MOCK_NOW_MILLIS);
@@ -798,6 +798,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(DateTime.parse(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_UPLOADED_ON)).getMillis(),
                 UPLOADED_ON_MILLIS);
         assertEquals(userMetadataMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE_CLEAN);
+        assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_CONTENT_TYPE), CONTENT_TYPE);
     }
 
     private void verifySynapseExport(String expectedS3Key) throws Exception {
