@@ -158,7 +158,8 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                     } catch (BridgeSDKException e) {
                         // Catching this specific error to prevent a single account issue from
                         // stopping the remaining reports
-                        LOG.error("Error while processing adherence job", e);
+                        LOG.error("Error while processing adherence job (appId: " + app.getIdentifier() +
+                                ", studyId: " + studyId + ", userId: " + summary.getId() + ")", e);
                         continue;
                     }
                     
