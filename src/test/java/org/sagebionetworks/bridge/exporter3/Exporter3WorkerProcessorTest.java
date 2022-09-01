@@ -1,5 +1,6 @@
 package org.sagebionetworks.bridge.exporter3;
 
+import static org.junit.Assert.assertFalse;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -742,6 +743,29 @@ public class Exporter3WorkerProcessorTest {
         verifyNoMoreInteractions(mockBridgeHelper, mockSynapseHelper);
     }
 
+    @Test
+    public void nullContentType() throws Exception {
+        Upload upload = mockUpload(false);
+        when(upload.getContentType()).thenReturn(null);
+        when(mockBridgeHelper.getUploadByUploadId(any())).thenReturn(upload);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(Exporter3TestUtil.makeAppWithEx3Config());
+        FileEntity createdFileEntity = new FileEntity();
+        createdFileEntity.setId(EXPORTED_FILE_ENTITY_ID);
+        mockSynapseHelper();
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID))
+                .thenReturn(makeRecord());
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
+
+        processor.process(makeRequest());
+
+        ArgumentCaptor<Map> annotationMapCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(mockSynapseHelper).addAnnotationsToEntity(eq(EXPORTED_FILE_ENTITY_ID), annotationMapCaptor.capture());
+        Map<String, AnnotationsValue> annotationMap = annotationMapCaptor.getValue();
+        assertFalse(annotationMap.containsKey(Exporter3WorkerProcessor.METADATA_KEY_CONTENT_TYPE));
+    }
+
     private void mockSynapseHelper() throws Exception {
         // Mock create folder.
         when(mockSynapseHelper.createFolderIfNotExists(Exporter3TestUtil.RAW_FOLDER_ID, TODAYS_DATE_STRING))
@@ -763,7 +787,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(s3Metadata.getContentType(), CONTENT_TYPE);
 
         Map<String, String> userMetadataMap = s3Metadata.getUserMetadata();
-        assertEquals(userMetadataMap.size(), 7);
+        assertEquals(userMetadataMap.size(), 8);
         assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO), CLIENT_INFO);
         assertEquals(DateTime.parse(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_EXPORTED_ON)).getMillis(),
                 MOCK_NOW_MILLIS);
@@ -774,6 +798,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(DateTime.parse(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_UPLOADED_ON)).getMillis(),
                 UPLOADED_ON_MILLIS);
         assertEquals(userMetadataMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE_CLEAN);
+        assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_CONTENT_TYPE), CONTENT_TYPE);
     }
 
     private void verifySynapseExport(String expectedS3Key) throws Exception {
@@ -803,7 +828,7 @@ public class Exporter3WorkerProcessorTest {
         verify(mockSynapseHelper).addAnnotationsToEntity(eq(EXPORTED_FILE_ENTITY_ID), annotationMapCaptor.capture());
 
         Map<String, AnnotationsValue> annotationMap = annotationMapCaptor.getValue();
-        assertEquals(annotationMap.size(), 7);
+        assertEquals(annotationMap.size(), 8);
 
         // Verify that all annotations are of type string and have one value.
         Map<String, String> flattenedAnnotationMap = new HashMap<>();
@@ -822,7 +847,7 @@ public class Exporter3WorkerProcessorTest {
             flattenedAnnotationMap.put(name, valueString);
         }
 
-        assertEquals(flattenedAnnotationMap.size(), 7);
+        assertEquals(flattenedAnnotationMap.size(), 8);
         assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO), CLIENT_INFO);
         assertEquals(DateTime.parse(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_EXPORTED_ON)).getMillis(),
                 MOCK_NOW_MILLIS);
@@ -833,6 +858,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(DateTime.parse(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_UPLOADED_ON)).getMillis(),
                 UPLOADED_ON_MILLIS);
         assertEquals(flattenedAnnotationMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE_CLEAN);
+        assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_CONTENT_TYPE), CONTENT_TYPE);
     }
 
     private void verifyUpdatedRecord() throws Exception {
