@@ -113,20 +113,38 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
 
         if (exportForApp) {
             String appParticipantVersionTableId = app.getExporter3Configuration().getParticipantVersionTableId();
-            PartialRow row = participantVersionHelper.makeRowForParticipantVersion(null,
+            PartialRow participantVersionRow = participantVersionHelper.makeRowForParticipantVersion(null,
                     appParticipantVersionTableId, participantVersion);
-            exportRowToSynapse(appId, healthCode, versionNum, appParticipantVersionTableId, row);
+            exportParticipantVersionRowToSynapse(appId, healthCode, versionNum, appParticipantVersionTableId,
+                    participantVersionRow);
+
+            String participantVersionDemographicsTableId = app.getExporter3Configuration()
+                    .getParticipantVersionDemographicsTableId();
+            List<PartialRow> participantVersionDemographicsRows = participantVersionHelper
+                    .makeRowsForParticipantVersionDemographics(appId, null, participantVersionDemographicsTableId,
+                            participantVersion);
+            exportParticipantVersionDemographicsRowToSynapse(appId, healthCode, participantVersionDemographicsTableId,
+                    participantVersionDemographicsRows);
         }
         for (Study study : studiesToExport) {
             String studyParticipantVersionTableId = study.getExporter3Configuration().getParticipantVersionTableId();
-            PartialRow row = participantVersionHelper.makeRowForParticipantVersion(study.getIdentifier(),
-                    studyParticipantVersionTableId, participantVersion);
-            exportRowToSynapse(appId, healthCode, versionNum, studyParticipantVersionTableId, row);
+            PartialRow participantVersionRow = participantVersionHelper.makeRowForParticipantVersion(
+                    study.getIdentifier(), studyParticipantVersionTableId, participantVersion);
+            exportParticipantVersionRowToSynapse(appId, healthCode, versionNum, studyParticipantVersionTableId,
+                    participantVersionRow);
+
+            String participantVersionDemographicsTableId = app.getExporter3Configuration()
+                    .getParticipantVersionDemographicsTableId();
+            List<PartialRow> participantVersionDemographicsRows = participantVersionHelper
+                    .makeRowsForParticipantVersionDemographics(appId, study.getIdentifier(),
+                            participantVersionDemographicsTableId, participantVersion);
+            exportParticipantVersionDemographicsRowToSynapse(appId, healthCode, participantVersionDemographicsTableId,
+                    participantVersionDemographicsRows);
         }
     }
 
     // Package-scoped for unit tests.
-    void exportRowToSynapse(String appId, String healthCode, int versionNum, String participantVersionTableId,
+    void exportParticipantVersionRowToSynapse(String appId, String healthCode, int versionNum, String participantVersionTableId,
             PartialRow row) throws BridgeSynapseException, SynapseException {
         PartialRowSet rowSet = new PartialRowSet();
         rowSet.setRows(ImmutableList.of(row));
@@ -136,6 +154,22 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
         if (rowReferenceSet.getRows().size() != 1) {
             LOG.error("Expected to write 1 participant version for app " + appId + " healthCode " + healthCode +
                     " version " + versionNum + ", instead wrote " + rowReferenceSet.getRows().size());
+        }
+    }
+
+    // Package-scoped for unit tests.
+    void exportParticipantVersionDemographicsRowToSynapse(String appId, String studyId,
+            String participantVersionDemographicsTableId, List<PartialRow> rows)
+            throws BridgeSynapseException, SynapseException {
+        PartialRowSet rowSet = new PartialRowSet();
+        rowSet.setRows(rows);
+        rowSet.setTableId(participantVersionDemographicsTableId);
+
+        RowReferenceSet rowReferenceSet = synapseHelper.appendRowsToTable(rowSet,
+                participantVersionDemographicsTableId);
+        if (rowReferenceSet.getRows().size() != rows.size()) {
+            LOG.error("Expected to write " + rows.size() + " participant version demographics for app " + appId
+                    + " study " + studyId + ", instead wrote " + rowReferenceSet.getRows().size());
         }
     }
 }

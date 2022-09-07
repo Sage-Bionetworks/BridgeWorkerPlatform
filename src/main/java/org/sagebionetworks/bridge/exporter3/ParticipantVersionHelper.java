@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.rest.model.DemographicResponse;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
@@ -27,6 +28,7 @@ import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 public class ParticipantVersionHelper {
     private static final Logger LOG = LoggerFactory.getLogger(ParticipantVersionHelper.class);
 
+    // Participant Version table columns
     public static final String COLUMN_NAME_HEALTH_CODE = "healthCode";
     public static final String COLUMN_NAME_PARTICIPANT_VERSION = "participantVersion";
     public static final String COLUMN_NAME_CREATED_ON = "createdOn";
@@ -36,6 +38,12 @@ public class ParticipantVersionHelper {
     public static final String COLUMN_NAME_SHARING_SCOPE = "sharingScope";
     public static final String COLUMN_NAME_STUDY_MEMBERSHIPS = "studyMemberships";
     public static final String COLUMN_NAME_CLIENT_TIME_ZONE = "clientTimeZone";
+    // Participant Version Demographics table columns
+    public static final String COLUMN_NAME_APP_ID = "appId";
+    public static final String COLUMN_NAME_STUDY_ID = "studyId";
+    public static final String COLUMN_NAME_DEMOGRAPHIC_CATEGORY_NAME = "demographicCategoryName";
+    public static final String COLUMN_NAME_DEMOGRAPHIC_VALUE = "demographicValue";
+    public static final String COLUMN_NAME_DEMOGRAPHIC_UNITS = "demographicUnits";
 
     static final String EXT_ID_NONE = "<none>";
 
@@ -126,10 +134,48 @@ public class ParticipantVersionHelper {
         if (participantVersion.getTimeZone() != null) {
             rowMap.put(columnNameToId.get(COLUMN_NAME_CLIENT_TIME_ZONE), participantVersion.getTimeZone());
         }
-
         PartialRow row = new PartialRow();
         row.setValues(rowMap);
         return row;
+    }
+
+    public List<PartialRow> makeRowsForParticipantVersionDemographics(String appId, String studyId, String participantVersionDemographicsTableId, ParticipantVersion participantVersion) throws SynapseException {
+        Map<String, String> columnNameToId = getColumnNameToIdMap(participantVersionDemographicsTableId);
+        String healthCode = participantVersion.getHealthCode();
+        Integer versionNum = participantVersion.getParticipantVersion();
+        if (healthCode == null || versionNum == null) {
+            // this table is not useful without the ability to be joined with the main participant versions table
+            return new ArrayList<>();
+        }
+
+        List<PartialRow> rows = new ArrayList<>();
+        if (participantVersion.getAppDemographics() != null) {
+            for (Map.Entry<String, DemographicResponse> entry : participantVersion.getAppDemographics().entrySet()) {
+                if (entry.getKey() == null || entry.getValue() == null) {
+                    // don't bother saving null categoryName or demographic
+                    continue;
+                }
+                String categoryName = entry.getKey();
+                DemographicResponse demographic = entry.getValue();
+                String units = demographic.getUnits();
+                for (String value : demographic.getValues()) {
+                    Map<String, String> rowMap = new HashMap<>();
+                    rowMap.put(columnNameToId.get(COLUMN_NAME_HEALTH_CODE), participantVersion.getHealthCode());
+                    rowMap.put(columnNameToId.get(COLUMN_NAME_PARTICIPANT_VERSION), participantVersion.getParticipantVersion()
+                            .toString());
+                    rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_CATEGORY_NAME), categoryName);
+                    rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_VALUE), value);
+                    if (units != null) {
+                        rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_UNITS), units);
+                    }
+                    PartialRow row = new PartialRow();
+                    row.setValues(rowMap);
+                    rows.add(row);
+                }
+            }
+        }
+
+        return rows;
     }
 
     /**
