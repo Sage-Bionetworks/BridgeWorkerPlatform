@@ -164,12 +164,9 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
         PartialRowSet rowSet = new PartialRowSet();
         rowSet.setRows(rows);
         rowSet.setTableId(participantVersionDemographicsTableId);
-        System.out.println(rowSet);
 
         RowReferenceSet rowReferenceSet = synapseHelper.appendRowsToTable(rowSet,
                 participantVersionDemographicsTableId);
-        System.out.println(rowReferenceSet);
-        System.out.println(rowReferenceSet.getRows());
         if (rowReferenceSet.getRows().size() != rows.size()) {
             LOG.error("Expected to write " + rows.size() + " participant version demographics for app " + appId
                     + " study " + studyId + ", instead wrote " + rowReferenceSet.getRows().size());
