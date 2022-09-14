@@ -167,6 +167,9 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
 
         RowReferenceSet rowReferenceSet = synapseHelper.appendRowsToTable(rowSet,
                 participantVersionDemographicsTableId);
+        if (rowReferenceSet.getRows() == null) {
+            rowReferenceSet.setRows(ImmutableList.of());
+        }
         if (rowReferenceSet.getRows().size() != rows.size()) {
             LOG.error("Expected to write " + rows.size() + " participant version demographics for app " + appId
                     + " study " + studyId + ", instead wrote " + rowReferenceSet.getRows().size());

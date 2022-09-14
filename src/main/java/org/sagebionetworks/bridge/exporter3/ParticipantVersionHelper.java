@@ -165,6 +165,7 @@ public class ParticipantVersionHelper {
                     rows.addAll(makeRowsFromDemographicsMap(demographics, columnNameToId, healthCode, versionNum));
                 }
             } else if (participantVersion.getStudyDemographics().get(studyId) != null) {
+                // get the demographics for this particular study
                 // study-level export, so include only demographics for that study
                 rows.addAll(makeRowsFromDemographicsMap(participantVersion.getStudyDemographics().get(studyId),
                         columnNameToId, healthCode, versionNum));
@@ -188,20 +189,28 @@ public class ParticipantVersionHelper {
             DemographicResponse demographic = entry.getValue();
             String units = demographic.getUnits();
             for (String value : demographic.getValues()) {
-                Map<String, String> rowMap = new HashMap<>();
-                rowMap.put(columnNameToId.get(COLUMN_NAME_HEALTH_CODE), healthCode);
-                rowMap.put(columnNameToId.get(COLUMN_NAME_PARTICIPANT_VERSION), versionNum.toString());
-                rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_CATEGORY_NAME), categoryName);
-                rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_VALUE), value);
-                if (units != null) {
-                    rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_UNITS), units);
-                }
-                PartialRow row = new PartialRow();
-                row.setValues(rowMap);
-                rows.add(row);
+                rows.add(makeDemographicsRow(columnNameToId, healthCode, versionNum, categoryName, value, units));
+            }
+            if (demographic.getValues().isEmpty()) {
+                // nothing selected in a multiple choice category, but we should still add a row
+                rows.add(makeDemographicsRow(columnNameToId, healthCode, versionNum, categoryName, null, units));
             }
         }
         return rows;
+    }
+
+    private PartialRow makeDemographicsRow(Map<String, String> columnNameToId, String healthCode, Integer versionNum, String categoryName, String value, String units) {
+        Map<String, String> rowMap = new HashMap<>();
+        rowMap.put(columnNameToId.get(COLUMN_NAME_HEALTH_CODE), healthCode);
+        rowMap.put(columnNameToId.get(COLUMN_NAME_PARTICIPANT_VERSION), versionNum.toString());
+        rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_CATEGORY_NAME), categoryName);
+        rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_VALUE), value);
+        if (units != null) {
+            rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_UNITS), units);
+        }
+        PartialRow row = new PartialRow();
+        row.setValues(rowMap);
+        return row;
     }
 
     /**
