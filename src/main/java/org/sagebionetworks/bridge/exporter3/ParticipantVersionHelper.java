@@ -154,21 +154,22 @@ public class ParticipantVersionHelper {
         List<PartialRow> rows = new ArrayList<>();
         if (participantVersion.getAppDemographics() != null) {
             // include app-level demographics for both study- and app-level export
-            rows.addAll(makeRowsFromDemographicsMap(participantVersion.getAppDemographics(), columnNameToId, healthCode,
-                    versionNum));
+            rows.addAll(
+                    makeRowsFromDemographicsMap(participantVersion.getAppDemographics(), columnNameToId, appId, null,
+                            healthCode, versionNum));
         }
         if (participantVersion.getStudyDemographics() != null) {
             if (studyId == null) {
                 // app-level export, so include all substudy demographics too
                 for (Map<String, DemographicResponse> demographics : participantVersion.getStudyDemographics()
                         .values()) {
-                    rows.addAll(makeRowsFromDemographicsMap(demographics, columnNameToId, healthCode, versionNum));
+                    rows.addAll(makeRowsFromDemographicsMap(demographics, columnNameToId, appId, null, healthCode,
+                            versionNum));
                 }
             } else if (participantVersion.getStudyDemographics().get(studyId) != null) {
-                // get the demographics for this particular study
                 // study-level export, so include only demographics for that study
                 rows.addAll(makeRowsFromDemographicsMap(participantVersion.getStudyDemographics().get(studyId),
-                        columnNameToId, healthCode, versionNum));
+                        columnNameToId, appId, studyId, healthCode, versionNum));
             }
         }
 
@@ -178,7 +179,7 @@ public class ParticipantVersionHelper {
     // Helper method for making Synapse table rows from map of categoryName to
     // demographic.
     private List<PartialRow> makeRowsFromDemographicsMap(Map<String, DemographicResponse> demographics,
-            Map<String, String> columnNameToId, String healthCode, Integer versionNum) {
+            Map<String, String> columnNameToId, String appId, String studyId, String healthCode, Integer versionNum) {
         List<PartialRow> rows = new ArrayList<>();
         for (Map.Entry<String, DemographicResponse> entry : demographics.entrySet()) {
             if (entry.getKey() == null || entry.getValue() == null) {
@@ -189,20 +190,25 @@ public class ParticipantVersionHelper {
             DemographicResponse demographic = entry.getValue();
             String units = demographic.getUnits();
             for (String value : demographic.getValues()) {
-                rows.add(makeDemographicsRow(columnNameToId, healthCode, versionNum, categoryName, value, units));
+                rows.add(makeDemographicsRow(columnNameToId, healthCode, versionNum, appId, studyId, categoryName,
+                        value, units));
             }
             if (demographic.getValues().isEmpty()) {
                 // nothing selected in a multiple choice category, but we should still add a row
-                rows.add(makeDemographicsRow(columnNameToId, healthCode, versionNum, categoryName, null, units));
+                rows.add(makeDemographicsRow(columnNameToId, healthCode, versionNum, appId, studyId, categoryName, null,
+                        units));
             }
         }
         return rows;
     }
 
-    private PartialRow makeDemographicsRow(Map<String, String> columnNameToId, String healthCode, Integer versionNum, String categoryName, String value, String units) {
+    private PartialRow makeDemographicsRow(Map<String, String> columnNameToId, String healthCode, Integer versionNum,
+            String appId, String studyId, String categoryName, String value, String units) {
         Map<String, String> rowMap = new HashMap<>();
         rowMap.put(columnNameToId.get(COLUMN_NAME_HEALTH_CODE), healthCode);
         rowMap.put(columnNameToId.get(COLUMN_NAME_PARTICIPANT_VERSION), versionNum.toString());
+        rowMap.put(columnNameToId.get(COLUMN_NAME_APP_ID), appId);
+        rowMap.put(columnNameToId.get(COLUMN_NAME_STUDY_ID), studyId);
         rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_CATEGORY_NAME), categoryName);
         rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_VALUE), value);
         if (units != null) {
