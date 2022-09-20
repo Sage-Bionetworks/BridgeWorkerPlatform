@@ -161,10 +161,12 @@ public class ParticipantVersionHelper {
         if (participantVersion.getStudyDemographics() != null) {
             if (studyId == null) {
                 // app-level export, so include all substudy demographics too
-                for (Map<String, DemographicResponse> demographics : participantVersion.getStudyDemographics()
-                        .values()) {
-                    rows.addAll(makeRowsFromDemographicsMap(demographics, columnNameToId, appId, null, healthCode,
-                            versionNum));
+                for (Map.Entry<String, Map<String, DemographicResponse>> entry : participantVersion
+                        .getStudyDemographics().entrySet()) {
+                    String demographicsStudyId = entry.getKey();
+                    Map<String, DemographicResponse> demographics = entry.getValue();
+                    rows.addAll(makeRowsFromDemographicsMap(demographics, columnNameToId, appId, demographicsStudyId,
+                            healthCode, versionNum));
                 }
             } else if (participantVersion.getStudyDemographics().get(studyId) != null) {
                 // study-level export, so include only demographics for that study
