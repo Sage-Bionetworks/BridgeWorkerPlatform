@@ -183,6 +183,10 @@ public class ParticipantVersionHelper {
     private List<PartialRow> makeRowsFromDemographicsMap(Map<String, DemographicResponse> demographics,
             Map<String, String> columnNameToId, String appId, String studyId, String healthCode, Integer versionNum) {
         List<PartialRow> rows = new ArrayList<>();
+        if (demographics == null) {
+            // should not happen but for safety
+            return rows;
+        }
         for (Map.Entry<String, DemographicResponse> entry : demographics.entrySet()) {
             if (entry.getKey() == null || entry.getValue() == null) {
                 // don't bother saving when null categoryName or demographic

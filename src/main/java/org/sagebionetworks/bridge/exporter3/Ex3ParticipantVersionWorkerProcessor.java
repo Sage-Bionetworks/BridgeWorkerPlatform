@@ -158,6 +158,7 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
     }
 
     // Package-scoped for unit tests.
+    // Separate method for logging
     void exportParticipantVersionDemographicsRowToSynapse(String appId, String studyId,
             String participantVersionDemographicsTableId, List<PartialRow> rows)
             throws BridgeSynapseException, SynapseException {

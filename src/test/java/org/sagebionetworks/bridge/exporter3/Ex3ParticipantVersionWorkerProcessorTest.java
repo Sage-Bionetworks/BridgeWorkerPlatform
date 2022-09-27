@@ -1,5 +1,6 @@
 package org.sagebionetworks.bridge.exporter3;
 
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.AdditionalMatchers.not;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -44,12 +45,16 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
     private static final String HEALTH_CODE = "health-code";
     private static final int PARTICIPANT_VERSION = 42;
     private static final String PARTICIPANT_VERSION_TABLE_ID_FOR_APP = "syn11111";
-    private static final String PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY = "syn22222";
+    private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP = "syn22222";
+    private static final String PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY = "syn33333";
+    private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY = "syn44444";
     private static final Map<String, String> STUDY_MEMBERSHIPS = ImmutableMap.of("studyC", "<none>",
             "studyB", "extB", "studyA", "extA");
 
     private App app;
     private ParticipantVersion participantVersion;
+    private RowReferenceSet rowReferenceSet;
+
 
     @Mock
     private BridgeHelper mockBridgeHelper;
@@ -71,6 +76,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         // Mock shared dependencies.
         app = Exporter3TestUtil.makeAppWithEx3Config();
         app.getExporter3Configuration().setParticipantVersionTableId(PARTICIPANT_VERSION_TABLE_ID_FOR_APP);
+        app.getExporter3Configuration().setParticipantVersionDemographicsTableId(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP);
         when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
 
         participantVersion = makeParticipantVersion();
@@ -78,13 +84,14 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
                 PARTICIPANT_VERSION)).thenReturn(participantVersion);
 
         when(mockParticipantVersionHelper.makeRowForParticipantVersion(any(), any(), any())).thenReturn(DUMMY_ROW);
+        when(mockParticipantVersionHelper.makeRowsForParticipantVersionDemographics(any(), any(), any(), any()))
+                .thenReturn(ImmutableList.of(DUMMY_ROW));
 
         when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
 
         // Create dummy row reference set. Worker only really cares about number of rows, and only for logging.
-        RowReferenceSet rowReferenceSet = new RowReferenceSet();
+        rowReferenceSet = new RowReferenceSet();
         rowReferenceSet.setRows(ImmutableList.of(new RowReference()));
-        when(mockSynapseHelper.appendRowsToTable(any(), any())).thenReturn(rowReferenceSet);
     }
 
     @Test
@@ -124,6 +131,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         Study study = new Study();
         study.setExporter3Enabled(false);
         when(mockBridgeHelper.getStudy(any(), any())).thenReturn(study);
+        when(mockSynapseHelper.appendRowsToTable(any(), any())).thenReturn(rowReferenceSet);
 
         // Execute.
         processor.process(makeRequest());
@@ -140,10 +148,40 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         assertEquals(rowSet.getTableId(), PARTICIPANT_VERSION_TABLE_ID_FOR_APP);
         assertEquals(rowSet.getRows().size(), 1);
         assertSame(rowSet.getRows().get(0), DUMMY_ROW);
+
+        verify(mockParticipantVersionHelper).makeRowsForParticipantVersionDemographics(eq(Exporter3TestUtil.APP_ID),
+                isNull(String.class), eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP), same(participantVersion));
+
+        verify(mockSynapseHelper).appendRowsToTable(rowSetCaptor.capture(),
+                eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP));
+
+        rowSet = (PartialRowSet) rowSetCaptor.getValue();
+        assertEquals(rowSet.getTableId(), PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP);
+        assertEquals(rowSet.getRows().size(), 1);
+        assertSame(rowSet.getRows().get(0), DUMMY_ROW);
+    }
+
+    @Test
+    public void processDemographicsNullRows() throws Exception {
+        Study study = new Study();
+        study.setExporter3Enabled(false);
+        when(mockBridgeHelper.getStudy(any(), any())).thenReturn(study);
+        RowReferenceSet emptyRowReferenceSet = new RowReferenceSet();
+        emptyRowReferenceSet.setRows(null);
+        when(mockSynapseHelper.appendRowsToTable(any(), eq(PARTICIPANT_VERSION_TABLE_ID_FOR_APP)))
+                .thenReturn(rowReferenceSet);
+        when(mockSynapseHelper.appendRowsToTable(any(), eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP)))
+                .thenReturn(emptyRowReferenceSet);
+
+        processor.process(makeRequest());
+
+        assertNotNull(emptyRowReferenceSet.getRows());
     }
 
     @Test
     public void processForStudy() throws Exception {
+        when(mockSynapseHelper.appendRowsToTable(any(), any())).thenReturn(rowReferenceSet);
+
         // No export config for app. (Export needs to remain enabled to export for studies.)
         app.setIdentifier(Exporter3TestUtil.APP_ID);
         app.setExporter3Enabled(true);
@@ -153,6 +191,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         Study studyA = Exporter3TestUtil.makeStudyWithEx3Config();
         studyA.setIdentifier("studyA");
         studyA.getExporter3Configuration().setParticipantVersionTableId(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY);
+        studyA.getExporter3Configuration().setParticipantVersionDemographicsTableId(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY);
         when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, "studyA")).thenReturn(studyA);
 
         Study otherStudy = new Study();
@@ -172,6 +211,17 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
 
         PartialRowSet rowSet = (PartialRowSet) rowSetCaptor.getValue();
         assertEquals(rowSet.getTableId(), PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY);
+        assertEquals(rowSet.getRows().size(), 1);
+        assertSame(rowSet.getRows().get(0), DUMMY_ROW);
+
+        verify(mockParticipantVersionHelper).makeRowsForParticipantVersionDemographics(eq(Exporter3TestUtil.APP_ID),
+                eq(studyA.getIdentifier()), eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY), same(participantVersion));
+
+        verify(mockSynapseHelper).appendRowsToTable(rowSetCaptor.capture(),
+                eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY));
+
+        rowSet = (PartialRowSet) rowSetCaptor.getValue();
+        assertEquals(rowSet.getTableId(), PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY);
         assertEquals(rowSet.getRows().size(), 1);
         assertSame(rowSet.getRows().get(0), DUMMY_ROW);
     }
