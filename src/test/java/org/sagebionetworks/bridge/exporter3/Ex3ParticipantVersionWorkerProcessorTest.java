@@ -84,7 +84,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
                 PARTICIPANT_VERSION)).thenReturn(participantVersion);
 
         when(mockParticipantVersionHelper.makeRowForParticipantVersion(any(), any(), any())).thenReturn(DUMMY_ROW);
-        when(mockParticipantVersionHelper.makeRowsForParticipantVersionDemographics(any(), any(), any(), any()))
+        when(mockParticipantVersionHelper.makeRowsForParticipantVersionDemographics(any(), any(), any()))
                 .thenReturn(ImmutableList.of(DUMMY_ROW));
 
         when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
@@ -149,8 +149,8 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         assertEquals(rowSet.getRows().size(), 1);
         assertSame(rowSet.getRows().get(0), DUMMY_ROW);
 
-        verify(mockParticipantVersionHelper).makeRowsForParticipantVersionDemographics(eq(Exporter3TestUtil.APP_ID),
-                isNull(String.class), eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP), same(participantVersion));
+        verify(mockParticipantVersionHelper).makeRowsForParticipantVersionDemographics(isNull(String.class),
+                eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP), same(participantVersion));
 
         verify(mockSynapseHelper).appendRowsToTable(rowSetCaptor.capture(),
                 eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP));
@@ -214,8 +214,8 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         assertEquals(rowSet.getRows().size(), 1);
         assertSame(rowSet.getRows().get(0), DUMMY_ROW);
 
-        verify(mockParticipantVersionHelper).makeRowsForParticipantVersionDemographics(eq(Exporter3TestUtil.APP_ID),
-                eq(studyA.getIdentifier()), eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY), same(participantVersion));
+        verify(mockParticipantVersionHelper).makeRowsForParticipantVersionDemographics(eq(studyA.getIdentifier()),
+                eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY), same(participantVersion));
 
         verify(mockSynapseHelper).appendRowsToTable(rowSetCaptor.capture(),
                 eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY));

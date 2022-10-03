@@ -63,7 +63,6 @@ public class ParticipantVersionHelperTest {
 
     private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE = "participantVersionDemographics-healthCode-col-id";
     private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION = "participantVersionDemographics-participantVersion-col-id";
-    private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_APP_ID = "participantVersionDemographics-appId-col-id";
     private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID = "participantVersionDemographics-studyId-col-id";
     private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME = "participantVersionDemographics-categoryName-col-id";
     private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE = "participantVersionDemographics-value-col-id";
@@ -88,7 +87,6 @@ public class ParticipantVersionHelperTest {
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE, HEALTH_CODE);
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION,
                 String.valueOf(PARTICIPANT_VERSION));
-        row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_APP_ID, Exporter3TestUtil.APP_ID);
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID, null);
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME, "category1");
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE, "foo");
@@ -99,7 +97,6 @@ public class ParticipantVersionHelperTest {
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE, HEALTH_CODE);
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION,
                 String.valueOf(PARTICIPANT_VERSION));
-        row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_APP_ID, Exporter3TestUtil.APP_ID);
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID, null);
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME, "category2");
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE, "1");
@@ -109,7 +106,6 @@ public class ParticipantVersionHelperTest {
         row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE, HEALTH_CODE);
         row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION,
                 String.valueOf(PARTICIPANT_VERSION));
-        row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_APP_ID, Exporter3TestUtil.APP_ID);
         row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID, null);
         row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME, "category2");
         row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE, "-5.7");
@@ -152,7 +148,6 @@ public class ParticipantVersionHelperTest {
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE, HEALTH_CODE);
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION,
                 String.valueOf(PARTICIPANT_VERSION));
-        row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_APP_ID, Exporter3TestUtil.APP_ID);
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID, STUDY_ID);
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME, "category1");
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE, "foo");
@@ -163,7 +158,6 @@ public class ParticipantVersionHelperTest {
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE, HEALTH_CODE);
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION,
                 String.valueOf(PARTICIPANT_VERSION));
-        row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_APP_ID, Exporter3TestUtil.APP_ID);
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID, STUDY_ID);
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME, "category2");
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE, "1");
@@ -173,7 +167,6 @@ public class ParticipantVersionHelperTest {
         row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE, HEALTH_CODE);
         row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION,
                 String.valueOf(PARTICIPANT_VERSION));
-        row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_APP_ID, Exporter3TestUtil.APP_ID);
         row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID, STUDY_ID);
         row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME, "category2");
         row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE, "-5.7");
@@ -183,7 +176,6 @@ public class ParticipantVersionHelperTest {
         row4Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE, HEALTH_CODE);
         row4Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION,
                 String.valueOf(PARTICIPANT_VERSION));
-        row4Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_APP_ID, Exporter3TestUtil.APP_ID);
         row4Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID, STUDY_ID);
         row4Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME, "category3");
         row4Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE, null);
@@ -198,7 +190,6 @@ public class ParticipantVersionHelperTest {
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE, HEALTH_CODE);
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION,
                 String.valueOf(PARTICIPANT_VERSION));
-        row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_APP_ID, Exporter3TestUtil.APP_ID);
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID, STUDY2_ID);
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME, "category4");
         row1Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE, "bar");
@@ -209,7 +200,6 @@ public class ParticipantVersionHelperTest {
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE, HEALTH_CODE);
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION,
                 String.valueOf(PARTICIPANT_VERSION));
-        row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_APP_ID, Exporter3TestUtil.APP_ID);
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID, STUDY2_ID);
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME, "category4");
         row2Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE, "baz");
@@ -248,8 +238,6 @@ public class ParticipantVersionHelperTest {
                         .setId(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE))
                 .add(new ColumnModel().setName(ParticipantVersionHelper.COLUMN_NAME_PARTICIPANT_VERSION)
                         .setId(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION))
-                .add(new ColumnModel().setName(ParticipantVersionHelper.COLUMN_NAME_APP_ID)
-                        .setId(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_APP_ID))
                 .add(new ColumnModel().setName(ParticipantVersionHelper.COLUMN_NAME_STUDY_ID)
                         .setId(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID))
                 .add(new ColumnModel().setName(ParticipantVersionHelper.COLUMN_NAME_DEMOGRAPHIC_CATEGORY_NAME)
@@ -323,9 +311,8 @@ public class ParticipantVersionHelperTest {
 
     @Test
     public void makeDemographicsRowsForApp() throws SynapseException {
-        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(
-                Exporter3TestUtil.APP_ID, null, PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP,
-                makeParticipantVersion());
+        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(null,
+                PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP, makeParticipantVersion());
 
         List<PartialRow> expectedRows = new ArrayList<>();
         expectedRows.addAll(EXPECTED_APP_ROWS);
@@ -338,8 +325,8 @@ public class ParticipantVersionHelperTest {
     public void makeDemographicsRowsForAppEmpty() throws SynapseException {
         ParticipantVersion participantVersion = makeParticipantVersion();
         participantVersion.setAppDemographics(ImmutableMap.of());
-        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(
-                Exporter3TestUtil.APP_ID, null, PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP, participantVersion);
+        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(null,
+                PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP, participantVersion);
 
         List<PartialRow> expectedRows = new ArrayList<>();
         expectedRows.addAll(EXPECTED_STUDY_ROWS);
@@ -352,17 +339,16 @@ public class ParticipantVersionHelperTest {
         ParticipantVersion participantVersion = makeParticipantVersion();
         participantVersion.setAppDemographics(null);
         participantVersion.setStudyDemographics(null);
-        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(
-                Exporter3TestUtil.APP_ID, null, PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP, participantVersion);
+        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(null,
+                PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP, participantVersion);
 
         assertEquals(rows.size(), 0);
     }
 
     @Test
     public void makeDemographicsRowsForStudy() throws SynapseException {
-        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(
-                Exporter3TestUtil.APP_ID, STUDY_ID, PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP,
-                makeParticipantVersion());
+        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(STUDY_ID,
+                PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP, makeParticipantVersion());
 
         List<PartialRow> expectedRows = new ArrayList<>();
         expectedRows.addAll(EXPECTED_APP_ROWS);
@@ -372,18 +358,16 @@ public class ParticipantVersionHelperTest {
 
     @Test
     public void makeDemographicsRowsForStudyNullDemographics() throws SynapseException {
-        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(
-                Exporter3TestUtil.APP_ID, STUDY_NULL_ID, PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP,
-                makeParticipantVersion());
+        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(STUDY_NULL_ID,
+                PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP, makeParticipantVersion());
 
         assertEquals(rows, EXPECTED_APP_ROWS);
     }
 
     @Test
     public void makeDemographicsRowsForStudyEmptyDemographics() throws SynapseException {
-        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(
-                Exporter3TestUtil.APP_ID, STUDY_EMPTY_ID, PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP,
-                makeParticipantVersion());
+        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(STUDY_EMPTY_ID,
+                PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP, makeParticipantVersion());
 
         assertEquals(rows, EXPECTED_APP_ROWS);
     }
@@ -392,9 +376,8 @@ public class ParticipantVersionHelperTest {
     public void makeDemographicsRowsNullHealthCode() throws SynapseException {
         ParticipantVersion participantVersion = makeParticipantVersion();
         participantVersion.setHealthCode(null);
-        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(
-                Exporter3TestUtil.APP_ID, STUDY_ID, PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP,
-                participantVersion);
+        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(STUDY_ID,
+                PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP, participantVersion);
 
         assertEquals(rows.size(), 0);
     }
@@ -403,9 +386,8 @@ public class ParticipantVersionHelperTest {
     public void makeDemographicsRowsNullVersionNum() throws SynapseException {
         ParticipantVersion participantVersion = makeParticipantVersion();
         participantVersion.setParticipantVersion(null);
-        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(
-                Exporter3TestUtil.APP_ID, STUDY_ID, PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP,
-                participantVersion);
+        List<PartialRow> rows = participantVersionHelper.makeRowsForParticipantVersionDemographics(STUDY_ID,
+                PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP, participantVersion);
 
         assertEquals(rows.size(), 0);
     }

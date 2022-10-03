@@ -121,9 +121,9 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
             String participantVersionDemographicsTableId = app.getExporter3Configuration()
                     .getParticipantVersionDemographicsTableId();
             List<PartialRow> participantVersionDemographicsRows = participantVersionHelper
-                    .makeRowsForParticipantVersionDemographics(appId, null, participantVersionDemographicsTableId,
+                    .makeRowsForParticipantVersionDemographics(null, participantVersionDemographicsTableId,
                             participantVersion);
-            exportParticipantVersionDemographicsRowToSynapse(appId, healthCode, participantVersionDemographicsTableId,
+            exportParticipantVersionDemographicsRowToSynapse(healthCode, participantVersionDemographicsTableId,
                     participantVersionDemographicsRows);
         }
         for (Study study : studiesToExport) {
@@ -136,9 +136,9 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
             String participantVersionDemographicsTableId = study.getExporter3Configuration()
                     .getParticipantVersionDemographicsTableId();
             List<PartialRow> participantVersionDemographicsRows = participantVersionHelper
-                    .makeRowsForParticipantVersionDemographics(appId, study.getIdentifier(),
+                    .makeRowsForParticipantVersionDemographics(study.getIdentifier(),
                             participantVersionDemographicsTableId, participantVersion);
-            exportParticipantVersionDemographicsRowToSynapse(appId, healthCode, participantVersionDemographicsTableId,
+            exportParticipantVersionDemographicsRowToSynapse(healthCode, participantVersionDemographicsTableId,
                     participantVersionDemographicsRows);
         }
     }
@@ -159,8 +159,8 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
 
     // Package-scoped for unit tests.
     // Separate method for logging
-    void exportParticipantVersionDemographicsRowToSynapse(String appId, String studyId,
-            String participantVersionDemographicsTableId, List<PartialRow> rows)
+    void exportParticipantVersionDemographicsRowToSynapse(String studyId, String participantVersionDemographicsTableId,
+            List<PartialRow> rows)
             throws BridgeSynapseException, SynapseException {
         PartialRowSet rowSet = new PartialRowSet();
         rowSet.setRows(rows);
@@ -172,8 +172,8 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
             rowReferenceSet.setRows(ImmutableList.of());
         }
         if (rowReferenceSet.getRows().size() != rows.size()) {
-            LOG.error("Expected to write " + rows.size() + " participant version demographics for app " + appId
-                    + " study " + studyId + ", instead wrote " + rowReferenceSet.getRows().size());
+            LOG.error("Expected to write " + rows.size() + " participant version demographics for study " + studyId
+                    + ", instead wrote " + rowReferenceSet.getRows().size());
         }
     }
 }
