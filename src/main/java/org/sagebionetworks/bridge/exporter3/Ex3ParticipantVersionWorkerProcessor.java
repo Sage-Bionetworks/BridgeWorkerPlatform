@@ -118,13 +118,16 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
             exportParticipantVersionRowToSynapse(appId, healthCode, versionNum, appParticipantVersionTableId,
                     participantVersionRow);
 
-            String participantVersionDemographicsTableId = app.getExporter3Configuration()
-                    .getParticipantVersionDemographicsTableId();
-            List<PartialRow> participantVersionDemographicsRows = participantVersionHelper
-                    .makeRowsForParticipantVersionDemographics(null, participantVersionDemographicsTableId,
-                            participantVersion);
-            exportParticipantVersionDemographicsRowToSynapse(healthCode, participantVersionDemographicsTableId,
-                    participantVersionDemographicsRows);
+            // don't export if demographics table/view is not yet set up
+            if (BridgeUtils.isExporter3ConfiguredForDemographics(app)) {
+                String participantVersionDemographicsTableId = app.getExporter3Configuration()
+                        .getParticipantVersionDemographicsTableId();
+                List<PartialRow> participantVersionDemographicsRows = participantVersionHelper
+                        .makeRowsForParticipantVersionDemographics(null, participantVersionDemographicsTableId,
+                                participantVersion);
+                exportParticipantVersionDemographicsRowToSynapse(healthCode, participantVersionDemographicsTableId,
+                        participantVersionDemographicsRows);
+            }
         }
         for (Study study : studiesToExport) {
             String studyParticipantVersionTableId = study.getExporter3Configuration().getParticipantVersionTableId();
@@ -133,13 +136,16 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
             exportParticipantVersionRowToSynapse(appId, healthCode, versionNum, studyParticipantVersionTableId,
                     participantVersionRow);
 
-            String participantVersionDemographicsTableId = study.getExporter3Configuration()
-                    .getParticipantVersionDemographicsTableId();
-            List<PartialRow> participantVersionDemographicsRows = participantVersionHelper
-                    .makeRowsForParticipantVersionDemographics(study.getIdentifier(),
-                            participantVersionDemographicsTableId, participantVersion);
-            exportParticipantVersionDemographicsRowToSynapse(healthCode, participantVersionDemographicsTableId,
-                    participantVersionDemographicsRows);
+            // don't export if demographics table/view is not yet set up
+            if (BridgeUtils.isExporter3ConfiguredForDemographics(study)) {
+                String participantVersionDemographicsTableId = study.getExporter3Configuration()
+                        .getParticipantVersionDemographicsTableId();
+                List<PartialRow> participantVersionDemographicsRows = participantVersionHelper
+                        .makeRowsForParticipantVersionDemographics(study.getIdentifier(),
+                                participantVersionDemographicsTableId, participantVersion);
+                exportParticipantVersionDemographicsRowToSynapse(healthCode, participantVersionDemographicsTableId,
+                        participantVersionDemographicsRows);
+            }
         }
     }
 

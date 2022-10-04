@@ -7,6 +7,7 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isNull;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -46,8 +47,10 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
     private static final int PARTICIPANT_VERSION = 42;
     private static final String PARTICIPANT_VERSION_TABLE_ID_FOR_APP = "syn11111";
     private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP = "syn22222";
-    private static final String PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY = "syn33333";
-    private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY = "syn44444";
+    private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_VIEW_ID_FOR_APP = "syn33333";
+    private static final String PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY = "syn44444";
+    private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY = "syn55555";
+    private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_VIEW_ID_FOR_STUDY = "syn66666";
     private static final Map<String, String> STUDY_MEMBERSHIPS = ImmutableMap.of("studyC", "<none>",
             "studyB", "extB", "studyA", "extA");
 
@@ -77,6 +80,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         app = Exporter3TestUtil.makeAppWithEx3Config();
         app.getExporter3Configuration().setParticipantVersionTableId(PARTICIPANT_VERSION_TABLE_ID_FOR_APP);
         app.getExporter3Configuration().setParticipantVersionDemographicsTableId(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP);
+        app.getExporter3Configuration().setParticipantVersionDemographicsViewId(PARTICIPANT_VERSION_DEMOGRAPHICS_VIEW_ID_FOR_APP);
         when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
 
         participantVersion = makeParticipantVersion();
@@ -175,6 +179,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
 
         processor.process(makeRequest());
 
+        // null rows set should be replaced with empty rows set
         assertNotNull(emptyRowReferenceSet.getRows());
     }
 
@@ -192,6 +197,7 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
         studyA.setIdentifier("studyA");
         studyA.getExporter3Configuration().setParticipantVersionTableId(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY);
         studyA.getExporter3Configuration().setParticipantVersionDemographicsTableId(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY);
+        studyA.getExporter3Configuration().setParticipantVersionDemographicsViewId(PARTICIPANT_VERSION_DEMOGRAPHICS_VIEW_ID_FOR_STUDY);
         when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, "studyA")).thenReturn(studyA);
 
         Study otherStudy = new Study();
@@ -250,6 +256,158 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
 
         // Verify no more interactions with backend services.
         verifyNoMoreInteractions(mockBridgeHelper, mockParticipantVersionHelper, mockSynapseHelper);
+    }
+
+    @Test
+    public void appNotConfiguredForDemographicsTable() throws Exception {
+        Study study = new Study();
+        study.setExporter3Enabled(false);
+        when(mockBridgeHelper.getStudy(any(), any())).thenReturn(study);
+        when(mockSynapseHelper.appendRowsToTable(any(), any())).thenReturn(rowReferenceSet);
+        app.setExporter3Enabled(true);
+        // table id is null so demographics are not configured, no demographics should
+        // be exported
+        app.getExporter3Configuration().setParticipantVersionDemographicsTableId(null);
+
+        // execute
+        processor.process(makeRequest());
+
+        verify(mockParticipantVersionHelper).makeRowForParticipantVersion(isNull(String.class),
+                eq(PARTICIPANT_VERSION_TABLE_ID_FOR_APP), same(participantVersion));
+
+        ArgumentCaptor<AppendableRowSet> rowSetCaptor = ArgumentCaptor.forClass(AppendableRowSet.class);
+        verify(mockSynapseHelper).appendRowsToTable(rowSetCaptor.capture(),
+                eq(PARTICIPANT_VERSION_TABLE_ID_FOR_APP));
+
+        PartialRowSet rowSet = (PartialRowSet) rowSetCaptor.getValue();
+        assertEquals(rowSet.getTableId(), PARTICIPANT_VERSION_TABLE_ID_FOR_APP);
+        assertEquals(rowSet.getRows().size(), 1);
+        assertSame(rowSet.getRows().get(0), DUMMY_ROW);
+
+        verify(mockParticipantVersionHelper, never()).makeRowsForParticipantVersionDemographics(any(), any(), any());
+
+        verify(mockSynapseHelper, never()).appendRowsToTable(any(),
+                eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP));
+    }
+
+    @Test
+    public void appNotConfiguredForDemographicsView() throws Exception {
+        Study study = new Study();
+        study.setExporter3Enabled(false);
+        when(mockBridgeHelper.getStudy(any(), any())).thenReturn(study);
+        when(mockSynapseHelper.appendRowsToTable(any(), any())).thenReturn(rowReferenceSet);
+        app.setExporter3Enabled(true);
+        // view id is null so demographics are not configured, no demographics should be
+        // exported
+        app.getExporter3Configuration().setParticipantVersionDemographicsViewId(null);
+
+        // execute
+        processor.process(makeRequest());
+
+        verify(mockParticipantVersionHelper).makeRowForParticipantVersion(isNull(String.class),
+                eq(PARTICIPANT_VERSION_TABLE_ID_FOR_APP), same(participantVersion));
+
+        ArgumentCaptor<AppendableRowSet> rowSetCaptor = ArgumentCaptor.forClass(AppendableRowSet.class);
+        verify(mockSynapseHelper).appendRowsToTable(rowSetCaptor.capture(),
+                eq(PARTICIPANT_VERSION_TABLE_ID_FOR_APP));
+
+        PartialRowSet rowSet = (PartialRowSet) rowSetCaptor.getValue();
+        assertEquals(rowSet.getTableId(), PARTICIPANT_VERSION_TABLE_ID_FOR_APP);
+        assertEquals(rowSet.getRows().size(), 1);
+        assertSame(rowSet.getRows().get(0), DUMMY_ROW);
+
+        verify(mockParticipantVersionHelper, never()).makeRowsForParticipantVersionDemographics(any(), any(), any());
+
+        verify(mockSynapseHelper, never()).appendRowsToTable(any(),
+                eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP));
+    }
+
+    @Test
+    public void studyNotConfiguredForDemographicsTable() throws Exception {
+        app.setExporter3Enabled(true);
+        app.setExporter3Configuration(null);
+
+        Study study = Exporter3TestUtil.makeStudyWithEx3Config();
+        study.setIdentifier("study");
+        study.setExporter3Enabled(true);
+        study.getExporter3Configuration().setParticipantVersionTableId(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY);
+        // table id is null so demographics are not configured, no demographics should
+        // be exported
+        study.getExporter3Configuration().setParticipantVersionDemographicsTableId(null);
+        study.getExporter3Configuration()
+                .setParticipantVersionDemographicsViewId(PARTICIPANT_VERSION_DEMOGRAPHICS_VIEW_ID_FOR_STUDY);
+        // we only need one of the studies, just use the one called studyA
+        when(mockBridgeHelper.getStudy(any(), eq("studyA"))).thenReturn(study);
+        when(mockSynapseHelper.appendRowsToTable(any(), any())).thenReturn(rowReferenceSet);
+
+        Study otherStudy = new Study();
+        otherStudy.setExporter3Enabled(false);
+        when(mockBridgeHelper.getStudy(eq(Exporter3TestUtil.APP_ID), not(eq("studyA")))).thenReturn(otherStudy);
+
+        // execute
+        processor.process(makeRequest());
+
+        verify(mockParticipantVersionHelper).makeRowForParticipantVersion(eq(study.getIdentifier()),
+                eq(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY), same(participantVersion));
+
+        ArgumentCaptor<AppendableRowSet> rowSetCaptor = ArgumentCaptor.forClass(AppendableRowSet.class);
+        verify(mockSynapseHelper).appendRowsToTable(rowSetCaptor.capture(),
+                eq(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY));
+
+        PartialRowSet rowSet = (PartialRowSet) rowSetCaptor.getValue();
+        assertEquals(rowSet.getTableId(), PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY);
+        assertEquals(rowSet.getRows().size(), 1);
+        assertSame(rowSet.getRows().get(0), DUMMY_ROW);
+
+        verify(mockParticipantVersionHelper, never()).makeRowsForParticipantVersionDemographics(any(),
+                eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY), any());
+
+        verify(mockSynapseHelper, never()).appendRowsToTable(any(),
+                eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY));
+    }
+
+    @Test
+    public void studyNotConfiguredForDemographicsView() throws Exception {
+        app.setExporter3Enabled(true);
+        app.setExporter3Configuration(null);
+
+        Study study = Exporter3TestUtil.makeStudyWithEx3Config();
+        study.setIdentifier("study");
+        study.setExporter3Enabled(true);
+        study.getExporter3Configuration().setParticipantVersionTableId(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY);
+        study.getExporter3Configuration()
+                .setParticipantVersionDemographicsTableId(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY);
+        // view id is null so demographics are not configured, no demographics should be
+        // exported
+        study.getExporter3Configuration().setParticipantVersionDemographicsViewId(null);
+        // we only need one of the studies, just use the one called studyA
+        when(mockBridgeHelper.getStudy(any(), eq("studyA"))).thenReturn(study);
+        when(mockSynapseHelper.appendRowsToTable(any(), any())).thenReturn(rowReferenceSet);
+
+        Study otherStudy = new Study();
+        otherStudy.setExporter3Enabled(false);
+        when(mockBridgeHelper.getStudy(eq(Exporter3TestUtil.APP_ID), not(eq("studyA")))).thenReturn(otherStudy);
+
+        // execute
+        processor.process(makeRequest());
+
+        verify(mockParticipantVersionHelper).makeRowForParticipantVersion(eq(study.getIdentifier()),
+                eq(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY), same(participantVersion));
+
+        ArgumentCaptor<AppendableRowSet> rowSetCaptor = ArgumentCaptor.forClass(AppendableRowSet.class);
+        verify(mockSynapseHelper).appendRowsToTable(rowSetCaptor.capture(),
+                eq(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY));
+
+        PartialRowSet rowSet = (PartialRowSet) rowSetCaptor.getValue();
+        assertEquals(rowSet.getTableId(), PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY);
+        assertEquals(rowSet.getRows().size(), 1);
+        assertSame(rowSet.getRows().get(0), DUMMY_ROW);
+
+        verify(mockParticipantVersionHelper, never()).makeRowsForParticipantVersionDemographics(any(),
+                eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY), any());
+
+        verify(mockSynapseHelper, never()).appendRowsToTable(any(),
+                eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY));
     }
 
     @Test
