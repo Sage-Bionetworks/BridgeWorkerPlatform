@@ -51,6 +51,30 @@ public class BridgeUtilsTest {
         assertTrue(BridgeUtils.isExporter3Configured(app));
     }
 
+    @Test
+    public void isExporter3ConfiguredForDemographics_AppConfigured() {
+        App app = makeEx3EnabledApp();
+        app.getExporter3Configuration().setParticipantVersionDemographicsTableId("table id");
+        app.getExporter3Configuration().setParticipantVersionDemographicsViewId("view id");
+        assertTrue(BridgeUtils.isExporter3ConfiguredForDemographics(app));
+    }
+
+    @Test
+    public void isExporter3ConfiguredForDemographics_AppNullTable() {
+        App app = makeEx3EnabledApp();
+        app.getExporter3Configuration().setParticipantVersionDemographicsTableId(null);
+        app.getExporter3Configuration().setParticipantVersionDemographicsViewId("view id");
+        assertFalse(BridgeUtils.isExporter3ConfiguredForDemographics(app));
+    }
+
+    @Test
+    public void isExporter3ConfiguredForDemographics_AppNullView() {
+        App app = makeEx3EnabledApp();
+        app.getExporter3Configuration().setParticipantVersionDemographicsTableId("table id");
+        app.getExporter3Configuration().setParticipantVersionDemographicsViewId(null);
+        assertFalse(BridgeUtils.isExporter3ConfiguredForDemographics(app));
+    }
+
     private static App makeEx3EnabledApp() {
         Exporter3Configuration ex3Config = new Exporter3Configuration();
         ex3Config.setConfigured(true);
@@ -100,6 +124,30 @@ public class BridgeUtilsTest {
     public void isExported3ConfiguredForStudy_ConfiguredTrue() {
         Study study = makeEx3EnabledStudy();
         assertTrue(BridgeUtils.isExporter3Configured(study));
+    }
+
+    @Test
+    public void isExporter3ConfiguredForDemographics_StudyConfigured() {
+        Study study = makeEx3EnabledStudy();
+        study.getExporter3Configuration().setParticipantVersionDemographicsTableId("table id");
+        study.getExporter3Configuration().setParticipantVersionDemographicsViewId("view id");
+        assertTrue(BridgeUtils.isExporter3ConfiguredForDemographics(study));
+    }
+
+    @Test
+    public void isExporter3ConfiguredForDemographics_StudyNullTable() {
+        Study study = makeEx3EnabledStudy();
+        study.getExporter3Configuration().setParticipantVersionDemographicsTableId(null);
+        study.getExporter3Configuration().setParticipantVersionDemographicsViewId("view id");
+        assertFalse(BridgeUtils.isExporter3ConfiguredForDemographics(study));
+    }
+
+    @Test
+    public void isExporter3ConfiguredForDemographics_StudyNullView() {
+        Study study = makeEx3EnabledStudy();
+        study.getExporter3Configuration().setParticipantVersionDemographicsTableId("table id");
+        study.getExporter3Configuration().setParticipantVersionDemographicsViewId(null);
+        assertFalse(BridgeUtils.isExporter3ConfiguredForDemographics(study));
     }
 
     private static Study makeEx3EnabledStudy() {
