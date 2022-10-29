@@ -68,6 +68,11 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         try {
             process(request);
+        } catch (Exception ex) {
+            // Catch and rethrow exception. The extra logging statement makes it easier to do log analysis.
+            LOG.error("Exception thrown for participant version request for app " + request.getAppId() +
+                    " healthcode " + request.getHealthCode() + " version " + request.getParticipantVersion(), ex);
+            throw ex;
         } finally {
             LOG.info("Participant version export request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) + " seconds for app " +
                     request.getAppId() + " healthcode " + request.getHealthCode() + " version " +
