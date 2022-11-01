@@ -148,6 +148,11 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         Stopwatch requestStopwatch = Stopwatch.createStarted();
         try {
             process(request);
+        } catch (Exception ex) {
+            // Catch and rethrow exception. The extra logging statement makes it easier to do log analysis.
+            LOG.error("Exception thrown for export request for app " + request.getAppId() + " record " +
+                    request.getRecordId(), ex);
+            throw ex;
         } finally {
             LOG.info("Export request took " + requestStopwatch.elapsed(TimeUnit.SECONDS) + " seconds for app " +
                     request.getAppId() + " record " + request.getRecordId());
