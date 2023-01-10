@@ -50,6 +50,8 @@ import org.sagebionetworks.bridge.exceptions.BridgeSynapseException;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.App;
+import org.sagebionetworks.bridge.rest.model.ExportNotificationRecordInfo;
+import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
@@ -243,17 +245,26 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         }
 
         // Upload to Synapse.
+        ExportToAppNotification notification = new ExportToAppNotification();
+        notification.setAppId(appId);
+        notification.setRecordId(recordId);
         if (exportForApp) {
-            exportToSynapse(appId, null, app.getExporter3Configuration(), upload, record, metadataMap, hexMd5);
+            ExportNotificationRecordInfo recordInfo = exportToSynapse(appId, null,
+                    app.getExporter3Configuration(), upload, record, metadataMap, hexMd5);
+            notification.setRecord(recordInfo);
         }
         for (Study study : studiesToExport) {
-            exportToSynapse(appId, study.getIdentifier(), study.getExporter3Configuration(), upload, record,
-                    metadataMap, hexMd5);
+            ExportNotificationRecordInfo recordInfo = exportToSynapse(appId, study.getIdentifier(),
+                    study.getExporter3Configuration(), upload, record, metadataMap, hexMd5);
+            notification.putStudyRecordsItem(study.getIdentifier(), recordInfo);
         }
 
         // Mark record as exported.
         record.setExported(true);
         bridgeHelper.createOrUpdateHealthDataRecordForExporter3(appId, record);
+
+        // Send export notification.
+        bridgeHelper.sendExportNotifications(notification);
     }
 
     private String decryptAndUploadFile(App app, Upload upload, HealthDataRecordEx3 record,
@@ -408,7 +419,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         return metadata;
     }
 
-    private void exportToSynapse(String appId, String studyId, Exporter3Configuration exporter3Config, Upload upload,
+    private ExportNotificationRecordInfo exportToSynapse(String appId, String studyId, Exporter3Configuration exporter3Config, Upload upload,
             HealthDataRecordEx3 record, Map<String, String> metadataMap, String hexMd5)
             throws SynapseException {
         // Exports are folderized by calendar date (YYYY-MM-DD). Create that folder if it doesn't already exist.
@@ -475,6 +486,15 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         }
 
         synapseHelper.addAnnotationsToEntity(fileEntityId, annotationMap);
+
+        // Create record info for notifications.
+        ExportNotificationRecordInfo recordInfo = new ExportNotificationRecordInfo();
+        recordInfo.setParentProjectId(exporter3Config.getProjectId());
+        recordInfo.setRawFolderId(folderId);
+        recordInfo.setFileEntityId(fileEntityId);
+        recordInfo.setS3Bucket(rawHealthDataBucket);
+        recordInfo.setS3Key(s3Key);
+        return recordInfo;
     }
 
     private String getRawS3KeyForUpload(String appId, String studyId, Upload upload, HealthDataRecordEx3 record) {
