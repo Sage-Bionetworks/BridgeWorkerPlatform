@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.DemographicResponse;
+import org.sagebionetworks.bridge.rest.model.DemographicValueResponse;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
@@ -43,6 +44,7 @@ public class ParticipantVersionHelper {
     public static final String COLUMN_NAME_DEMOGRAPHIC_CATEGORY_NAME = "demographicCategoryName";
     public static final String COLUMN_NAME_DEMOGRAPHIC_VALUE = "demographicValue";
     public static final String COLUMN_NAME_DEMOGRAPHIC_UNITS = "demographicUnits";
+    public static final String COLUMN_NAME_DEMOGRAPHIC_INVALIDITY = "demographicInvalidity";
 
     static final String EXT_ID_NONE = "<none>";
 
@@ -194,21 +196,23 @@ public class ParticipantVersionHelper {
             String categoryName = entry.getKey();
             DemographicResponse demographic = entry.getValue();
             String units = demographic.getUnits();
-            for (String value : demographic.getValues()) {
+            for (DemographicValueResponse demographicValue : demographic.getValues()) {
+                String value = demographicValue.getValue();
+                String invalidity = demographicValue.getInvalidity();
                 rows.add(makeDemographicsRow(columnNameToId, healthCode, versionNum, studyId, categoryName,
-                        value, units));
+                        value, units, invalidity));
             }
             if (demographic.getValues().isEmpty()) {
                 // nothing selected in a multiple choice category, but we should still add a row
                 rows.add(makeDemographicsRow(columnNameToId, healthCode, versionNum, studyId, categoryName, null,
-                        units));
+                        units, null));
             }
         }
         return rows;
     }
 
     private PartialRow makeDemographicsRow(Map<String, String> columnNameToId, String healthCode, Integer versionNum,
-            String studyId, String categoryName, String value, String units) {
+            String studyId, String categoryName, String value, String units, String invalidity) {
         Map<String, String> rowMap = new HashMap<>();
         rowMap.put(columnNameToId.get(COLUMN_NAME_HEALTH_CODE), healthCode);
         rowMap.put(columnNameToId.get(COLUMN_NAME_PARTICIPANT_VERSION), versionNum.toString());
@@ -217,6 +221,9 @@ public class ParticipantVersionHelper {
         rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_VALUE), value);
         if (units != null) {
             rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_UNITS), units);
+        }
+        if (invalidity != null) {
+            rowMap.put(columnNameToId.get(COLUMN_NAME_DEMOGRAPHIC_INVALIDITY), invalidity);
         }
         PartialRow row = new PartialRow();
         row.setValues(rowMap);

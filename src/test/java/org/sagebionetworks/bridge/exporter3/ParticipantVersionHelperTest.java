@@ -27,6 +27,7 @@ import org.testng.annotations.Test;
 
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.DemographicResponse;
+import org.sagebionetworks.bridge.rest.model.DemographicValueResponse;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
@@ -67,17 +68,27 @@ public class ParticipantVersionHelperTest {
     private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME = "participantVersionDemographics-categoryName-col-id";
     private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE = "participantVersionDemographics-value-col-id";
     private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_UNITS = "participantVersionDemographics-units-col-id";
+    private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_INVALIDITY = "participantVersionDemographics-invalidity-col-id";
 
     private static final Map<String, DemographicResponse> APP_DEMOGRAPHICS;
     static {
         APP_DEMOGRAPHICS = new LinkedHashMap<>();
         APP_DEMOGRAPHICS.put("category1",
-                new DemographicResponse().multipleSelect(false).values(ImmutableList.of("foo")).units("units"));
+                new DemographicResponse().multipleSelect(false)
+                        .values(ImmutableList.of(new DemographicValueResponse().value("foo"))).units("units"));
         APP_DEMOGRAPHICS.put("category2",
-                new DemographicResponse().multipleSelect(true).values(ImmutableList.of("1", "-5.7")).units(null));
+                new DemographicResponse().multipleSelect(true).values(ImmutableList
+                        .of(new DemographicValueResponse().value("1"), new DemographicValueResponse().value("-5.7")))
+                        .units(null));
         APP_DEMOGRAPHICS.put(null,
-                new DemographicResponse().multipleSelect(true).values(ImmutableList.of("bar")).units("units2"));
+                new DemographicResponse().multipleSelect(true)
+                        .values(ImmutableList.of(new DemographicValueResponse().value("bar"))).units("units2"));
         APP_DEMOGRAPHICS.put("category3", null);
+        APP_DEMOGRAPHICS.put("category4",
+                new DemographicResponse().multipleSelect(true)
+                        .values(ImmutableList.of(new DemographicValueResponse().value("abc").invalidity("invalid data"),
+                                new DemographicValueResponse().value("def")))
+                        .units(null));
     }
     private static final List<PartialRow> EXPECTED_APP_ROWS;
     static {
@@ -110,6 +121,25 @@ public class ParticipantVersionHelperTest {
         row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME, "category2");
         row3Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE, "-5.7");
         EXPECTED_APP_ROWS.add(new PartialRow().setValues(row3Map));
+
+        Map<String, String> row4Map = new HashMap<>();
+        row4Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE, HEALTH_CODE);
+        row4Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION,
+                String.valueOf(PARTICIPANT_VERSION));
+        row4Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID, null);
+        row4Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME, "category4");
+        row4Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE, "abc");
+        row4Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_INVALIDITY, "invalid data");
+        EXPECTED_APP_ROWS.add(new PartialRow().setValues(row4Map));
+
+        Map<String, String> row5Map = new HashMap<>();
+        row5Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_HEALTH_CODE, HEALTH_CODE);
+        row5Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_PARTICIPANT_VERSION,
+                String.valueOf(PARTICIPANT_VERSION));
+        row5Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_STUDY_ID, null);
+        row5Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_CATEGORY_NAME, "category4");
+        row5Map.put(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE, "def");
+        EXPECTED_APP_ROWS.add(new PartialRow().setValues(row5Map));
     }
     private static final String STUDY_ID = "study";
     private static final String STUDY2_ID = "study2";
@@ -121,20 +151,26 @@ public class ParticipantVersionHelperTest {
 
         Map<String, DemographicResponse> STUDY1_DEMOGRAPHICS_MAP = new LinkedHashMap<>();
         STUDY1_DEMOGRAPHICS_MAP.put("category1",
-                new DemographicResponse().multipleSelect(false).values(ImmutableList.of("foo")).units("units"));
+                new DemographicResponse().multipleSelect(false)
+                        .values(ImmutableList.of(new DemographicValueResponse().value("foo"))).units("units"));
         STUDY1_DEMOGRAPHICS_MAP.put("category2",
-                new DemographicResponse().multipleSelect(true).values(ImmutableList.of("1", "-5.7")).units(null));
+                new DemographicResponse().multipleSelect(true).values(ImmutableList
+                        .of(new DemographicValueResponse().value("1"), new DemographicValueResponse().value("-5.7")))
+                        .units(null));
         STUDY1_DEMOGRAPHICS_MAP.put("category3",
                 new DemographicResponse().multipleSelect(true).values(ImmutableList.of()).units("units2"));
         STUDY1_DEMOGRAPHICS_MAP.put(null,
-                new DemographicResponse().multipleSelect(true).values(ImmutableList.of("bar")).units("units2"));
+                new DemographicResponse().multipleSelect(true)
+                        .values(ImmutableList.of(new DemographicValueResponse().value("bar"))).units("units2"));
         STUDY1_DEMOGRAPHICS_MAP.put("category4", null);
         STUDY_DEMOGRAPHICS.put(STUDY_ID, STUDY1_DEMOGRAPHICS_MAP);
 
         // to test whether study demographics leak into other tables
         STUDY_DEMOGRAPHICS.put(STUDY2_ID, ImmutableMap.of(
                 "category4",
-                new DemographicResponse().multipleSelect(true).values(ImmutableList.of("bar", "baz")).units("units3")));
+                new DemographicResponse().multipleSelect(true).values(ImmutableList
+                        .of(new DemographicValueResponse().value("bar"), new DemographicValueResponse().value("baz")))
+                        .units("units3")));
 
         STUDY_DEMOGRAPHICS.put(STUDY_NULL_ID, null);
 
@@ -246,6 +282,8 @@ public class ParticipantVersionHelperTest {
                         .setId(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_VALUE))
                 .add(new ColumnModel().setName(ParticipantVersionHelper.COLUMN_NAME_DEMOGRAPHIC_UNITS)
                         .setId(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_UNITS))
+                .add(new ColumnModel().setName(ParticipantVersionHelper.COLUMN_NAME_DEMOGRAPHIC_INVALIDITY)
+                    .setId(PARTICIPANT_VERSION_DEMOGRAPHICS_COLUMN_ID_INVALIDITY))
                 .build();
     }
 
