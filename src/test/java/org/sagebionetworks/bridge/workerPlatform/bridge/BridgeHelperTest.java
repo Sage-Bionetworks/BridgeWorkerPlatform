@@ -33,6 +33,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
+import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersionList;
@@ -253,6 +254,19 @@ public class BridgeHelperTest {
         assertEquals(outputList.get(0), activityEvent);
 
         verify(mockWorkerApi).getActivityEventsForParticipantAndApp(APP_ID, USER_ID);
+    }
+
+    @Test
+    public void sendExportNotifications() throws Exception {
+        // Set up mocks.
+        Call<Message> mockCall = mock(Call.class);
+        when(mockWorkerApi.sendExportNotifications(any())).thenReturn(mockCall);
+
+        // Execute and validate.
+        ExportToAppNotification dummyNotification = new ExportToAppNotification();
+        bridgeHelper.sendExportNotifications(dummyNotification);
+        verify(mockWorkerApi).sendExportNotifications(same(dummyNotification));
+        verify(mockCall).execute();
     }
 
     @Test

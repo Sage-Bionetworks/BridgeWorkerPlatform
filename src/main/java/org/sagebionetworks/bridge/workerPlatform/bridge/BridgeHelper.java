@@ -8,6 +8,7 @@ import java.util.List;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
+import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
 import org.sagebionetworks.bridge.rest.model.Study;
@@ -102,6 +103,14 @@ public class BridgeHelper {
     public List<ActivityEvent> getActivityEvents(String appId, String userId) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getActivityEventsForParticipantAndApp(appId, userId).execute()
                 .body().getItems();
+    }
+
+    /**
+     * Sends notifications to Bridge Server, which then sends notifications to all subscribers. This includes
+     * subscribers for both the app-wide Synapse project and all study-specific Synapse projects that the record was
+     * exported to. */
+    public void sendExportNotifications(ExportToAppNotification notification) throws IOException {
+        clientManager.getClient(ForWorkersApi.class).sendExportNotifications(notification).execute();
     }
 
     /** Returns the FitBitUser for a single user. */
