@@ -133,11 +133,16 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
                 exportParticipantVersionDemographicsRowToSynapse(healthCode, participantVersionDemographicsTableId,
                         participantVersionDemographicsRows);
             }
+
+            // Log message for our dashboards.
+            LOG.info("Exported participant version to app-wide project: appId=" + appId + ", healthCode=" +
+                    healthCode + ", version=" + versionNum);
         }
         for (Study study : studiesToExport) {
+            String studyId = study.getIdentifier();
             String studyParticipantVersionTableId = study.getExporter3Configuration().getParticipantVersionTableId();
             PartialRow participantVersionRow = participantVersionHelper.makeRowForParticipantVersion(
-                    study.getIdentifier(), studyParticipantVersionTableId, participantVersion);
+                    studyId, studyParticipantVersionTableId, participantVersion);
             exportParticipantVersionRowToSynapse(appId, healthCode, versionNum, studyParticipantVersionTableId,
                     participantVersionRow);
 
@@ -146,11 +151,15 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
                 String participantVersionDemographicsTableId = study.getExporter3Configuration()
                         .getParticipantVersionDemographicsTableId();
                 List<PartialRow> participantVersionDemographicsRows = participantVersionHelper
-                        .makeRowsForParticipantVersionDemographics(study.getIdentifier(),
+                        .makeRowsForParticipantVersionDemographics(studyId,
                                 participantVersionDemographicsTableId, participantVersion);
                 exportParticipantVersionDemographicsRowToSynapse(healthCode, participantVersionDemographicsTableId,
                         participantVersionDemographicsRows);
             }
+
+            // Log message for our dashboards.
+            LOG.info("Exported participant version to study-specific project: appId=" + appId + ", studyId=" +
+                    studyId + ", healthCode=" + healthCode + ", version=" + versionNum);
         }
     }
 
