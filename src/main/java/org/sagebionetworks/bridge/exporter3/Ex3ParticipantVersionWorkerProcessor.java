@@ -175,7 +175,8 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
             RowReferenceSet rowReferenceSet = synapseHelper.appendRowsToTable(rowSet, participantVersionTableId);
             if (rowReferenceSet.getRows().size() != 1) {
                 LOG.error("Expected to write 1 participant version for app " + appId + " healthCode " + healthCode +
-                        " version " + versionNum + ", instead wrote " + rowReferenceSet.getRows().size());
+                        " version " + versionNum + " to table " + participantVersionTableId + ", instead wrote " +
+                        rowReferenceSet.getRows().size());
             }
         } finally {
              LOG.info("Appending participant version healthCode=" + healthCode + ", version=" + versionNum +
@@ -202,8 +203,8 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
             }
             if (rowReferenceSet.getRows().size() != rows.size()) {
                 LOG.error("Expected to write " + rows.size() + " participant demographics for app " + appId +
-                        " healthCode " + healthCode + " version " + versionNum + ", instead wrote " +
-                        rowReferenceSet.getRows().size());
+                        " healthCode " + healthCode + " version " + versionNum + " to table " +
+                        participantVersionDemographicsTableId + ", instead wrote " + rowReferenceSet.getRows().size());
             }
         } finally {
             LOG.info("Appending participant demographics healthCode=" + healthCode + ", version=" + versionNum +
