@@ -130,14 +130,19 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
                 List<PartialRow> participantVersionDemographicsRows = participantVersionHelper
                         .makeRowsForParticipantVersionDemographics(null, participantVersionDemographicsTableId,
                                 participantVersion);
-                exportParticipantVersionDemographicsRowToSynapse(healthCode, participantVersionDemographicsTableId,
-                        participantVersionDemographicsRows);
+                exportParticipantVersionDemographicsRowToSynapse(appId, healthCode, versionNum,
+                        participantVersionDemographicsTableId, participantVersionDemographicsRows);
             }
+
+            // Log message for our dashboards.
+            LOG.info("Exported participant version to app-wide project: appId=" + appId + ", healthCode=" +
+                    healthCode + ", version=" + versionNum);
         }
         for (Study study : studiesToExport) {
+            String studyId = study.getIdentifier();
             String studyParticipantVersionTableId = study.getExporter3Configuration().getParticipantVersionTableId();
             PartialRow participantVersionRow = participantVersionHelper.makeRowForParticipantVersion(
-                    study.getIdentifier(), studyParticipantVersionTableId, participantVersion);
+                    studyId, studyParticipantVersionTableId, participantVersion);
             exportParticipantVersionRowToSynapse(appId, healthCode, versionNum, studyParticipantVersionTableId,
                     participantVersionRow);
 
@@ -146,11 +151,15 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
                 String participantVersionDemographicsTableId = study.getExporter3Configuration()
                         .getParticipantVersionDemographicsTableId();
                 List<PartialRow> participantVersionDemographicsRows = participantVersionHelper
-                        .makeRowsForParticipantVersionDemographics(study.getIdentifier(),
+                        .makeRowsForParticipantVersionDemographics(studyId,
                                 participantVersionDemographicsTableId, participantVersion);
-                exportParticipantVersionDemographicsRowToSynapse(healthCode, participantVersionDemographicsTableId,
-                        participantVersionDemographicsRows);
+                exportParticipantVersionDemographicsRowToSynapse(appId, healthCode, versionNum,
+                        participantVersionDemographicsTableId, participantVersionDemographicsRows);
             }
+
+            // Log message for our dashboards.
+            LOG.info("Exported participant version to study-specific project: appId=" + appId + ", studyId=" +
+                    studyId + ", healthCode=" + healthCode + ", version=" + versionNum);
         }
     }
 
@@ -161,30 +170,46 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
         rowSet.setRows(ImmutableList.of(row));
         rowSet.setTableId(participantVersionTableId);
 
-        RowReferenceSet rowReferenceSet = synapseHelper.appendRowsToTable(rowSet, participantVersionTableId);
-        if (rowReferenceSet.getRows().size() != 1) {
-            LOG.error("Expected to write 1 participant version for app " + appId + " healthCode " + healthCode +
-                    " version " + versionNum + ", instead wrote " + rowReferenceSet.getRows().size());
+        Stopwatch stopwatch = Stopwatch.createStarted();
+        try {
+            RowReferenceSet rowReferenceSet = synapseHelper.appendRowsToTable(rowSet, participantVersionTableId);
+            if (rowReferenceSet.getRows().size() != 1) {
+                LOG.error("Expected to write 1 participant version for app " + appId + " healthCode " + healthCode +
+                        " version " + versionNum + " to table " + participantVersionTableId + ", instead wrote " +
+                        rowReferenceSet.getRows().size());
+            }
+        } finally {
+             LOG.info("Appending participant version healthCode=" + healthCode + ", version=" + versionNum +
+                     ", tableId=" + participantVersionTableId + " took " + stopwatch.elapsed(TimeUnit.MILLISECONDS) +
+                     "ms");
         }
     }
 
     // Package-scoped for unit tests.
     // Separate method for logging
-    void exportParticipantVersionDemographicsRowToSynapse(String studyId, String participantVersionDemographicsTableId,
-            List<PartialRow> rows)
+    void exportParticipantVersionDemographicsRowToSynapse(String appId, String healthCode, int versionNum,
+            String participantVersionDemographicsTableId, List<PartialRow> rows)
             throws BridgeSynapseException, SynapseException {
         PartialRowSet rowSet = new PartialRowSet();
         rowSet.setRows(rows);
         rowSet.setTableId(participantVersionDemographicsTableId);
 
-        RowReferenceSet rowReferenceSet = synapseHelper.appendRowsToTable(rowSet,
-                participantVersionDemographicsTableId);
-        if (rowReferenceSet.getRows() == null) {
-            rowReferenceSet.setRows(ImmutableList.of());
-        }
-        if (rowReferenceSet.getRows().size() != rows.size()) {
-            LOG.error("Expected to write " + rows.size() + " participant version demographics for study " + studyId
-                    + ", instead wrote " + rowReferenceSet.getRows().size());
+        Stopwatch stopwatch = Stopwatch.createStarted();
+        try {
+            RowReferenceSet rowReferenceSet = synapseHelper.appendRowsToTable(rowSet,
+                    participantVersionDemographicsTableId);
+            if (rowReferenceSet.getRows() == null) {
+                rowReferenceSet.setRows(ImmutableList.of());
+            }
+            if (rowReferenceSet.getRows().size() != rows.size()) {
+                LOG.error("Expected to write " + rows.size() + " participant demographics for app " + appId +
+                        " healthCode " + healthCode + " version " + versionNum + " to table " +
+                        participantVersionDemographicsTableId + ", instead wrote " + rowReferenceSet.getRows().size());
+            }
+        } finally {
+            LOG.info("Appending participant demographics healthCode=" + healthCode + ", version=" + versionNum +
+                    ", tableId=" + participantVersionDemographicsTableId + " took " +
+                    stopwatch.elapsed(TimeUnit.MILLISECONDS) + "ms");
         }
     }
 }

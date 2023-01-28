@@ -252,11 +252,19 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             ExportNotificationRecordInfo recordInfo = exportToSynapse(appId, null,
                     app.getExporter3Configuration(), upload, record, metadataMap, hexMd5);
             notification.setRecord(recordInfo);
+
+            // Log message for our dashboards.
+            LOG.info("Exported upload to app-wide project: appId=" + appId + ", recordId=" + recordId);
         }
         for (Study study : studiesToExport) {
-            ExportNotificationRecordInfo recordInfo = exportToSynapse(appId, study.getIdentifier(),
+            String studyId = study.getIdentifier();
+            ExportNotificationRecordInfo recordInfo = exportToSynapse(appId, studyId,
                     study.getExporter3Configuration(), upload, record, metadataMap, hexMd5);
-            notification.putStudyRecordsItem(study.getIdentifier(), recordInfo);
+            notification.putStudyRecordsItem(studyId, recordInfo);
+
+            // Log message for our dashboards.
+            LOG.info("Exported upload to study-specific project: appId=" + appId + ", studyId=" + studyId +
+                    ", recordId=" + recordId);
         }
 
         // Mark record as exported.
