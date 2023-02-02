@@ -16,6 +16,8 @@ import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertSame;
 
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableList;
@@ -54,6 +56,9 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
     private static final Map<String, String> STUDY_MEMBERSHIPS = ImmutableMap.of("studyC", "<none>",
             "studyB", "extB", "studyA", "extA");
 
+    // We don't do anything special with thread pools. Just use a default executor.
+    private static final ExecutorService EXECUTOR_SERVICE = Executors.newCachedThreadPool();
+
     private App app;
     private ParticipantVersion participantVersion;
     private RowReferenceSet rowReferenceSet;
@@ -75,6 +80,8 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
     @BeforeMethod
     public void beforeMethod() throws Exception {
         MockitoAnnotations.initMocks(this);
+
+        processor.setSynapseExecutorService(EXECUTOR_SERVICE);
 
         // Mock shared dependencies.
         app = Exporter3TestUtil.makeAppWithEx3Config();
