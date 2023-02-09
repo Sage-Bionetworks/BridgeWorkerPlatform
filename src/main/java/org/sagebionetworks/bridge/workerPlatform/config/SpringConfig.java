@@ -261,8 +261,6 @@ public class SpringConfig {
     public SynapseHelper synapseHelper() {
         Config config = bridgeConfig();
         SynapseHelper synapseHelper = new SynapseHelper();
-        synapseHelper.setAsyncIntervalMillis(config.getInt("synapse.poll.interval.millis"));
-        synapseHelper.setAsyncTimeoutLoops(config.getInt("synapse.poll.max.tries"));
         synapseHelper.setGetColumnModelsRateLimit(
                 config.getInt("synapse.get.column.models.rate.limit.per.minute") / 60.0);
         synapseHelper.setRateLimit(config.getInt("synapse.rate.limit.per.second"));
