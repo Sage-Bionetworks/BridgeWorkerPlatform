@@ -222,7 +222,7 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
     private Future<?> exportParticipantVersionDemographicsRowToSynapse(String appId, String healthCode, int versionNum,
             String participantVersionDemographicsTableId, List<PartialRow> rows) {
         if (rows.isEmpty()) {
-            return CompletableFuture.completedFuture(null);
+            return CompletableFuture.allOf();
         }
 
         PartialRowSet rowSet = new PartialRowSet();
