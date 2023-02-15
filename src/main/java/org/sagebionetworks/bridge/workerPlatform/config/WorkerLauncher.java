@@ -1,5 +1,7 @@
 package org.sagebionetworks.bridge.workerPlatform.config;
 
+import java.util.Map;
+
 import org.sagebionetworks.bridge.heartbeat.HeartbeatLogger;
 import org.sagebionetworks.bridge.sqs.PollSqsWorker;
 import org.slf4j.Logger;
@@ -17,7 +19,7 @@ public class WorkerLauncher implements CommandLineRunner {
     private static final Logger LOG = LoggerFactory.getLogger(WorkerLauncher.class);
 
     private HeartbeatLogger heartbeatLogger;
-    private PollSqsWorker pollSqsWorkers;
+    private Map<String, PollSqsWorker> pollSqsWorkers;
 
     @Autowired
     public final void setHeartbeatLogger(HeartbeatLogger heartbeatLogger) {
@@ -25,7 +27,7 @@ public class WorkerLauncher implements CommandLineRunner {
     }
 
     @Autowired
-    public final void setPollSqsWorkers(PollSqsWorker pollSqsWorkers) {
+    public final void setPollSqsWorkers(Map<String, PollSqsWorker> pollSqsWorkers) {
         this.pollSqsWorkers = pollSqsWorkers;
     }
 
@@ -40,7 +42,9 @@ public class WorkerLauncher implements CommandLineRunner {
         LOG.info("Worker Platform Starting heartbeat...");
         new Thread(heartbeatLogger).start();
 
-        LOG.info("Worker Platform Starting poll SQS worker...");
-        new Thread(pollSqsWorkers).start();
+        for (Map.Entry<String, PollSqsWorker> entry : pollSqsWorkers.entrySet()) {
+            LOG.info("Worker Platform Starting " + entry.getKey() + "...");
+            new Thread(entry.getValue()).start();
+        }
     }
 }

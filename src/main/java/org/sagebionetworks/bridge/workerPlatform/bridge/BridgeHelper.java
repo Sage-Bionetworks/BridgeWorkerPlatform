@@ -7,6 +7,8 @@ import java.util.List;
 
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
+
+import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
@@ -258,6 +260,22 @@ public class BridgeHelper {
     public Iterator<ScheduledActivity> getTaskHistory(String appId, String userId, String taskId,
             DateTime scheduledOnStart, DateTime scheduledOnEnd) {
         return new TaskHistoryIterator(clientManager, appId, userId, taskId, scheduledOnStart, scheduledOnEnd);
+    }
+
+    /**
+     * Signals Bridge Server that the upload is completed and to begin processing the upload. Used by Upload
+     * Auto-Complete.
+     *
+     * @param uploadId
+     *         upload to mark completed and begin processing
+     */
+    public void completeUpload(String uploadId) {
+        try {
+            clientManager.getClient(ForWorkersApi.class).completeUploadSession(uploadId, null, null)
+                    .execute();
+        } catch (IOException ex) {
+            throw new BridgeSDKException("Error completing upload to Bridge: " + ex.getMessage(), ex);
+        }
     }
 
     /*
