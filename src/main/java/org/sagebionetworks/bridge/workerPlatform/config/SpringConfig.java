@@ -58,6 +58,7 @@ import org.sagebionetworks.bridge.sqs.PollSqsWorker;
 import org.sagebionetworks.bridge.sqs.SqsHelper;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.udd.worker.BridgeUddProcessor;
+import org.sagebionetworks.bridge.uploadcomplete.S3EventNotificationCallback;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.multiplexer.BridgeWorkerPlatformSqsCallback;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
@@ -226,15 +227,29 @@ public class SpringConfig {
         return sqsHelper;
     }
 
-    @Bean
+    @Bean(name = "generalSqsWorker")
     @Autowired
-    public PollSqsWorker sqsWorker(BridgeWorkerPlatformSqsCallback callback) {
+    public PollSqsWorker generalSqsWorker(BridgeWorkerPlatformSqsCallback callback) {
         Config config = bridgeConfig();
 
         PollSqsWorker sqsWorker = new PollSqsWorker();
         sqsWorker.setCallback(callback);
         sqsWorker.setExecutorService(generalExecutorService());
         sqsWorker.setQueueUrl(config.get("workerPlatform.request.sqs.queue.url"));
+        sqsWorker.setSleepTimeMillis(config.getInt("workerPlatform.request.sqs.sleep.time.millis"));
+        sqsWorker.setSqsHelper(sqsHelper());
+        return sqsWorker;
+    }
+
+    @Bean(name = "s3NotificationSqsWorker")
+    @Autowired
+    public PollSqsWorker s3NotificationSqsWorker(S3EventNotificationCallback s3NotificationCallback) {
+        Config config = bridgeConfig();
+
+        PollSqsWorker sqsWorker = new PollSqsWorker();
+        sqsWorker.setCallback(s3NotificationCallback);
+        sqsWorker.setExecutorService(generalExecutorService());
+        sqsWorker.setQueueUrl(config.get("s3.notification.sqs.queue.url"));
         sqsWorker.setSleepTimeMillis(config.getInt("workerPlatform.request.sqs.sleep.time.millis"));
         sqsWorker.setSqsHelper(sqsHelper());
         return sqsWorker;

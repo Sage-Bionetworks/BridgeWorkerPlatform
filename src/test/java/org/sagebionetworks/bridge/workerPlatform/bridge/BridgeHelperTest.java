@@ -32,6 +32,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+
+import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
@@ -631,6 +633,30 @@ public class BridgeHelperTest {
 
         verify(mockWorkerApi).getParticipantTaskHistoryForApp(eq(APP_ID), eq(USER_ID), eq(TASK_ID), eq(SCHEDULED_ON_START),
                 eq(SCHEDULED_ON_END), any(), any());
+    }
+
+    @Test
+    public void completeUpload() throws Exception {
+        // Mock call.
+        Call<UploadValidationStatus> mockCall = mock(Call.class);
+        when(mockWorkerApi.completeUploadSession(UPLOAD_ID, null, null))
+                .thenReturn(mockCall);
+
+        // Execute and verify.
+        bridgeHelper.completeUpload(UPLOAD_ID);
+        verify(mockCall).execute();
+    }
+
+    @Test(expectedExceptions = BridgeSDKException.class)
+    public void completeUpload_IOException() throws Exception {
+        // Mock call.
+        Call<UploadValidationStatus> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenThrow(IOException.class);
+        when(mockWorkerApi.completeUploadSession(UPLOAD_ID, null, null))
+                .thenReturn(mockCall);
+
+        // Execute and verify.
+        bridgeHelper.completeUpload(UPLOAD_ID);
     }
 
     @Test
