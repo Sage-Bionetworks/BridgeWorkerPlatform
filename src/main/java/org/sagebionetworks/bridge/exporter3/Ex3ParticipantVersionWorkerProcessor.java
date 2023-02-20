@@ -3,6 +3,7 @@ package org.sagebionetworks.bridge.exporter3;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -220,6 +221,10 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
     // Separate method for logging
     private Future<?> exportParticipantVersionDemographicsRowToSynapse(String appId, String healthCode, int versionNum,
             String participantVersionDemographicsTableId, List<PartialRow> rows) {
+        if (rows.isEmpty()) {
+            return CompletableFuture.allOf();
+        }
+
         PartialRowSet rowSet = new PartialRowSet();
         rowSet.setRows(rows);
         rowSet.setTableId(participantVersionDemographicsTableId);

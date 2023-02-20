@@ -191,6 +191,31 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
     }
 
     @Test
+    public void processDemographicsEmptyRows() throws Exception {
+        when(mockSynapseHelper.appendRowsToTable(any(), any())).thenReturn(rowReferenceSet);
+
+        Study studyA = Exporter3TestUtil.makeStudyWithEx3Config();
+        studyA.setIdentifier("studyA");
+        studyA.getExporter3Configuration().setParticipantVersionTableId(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY);
+        studyA.getExporter3Configuration().setParticipantVersionDemographicsTableId(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY);
+        studyA.getExporter3Configuration().setParticipantVersionDemographicsViewId(PARTICIPANT_VERSION_DEMOGRAPHICS_VIEW_ID_FOR_STUDY);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, "studyA")).thenReturn(studyA);
+
+        Study otherStudy = new Study();
+        otherStudy.setExporter3Enabled(false);
+        when(mockBridgeHelper.getStudy(eq(Exporter3TestUtil.APP_ID), not(eq("studyA")))).thenReturn(otherStudy);
+
+        when(mockParticipantVersionHelper.makeRowsForParticipantVersionDemographics(any(), any(), any())).thenReturn(ImmutableList.of());
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Validate.
+        verify(mockSynapseHelper, never()).appendRowsToTable(any(), eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP));
+        verify(mockSynapseHelper, never()).appendRowsToTable(any(), eq(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY));
+    }
+
+    @Test
     public void processForStudy() throws Exception {
         when(mockSynapseHelper.appendRowsToTable(any(), any())).thenReturn(rowReferenceSet);
 
