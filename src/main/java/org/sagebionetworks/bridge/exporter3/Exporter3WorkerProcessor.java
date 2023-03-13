@@ -263,8 +263,8 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             notification.putStudyRecordsItem(studyId, recordInfo);
 
             // Log message for our dashboards.
-            LOG.info("Exported upload to study-specific project: appId=" + appId + ", studyId=" + studyId +
-                    ", recordId=" + recordId);
+            LOG.info("Exported upload to study-specific project: appId=" + appId + ", study=" + studyId + "-" +
+                    study.getName() + ", recordId=" + recordId);
         }
 
         // Mark record as exported.
