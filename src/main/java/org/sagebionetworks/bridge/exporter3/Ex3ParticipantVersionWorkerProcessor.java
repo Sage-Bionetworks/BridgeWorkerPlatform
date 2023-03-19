@@ -183,8 +183,8 @@ public class Ex3ParticipantVersionWorkerProcessor implements ThrowingConsumer<Js
             }
 
             // Log message for our dashboards.
-            LOG.info("Exported participant version to study-specific project: appId=" + appId + ", studyId=" +
-                    studyId + ", healthCode=" + healthCode + ", version=" + versionNum);
+            LOG.info("Exported participant version to study-specific project: appId=" + appId + ", study=" + studyId +
+                    "-" + study.getName() + ", healthCode=" + healthCode + ", version=" + versionNum);
         }
 
         // Wait for all async tasks to be done.
