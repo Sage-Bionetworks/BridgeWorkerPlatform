@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.sagebionetworks.bridge.exporter3.Exporter3WorkerProcessor.METADATA_KEY_INSTANCE_GUID;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
@@ -56,7 +57,7 @@ import org.sagebionetworks.bridge.crypto.WrongEncryptionKeyException;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.App;
-import org.sagebionetworks.bridge.rest.model.ExportNotificationRecordInfo;
+import org.sagebionetworks.bridge.rest.model.ExportedRecordInfo;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
@@ -429,7 +430,7 @@ public class Exporter3WorkerProcessorTest {
         verifyS3Metadata(s3MetadataCaptor.getValue());
 
         verifySynapseExport(EXPECTED_S3_KEY);
-        verifyUpdatedRecord();
+        verifyUpdatedRecordForApp();
         verifyExportNotificationForApp();
     }
 
@@ -457,7 +458,7 @@ public class Exporter3WorkerProcessorTest {
         verifyS3Metadata(s3MetadataCaptor.getValue());
 
         verifySynapseExport(EXPECTED_S3_KEY);
-        verifyUpdatedRecord();
+        verifyUpdatedRecordForApp();
         verifyExportNotificationForApp();
     }
 
@@ -625,7 +626,7 @@ public class Exporter3WorkerProcessorTest {
         verifyS3Metadata(s3MetadataCaptor.getValue());
 
         verifySynapseExport(EXPECTED_S3_KEY_FOR_STUDY);
-        verifyUpdatedRecord();
+        verifyUpdatedRecordForStudy();
         verifyExportNotificationForStudy();
     }
 
@@ -661,7 +662,7 @@ public class Exporter3WorkerProcessorTest {
         verifyS3Metadata(s3MetadataCaptor.getValue());
 
         verifySynapseExport(EXPECTED_S3_KEY_FOR_STUDY);
-        verifyUpdatedRecord();
+        verifyUpdatedRecordForStudy();
         verifyExportNotificationForStudy();
     }
 
@@ -868,13 +869,30 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_CONTENT_TYPE), CONTENT_TYPE);
     }
 
-    private void verifyUpdatedRecord() throws Exception {
+    private void verifyUpdatedRecordForApp() throws Exception {
+        HealthDataRecordEx3 record = verifyUpdatedRecordInternal();
+
+        ExportedRecordInfo exportedRecord = record.getExportedRecord();
+        assertNotNull(exportedRecord);
+        verifyNotificationRecordInfo(exportedRecord, EXPECTED_S3_KEY);
+    }
+
+    private void verifyUpdatedRecordForStudy() throws Exception {
+        HealthDataRecordEx3 record = verifyUpdatedRecordInternal();
+
+        ExportedRecordInfo exportedRecord = record.getExportedStudyRecords().get(Exporter3TestUtil.STUDY_ID);
+        assertNotNull(exportedRecord);
+        verifyNotificationRecordInfo(exportedRecord, EXPECTED_S3_KEY_FOR_STUDY);
+    }
+
+    private HealthDataRecordEx3 verifyUpdatedRecordInternal() throws Exception {
         ArgumentCaptor<HealthDataRecordEx3> recordCaptor = ArgumentCaptor.forClass(HealthDataRecordEx3.class);
         verify(mockBridgeHelper).createOrUpdateHealthDataRecordForExporter3(eq(Exporter3TestUtil.APP_ID), recordCaptor.capture());
 
         HealthDataRecordEx3 record = recordCaptor.getValue();
         assertEquals(record.getExportedOn().getMillis(), MOCK_NOW_MILLIS);
         assertTrue(record.isExported());
+        return record;
     }
 
     private void verifyExportNotificationForApp() throws Exception {
@@ -901,7 +919,7 @@ public class Exporter3WorkerProcessorTest {
                 EXPECTED_S3_KEY_FOR_STUDY);
     }
 
-    private void verifyNotificationRecordInfo(ExportNotificationRecordInfo recordInfo, String expectedS3Key) {
+    private void verifyNotificationRecordInfo(ExportedRecordInfo recordInfo, String expectedS3Key) {
         assertEquals(recordInfo.getParentProjectId(), Exporter3TestUtil.PROJECT_ID);
         assertEquals(recordInfo.getRawFolderId(), TODAYS_FOLDER_ID);
         assertEquals(recordInfo.getFileEntityId(), EXPORTED_FILE_ENTITY_ID);
