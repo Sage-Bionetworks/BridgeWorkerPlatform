@@ -84,6 +84,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     static final String METADATA_KEY_RECORD_ID = "recordId";
     static final String METADATA_KEY_SCHEDULE_GUID = "scheduleGuid";
     static final String METADATA_KEY_UPLOADED_ON = "uploadedOn";
+    static final String METADATA_KEY_USER_AGENT = "userAgent";
     static final String METADATA_KEY_INSTANCE_GUID = "instanceGuid";
     static final String METADATA_KEY_CONTENT_TYPE = "contentType";
 
@@ -389,6 +390,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         metadataMap.put(METADATA_KEY_HEALTH_CODE, record.getHealthCode());
         metadataMap.put(METADATA_KEY_RECORD_ID, record.getId());
         metadataMap.put(METADATA_KEY_UPLOADED_ON, record.getCreatedOn().toString());
+        metadataMap.put(METADATA_KEY_USER_AGENT, record.getUserAgent());
 
         // Schedule context metadata can be added if instanceGuid has been provided.
         String instanceGuid = metadataMap.get(METADATA_KEY_INSTANCE_GUID);

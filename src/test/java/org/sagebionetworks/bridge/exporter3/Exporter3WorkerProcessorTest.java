@@ -96,6 +96,7 @@ public class Exporter3WorkerProcessorTest {
     private static final String TODAYS_DATE_STRING = "2021-08-23";
     private static final String TODAYS_FOLDER_ID = "syn7777";
     private static final String UPLOAD_BUCKET = "upload-bucket";
+    private static final String USER_AGENT = "dummy user agent";
     private static final String INSTANCE_GUID = "instanceGuid";
     private static final String ASSESSMENT_INSTANCE_GUID = "assessmentInstanceGuid";
     private static final String SESSION_GUID = "session-guid";
@@ -795,7 +796,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(s3Metadata.getContentType(), CONTENT_TYPE);
 
         Map<String, String> userMetadataMap = s3Metadata.getUserMetadata();
-        assertEquals(userMetadataMap.size(), 8);
+        assertEquals(userMetadataMap.size(), 9);
         assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO), CLIENT_INFO);
         assertEquals(DateTime.parse(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_EXPORTED_ON)).getMillis(),
                 MOCK_NOW_MILLIS);
@@ -805,6 +806,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_RECORD_ID), RECORD_ID);
         assertEquals(DateTime.parse(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_UPLOADED_ON)).getMillis(),
                 UPLOADED_ON_MILLIS);
+        assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_USER_AGENT), USER_AGENT);
         assertEquals(userMetadataMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE_CLEAN);
         assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_CONTENT_TYPE), CONTENT_TYPE);
     }
@@ -836,7 +838,7 @@ public class Exporter3WorkerProcessorTest {
         verify(mockSynapseHelper).addAnnotationsToEntity(eq(EXPORTED_FILE_ENTITY_ID), annotationMapCaptor.capture());
 
         Map<String, AnnotationsValue> annotationMap = annotationMapCaptor.getValue();
-        assertEquals(annotationMap.size(), 8);
+        assertEquals(annotationMap.size(), 9);
 
         // Verify that all annotations are of type string and have one value.
         Map<String, String> flattenedAnnotationMap = new HashMap<>();
@@ -855,7 +857,7 @@ public class Exporter3WorkerProcessorTest {
             flattenedAnnotationMap.put(name, valueString);
         }
 
-        assertEquals(flattenedAnnotationMap.size(), 8);
+        assertEquals(flattenedAnnotationMap.size(), 9);
         assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO), CLIENT_INFO);
         assertEquals(DateTime.parse(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_EXPORTED_ON)).getMillis(),
                 MOCK_NOW_MILLIS);
@@ -865,6 +867,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_RECORD_ID), RECORD_ID);
         assertEquals(DateTime.parse(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_UPLOADED_ON)).getMillis(),
                 UPLOADED_ON_MILLIS);
+        assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_USER_AGENT), USER_AGENT);
         assertEquals(flattenedAnnotationMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE_CLEAN);
         assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_CONTENT_TYPE), CONTENT_TYPE);
     }
@@ -944,11 +947,13 @@ public class Exporter3WorkerProcessorTest {
         record.setCreatedOn(UPLOADED_ON);
         record.setParticipantVersion(PARTICIPANT_VERSION);
         record.setSharingScope(SharingScope.ALL_QUALIFIED_RESEARCHERS);
+        record.setUserAgent(USER_AGENT);
 
         record.putMetadataItem(CUSTOM_METADATA_KEY, CUSTOM_METADATA_VALUE);
 
         // Add a fake client info, just to make sure Bridge overwrites/ignores this correctly.
         record.putMetadataItem(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO, "this is ignored");
+        record.putMetadataItem(Exporter3WorkerProcessor.METADATA_KEY_USER_AGENT, "this is also ignored");
 
         return record;
     }
