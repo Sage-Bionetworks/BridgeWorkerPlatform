@@ -1,19 +1,9 @@
 package org.sagebionetworks.bridge.exporter3;
 
 /** A request to export a participant version to Exporter 3.0. */
-public class Ex3ParticipantVersionRequest {
-    private String appId;
+public class Ex3ParticipantVersionRequest extends BaseParticipantVersionRequest {
     private String healthCode;
     private int participantVersion;
-
-    /** App ID of the participant version to export. */
-    public String getAppId() {
-        return appId;
-    }
-
-    public void setAppId(String appId) {
-        this.appId = appId;
-    }
 
     /** Health code of the participant version to export. */
     public String getHealthCode() {
