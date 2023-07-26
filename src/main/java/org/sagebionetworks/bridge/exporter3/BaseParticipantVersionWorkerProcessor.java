@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
 import com.google.common.util.concurrent.RateLimiter;
 import org.sagebionetworks.client.exceptions.SynapseException;
+import org.sagebionetworks.repo.model.table.AppendableRowSet;
 import org.sagebionetworks.repo.model.table.PartialRow;
 import org.sagebionetworks.repo.model.table.PartialRowSet;
 import org.sagebionetworks.repo.model.table.RowReferenceSet;
@@ -42,6 +43,11 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
         implements ThrowingConsumer<JsonNode> {
     private static final Logger LOG = LoggerFactory.getLogger(BaseParticipantVersionWorkerProcessor.class);
 
+    // Backoff plan for polling Synapse async get calls. Each element is how long in seconds we wait before making the
+    // next async get call. Default uses exponential back-off, starting at 1 second, maximum of 60 seconds.
+    // Total of 8 tries, totalling a little over 3 minutes.
+    private static final int[] ASYNC_GET_BACKOFF_PLAN = {1, 2, 4, 8, 16, 32, 60, 60 };
+
     // This is the maximum number of health codes we can process in a single request.
     private static final int MAX_PARTICIPANT_VERSIONS = 100000;
 
@@ -52,11 +58,19 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
     // Bridge Server.
     private final RateLimiter rateLimiter = RateLimiter.create(10.0);
 
+    private int[] asyncGetBackoffPlan = ASYNC_GET_BACKOFF_PLAN;
     private BridgeHelper bridgeHelper;
     private DynamoHelper dynamoHelper;
-    private ParticipantVersionHelper participantVersionHelper;
+    private ExecutorService appendTableExecutorService;
     private ExecutorService synapseExecutorService;
+    private ParticipantVersionHelper participantVersionHelper;
     private SynapseHelper synapseHelper;
+
+    // Setter for the backoff plan for unit tests.
+    public final void setAsyncGetBackoffPlan(int[] asyncGetBackoffPlan) {
+        // As per Findbugs, we need to copy the array for safety.
+        this.asyncGetBackoffPlan = asyncGetBackoffPlan.clone();
+    }
 
     protected final BridgeHelper getBridgeHelper() {
         return bridgeHelper;
@@ -72,18 +86,19 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
         this.dynamoHelper = dynamoHelper;
     }
 
-    @Autowired
-    public final void setParticipantVersionHelper(ParticipantVersionHelper participantVersionHelper) {
-        this.participantVersionHelper = participantVersionHelper;
+    @Resource(name = "appendTableExecutorService")
+    public final void setAppendTableExecutorService(ExecutorService appendTableExecutorService) {
+        this.appendTableExecutorService = appendTableExecutorService;
     }
 
-    /**
-     * Executor service (thread pool) for making asynchronous calls to Synapse. This allows us to make calls to update
-     * the participant version table and the demographics table in parallel.
-     */
     @Resource(name = "synapseExecutorService")
     public final void setSynapseExecutorService(ExecutorService synapseExecutorService) {
         this.synapseExecutorService = synapseExecutorService;
+    }
+
+    @Autowired
+    public final void setParticipantVersionHelper(ParticipantVersionHelper participantVersionHelper) {
+        this.participantVersionHelper = participantVersionHelper;
     }
 
     @Autowired
@@ -306,20 +321,24 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
             String tableId = tableIdRowEntry.getKey();
             List<PartialRow> rowList = tableIdRowEntry.getValue();
             int numRows = rowList.size();
+            if (numRows == 0) {
+                // BRIDGE-3384 No rows to write. Skip.
+                continue;
+            }
 
             PartialRowSet rowSet = new PartialRowSet();
             rowSet.setRows(rowList);
             rowSet.setTableId(tableId);
 
-            Future<?> future = synapseExecutorService.submit(() -> {
+            Future<?> future = appendTableExecutorService.submit(() -> {
                 Stopwatch stopwatch = Stopwatch.createStarted();
                 try {
-                    RowReferenceSet rowReferenceSet = synapseHelper.appendRowsToTable(rowSet, tableId);
+                    RowReferenceSet rowReferenceSet = appendRowsToTable(rowSet, tableId);
                     if (rowReferenceSet.getRows().size() != numRows) {
                         LOG.error("Expected to write " + numRows + " participant versions to table " + tableId +
                                 ", instead wrote " + rowReferenceSet.getRows().size());
                     }
-                } catch (BridgeSynapseException | SynapseException ex) {
+                } catch (BridgeSynapseException | ExecutionException | InterruptedException | SynapseException ex) {
                     LOG.error("Error writing participant versions to table " + tableId + ": " + ex.getMessage(), ex);
                     throw new RuntimeException(ex);
                 } finally {
@@ -334,5 +353,36 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
         for (Future<?> future : futureList) {
             future.get();
         }
+    }
+
+    // This needs to be outside of SynapseHelper, because we need a separate thread pool to handle idle-waiting for
+    // the async call.
+    // Package-scoped so that unit tests can mock this.
+    RowReferenceSet appendRowsToTable(AppendableRowSet rowSet, String tableId) throws BridgeSynapseException,
+            ExecutionException, InterruptedException, SynapseException {
+        String jobId = synapseHelper.appendRowsToTableStart(rowSet, tableId);
+        // Poll async get until success or timeout.
+        for (int waitTimeSeconds : asyncGetBackoffPlan) {
+            if (waitTimeSeconds > 0) {
+                try {
+                    Thread.sleep(waitTimeSeconds * 1000L);
+                } catch (InterruptedException ex) {
+                    // noop
+                }
+            }
+
+            // Poll. Use the Synapse thread pool to limit the number of concurrent requests.
+            Future<RowReferenceSet> future = synapseExecutorService.submit(() ->
+                    synapseHelper.appendRowsToTableGet(jobId, tableId));
+            RowReferenceSet response = future.get();
+            if (response != null) {
+                return response;
+            }
+
+            // Result not ready. Loop around again.
+        }
+
+        // If we make it this far, this means we timed out.
+        throw new BridgeSynapseException("Timed out appending rows to table " + tableId);
     }
 }

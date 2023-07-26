@@ -23,6 +23,7 @@ public class RedriveParticipantVersionsWorkerProcessor extends
     private static final Logger LOG = LoggerFactory.getLogger(RedriveParticipantVersionsWorkerProcessor.class);
 
     static final String CONFIG_KEY_BACKFILL_BUCKET = "backfill.bucket";
+    static final String WORKER_ID = "RedriveParticipantVersionsWorker";
 
     private String backfillBucket;
     private S3Helper s3Helper;
@@ -44,7 +45,7 @@ public class RedriveParticipantVersionsWorkerProcessor extends
 
     @Override
     protected String getWorkerId() {
-        return "RedriveParticipantVersionsWorker";
+        return WORKER_ID;
     }
 
     @Override

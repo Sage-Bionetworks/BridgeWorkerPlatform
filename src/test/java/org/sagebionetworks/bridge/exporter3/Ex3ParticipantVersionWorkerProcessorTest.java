@@ -63,7 +63,6 @@ public class Ex3ParticipantVersionWorkerProcessorTest {
     private ParticipantVersion participantVersion;
     private RowReferenceSet rowReferenceSet;
 
-
     @Mock
     private BridgeHelper mockBridgeHelper;
 

@@ -3,6 +3,7 @@ package org.sagebionetworks.bridge.exporter3;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.notNull;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -51,7 +52,11 @@ public class RedriveParticipantVersionsWorkerProcessorTest {
     private static final String HEALTH_CODE_1 = "healthCode1";
     private static final String HEALTH_CODE_2 = "healthCode2";
     private static final String PARTICIPANT_VERSION_TABLE_ID_FOR_APP = "syn11111";
-    private static final String PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY = "syn22222";
+    private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP = "syn22222";
+    private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_VIEW_ID_FOR_APP = "syn33333";
+    private static final String PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY = "syn44444";
+    private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY = "syn55555";
+    private static final String PARTICIPANT_VERSION_DEMOGRAPHICS_VIEW_ID_FOR_STUDY = "syn66666";
     private static final String S3KEY = "my-healthcode-list";
     private static final String STUDY_A = "studyA";
     private static final String STUDY_B = "studyB";
@@ -87,6 +92,10 @@ public class RedriveParticipantVersionsWorkerProcessorTest {
                 BACKFILL_BUCKET);
         processor.setConfig(mockConfig);
 
+        processor.setAsyncGetBackoffPlan(BaseParticipantVersionWorkerProcessorTest.TEST_ASYNC_BACKOFF_PLAN);
+        processor.setAppendTableExecutorService(BaseParticipantVersionWorkerProcessorTest.TEST_EXECUTOR_SERVICE);
+        processor.setSynapseExecutorService(BaseParticipantVersionWorkerProcessorTest.TEST_EXECUTOR_SERVICE);
+
         app = Exporter3TestUtil.makeAppWithEx3Config();
         app.getExporter3Configuration().setParticipantVersionTableId(PARTICIPANT_VERSION_TABLE_ID_FOR_APP);
         when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
@@ -94,7 +103,7 @@ public class RedriveParticipantVersionsWorkerProcessorTest {
         when(mockSynapseHelper.isSynapseWritable()).thenReturn(true);
 
         // Create dummy row reference set. Worker only really cares about number of rows, and only for logging.
-        when(mockSynapseHelper.appendRowsToTable(any(), any())).thenAnswer(invocation -> {
+        doAnswer(invocation -> {
             PartialRowSet partialRowSet = invocation.getArgumentAt(0, PartialRowSet.class);
             int numRows = partialRowSet.getRows().size();
 
@@ -106,7 +115,7 @@ public class RedriveParticipantVersionsWorkerProcessorTest {
             RowReferenceSet rowReferenceSet = new RowReferenceSet();
             rowReferenceSet.setRows(rowReferenceList);
             return rowReferenceSet;
-        });
+        }).when(processor).appendRowsToTable(any(), any());
     }
 
     @Test
@@ -238,29 +247,8 @@ public class RedriveParticipantVersionsWorkerProcessorTest {
 
         // Validate.
         verify(mockSynapseHelper).isSynapseWritable();
-
-        ArgumentCaptor<PartialRowSet> rowSetForAppCaptor = ArgumentCaptor.forClass(PartialRowSet.class);
-        verify(mockSynapseHelper).appendRowsToTable(rowSetForAppCaptor.capture(),
-                eq(PARTICIPANT_VERSION_TABLE_ID_FOR_APP));
-        PartialRowSet rowSetForApp = rowSetForAppCaptor.getValue();
-        assertEquals(rowSetForApp.getTableId(), PARTICIPANT_VERSION_TABLE_ID_FOR_APP);
-
-        List<PartialRow> rowListForApp = rowSetForApp.getRows();
-        assertEquals(rowListForApp.size(), 3);
-        assertSame(rowListForApp.get(0), hc2v1appRow);
-        assertSame(rowListForApp.get(1), hc2v2appRow);
-        assertSame(rowListForApp.get(2), hc2v3appRow);
-
-        ArgumentCaptor<PartialRowSet> rowSetForStudyCaptor = ArgumentCaptor.forClass(PartialRowSet.class);
-        verify(mockSynapseHelper).appendRowsToTable(rowSetForStudyCaptor.capture(),
-                eq(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY));
-        PartialRowSet rowSetForStudy = rowSetForStudyCaptor.getValue();
-        assertEquals(rowSetForStudy.getTableId(), PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY);
-
-        List<PartialRow> rowListForStudy = rowSetForStudy.getRows();
-        assertEquals(rowListForStudy.size(), 1);
-        assertSame(rowListForStudy.get(0), hc2v3studyRow);
-
+        verifyRowSet(PARTICIPANT_VERSION_TABLE_ID_FOR_APP, hc2v1appRow, hc2v2appRow, hc2v3appRow);
+        verifyRowSet(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY, hc2v3studyRow);
         verifyNoMoreInteractions(mockSynapseHelper);
 
         // Verify we only call getStudy once for each study.
@@ -298,17 +286,7 @@ public class RedriveParticipantVersionsWorkerProcessorTest {
 
         // Validate.
         verify(mockSynapseHelper).isSynapseWritable();
-
-        ArgumentCaptor<PartialRowSet> rowSetForAppCaptor = ArgumentCaptor.forClass(PartialRowSet.class);
-        verify(mockSynapseHelper).appendRowsToTable(rowSetForAppCaptor.capture(),
-                eq(PARTICIPANT_VERSION_TABLE_ID_FOR_APP));
-        PartialRowSet rowSetForApp = rowSetForAppCaptor.getValue();
-        assertEquals(rowSetForApp.getTableId(), PARTICIPANT_VERSION_TABLE_ID_FOR_APP);
-
-        List<PartialRow> rowListForApp = rowSetForApp.getRows();
-        assertEquals(rowListForApp.size(), 1);
-        assertSame(rowListForApp.get(0), row);
-
+        verifyRowSet(PARTICIPANT_VERSION_TABLE_ID_FOR_APP, row);
         verifyNoMoreInteractions(mockSynapseHelper);
     }
 
@@ -341,17 +319,7 @@ public class RedriveParticipantVersionsWorkerProcessorTest {
 
         // Validate.
         verify(mockSynapseHelper).isSynapseWritable();
-
-        ArgumentCaptor<PartialRowSet> rowSetForStudyCaptor = ArgumentCaptor.forClass(PartialRowSet.class);
-        verify(mockSynapseHelper).appendRowsToTable(rowSetForStudyCaptor.capture(),
-                eq(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY));
-        PartialRowSet rowSetForStudy = rowSetForStudyCaptor.getValue();
-        assertEquals(rowSetForStudy.getTableId(), PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY);
-
-        List<PartialRow> rowListForApp = rowSetForStudy.getRows();
-        assertEquals(rowListForApp.size(), 1);
-        assertSame(rowListForApp.get(0), row);
-
+        verifyRowSet(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY, row);
         verifyNoMoreInteractions(mockSynapseHelper);
     }
 
@@ -380,7 +348,62 @@ public class RedriveParticipantVersionsWorkerProcessorTest {
 
         // Validate.
         verify(mockParticipantVersionHelper, never()).makeRowForParticipantVersion(any(), any(), any());
-        verify(mockSynapseHelper, never()).appendRowsToTable(any(), any());
+        verify(processor, never()).appendRowsToTable(any(), any());
+    }
+
+    @Test
+    public void redriveWithDemographics() throws Exception {
+        // Set up mocks.
+        when(mockS3Helper.readS3FileAsLines(BACKFILL_BUCKET, S3KEY)).thenReturn(ImmutableList.of(HEALTH_CODE_1));
+
+        ParticipantVersion participantVersion = new ParticipantVersion();
+        participantVersion.setHealthCode(HEALTH_CODE_1);
+        participantVersion.setParticipantVersion(1);
+        participantVersion.setStudyMemberships(ImmutableMap.of(STUDY_A, EXT_ID_A));
+
+        when(mockBridgeHelper.getAllParticipantVersionsForUser(Exporter3TestUtil.APP_ID,
+                "healthcode:" + HEALTH_CODE_1)).thenReturn(ImmutableList.of(participantVersion));
+
+        app.getExporter3Configuration().setParticipantVersionTableId(PARTICIPANT_VERSION_TABLE_ID_FOR_APP);
+        app.getExporter3Configuration().setParticipantVersionDemographicsTableId(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP);
+        app.getExporter3Configuration().setParticipantVersionDemographicsViewId(PARTICIPANT_VERSION_DEMOGRAPHICS_VIEW_ID_FOR_APP);
+
+        PartialRow appParticipantRow = new PartialRow();
+        when(mockParticipantVersionHelper.makeRowForParticipantVersion(null,
+                PARTICIPANT_VERSION_TABLE_ID_FOR_APP, participantVersion)).thenReturn(appParticipantRow);
+
+        PartialRow appDemographicRow = new PartialRow();
+        when(mockParticipantVersionHelper.makeRowsForParticipantVersionDemographics(null,
+                PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP, participantVersion))
+                .thenReturn(ImmutableList.of(appDemographicRow));
+
+        Study studyA = Exporter3TestUtil.makeStudyWithEx3Config();
+        studyA.getExporter3Configuration().setParticipantVersionTableId(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY);
+        studyA.getExporter3Configuration().setParticipantVersionDemographicsTableId(
+                PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY);
+        studyA.getExporter3Configuration().setParticipantVersionDemographicsViewId(
+                PARTICIPANT_VERSION_DEMOGRAPHICS_VIEW_ID_FOR_STUDY);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, STUDY_A)).thenReturn(studyA);
+
+        PartialRow studyParticipantRow = new PartialRow();
+        when(mockParticipantVersionHelper.makeRowForParticipantVersion(STUDY_A,
+                PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY, participantVersion)).thenReturn(studyParticipantRow);
+
+        PartialRow studyDemographicRow = new PartialRow();
+        when(mockParticipantVersionHelper.makeRowsForParticipantVersionDemographics(STUDY_A,
+                PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY, participantVersion))
+                .thenReturn(ImmutableList.of(studyDemographicRow));
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // Validate.
+        verify(mockSynapseHelper).isSynapseWritable();
+        verifyRowSet(PARTICIPANT_VERSION_TABLE_ID_FOR_APP, appParticipantRow);
+        verifyRowSet(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_APP, appDemographicRow);
+        verifyRowSet(PARTICIPANT_VERSION_TABLE_ID_FOR_STUDY, studyParticipantRow);
+        verifyRowSet(PARTICIPANT_VERSION_DEMOGRAPHICS_TABLE_ID_FOR_STUDY, studyDemographicRow);
+        verifyNoMoreInteractions(mockSynapseHelper);
     }
 
     private static BackfillParticipantVersionsRequest makeRequest() {
@@ -388,5 +411,19 @@ public class RedriveParticipantVersionsWorkerProcessorTest {
         request.setAppId(Exporter3TestUtil.APP_ID);
         request.setS3Key(S3KEY);
         return request;
+    }
+
+    private void verifyRowSet(String tableId, PartialRow... expectedRows) throws Exception {
+        ArgumentCaptor<PartialRowSet> rowSetCaptor = ArgumentCaptor.forClass(PartialRowSet.class);
+        verify(processor).appendRowsToTable(rowSetCaptor.capture(),
+                eq(tableId));
+        PartialRowSet rowSet = rowSetCaptor.getValue();
+        assertEquals(rowSet.getTableId(), tableId);
+
+        List<PartialRow> rowList = rowSet.getRows();
+        assertEquals(rowList.size(), expectedRows.length);
+        for (int i = 0; i < expectedRows.length; i++) {
+            assertSame(rowList.get(i), expectedRows[i]);
+        }
     }
 }
