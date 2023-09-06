@@ -1,9 +1,11 @@
 package org.sagebionetworks.bridge.exporter3;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import com.google.common.util.concurrent.RateLimiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +26,10 @@ public class RedriveParticipantVersionsWorkerProcessor extends
 
     static final String CONFIG_KEY_BACKFILL_BUCKET = "backfill.bucket";
     static final String WORKER_ID = "RedriveParticipantVersionsWorker";
+
+    // Rate limiter. We accept this many health codes per second. Bridge Server handles slightly less than 10 requests
+    // per second at peak, so we don't want to go too much higher than this.
+    private final RateLimiter rateLimiter = RateLimiter.create(10.0);
 
     private String backfillBucket;
     private S3Helper s3Helper;
@@ -69,70 +75,20 @@ public class RedriveParticipantVersionsWorkerProcessor extends
         // Get list of health codes from S3.
         List<String> healthCodeList = s3Helper.readS3FileAsLines(backfillBucket, s3Key);
         LOG.info("Found " + healthCodeList.size() + " health codes for app " + appId + " s3 key " + s3Key);
-        return new RedriveParticipantVersionIterator(appId, healthCodeList);
-    }
 
-    private class RedriveParticipantVersionIterator implements Iterator<ParticipantVersion> {
-        private final String appId;
-        private final List<String> healthCodeList;
-
-        private int healthCodeIndex = 0;
-        private int participantVersionIndex = 0;
-        private List<ParticipantVersion> participantVersionList;
-
-        public RedriveParticipantVersionIterator(String appId, List<String> healthCodeList) throws IOException {
-            this.appId = appId;
-            this.healthCodeList = healthCodeList;
-
-            // Initialize the first health code's participant versions.
-            getNextParticipantVersionList();
-        }
-
-        @Override
-        public boolean hasNext() {
-            if (participantVersionIndex < participantVersionList.size()) {
-                // If the current list has more participant versions, return true.
-                return true;
-            } else if (healthCodeIndex < healthCodeList.size()) {
-                try {
-                    // Fetch the next health code's participant version list.
-                    getNextParticipantVersionList();
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
-                }
-
-                // Note that the remaining health codes might have no participant versions, so check healthCodeIndex
-                // again.
-                return healthCodeIndex < healthCodeList.size();
-            } else {
-                return false;
+        // For simplicity and for robustness, load all participant versions.
+        List<ParticipantVersion> participantVersionList = new ArrayList<>();
+        for (String healthCode : healthCodeList) {
+            rateLimiter.acquire();
+            try {
+                List<ParticipantVersion> userParticipantVersionList = getBridgeHelper()
+                        .getAllParticipantVersionsForUser(appId, "healthcode:" + healthCode);
+                participantVersionList.addAll(userParticipantVersionList);
+            } catch (Exception ex) {
+                LOG.error("Error getting participant versions for app " + appId + " health code " + healthCode, ex);
             }
         }
 
-        @Override
-        public ParticipantVersion next() {
-            // This will only ever be called if hasNext() returned true, which means we have a next participant
-            // version.
-            ParticipantVersion next = participantVersionList.get(participantVersionIndex);
-            participantVersionIndex++;
-            return next;
-        }
-
-        private void getNextParticipantVersionList() throws IOException {
-            do {
-                if (healthCodeIndex >= healthCodeList.size()) {
-                    // No more health codes.
-                    break;
-                }
-
-                String nextHealthCode = healthCodeList.get(healthCodeIndex);
-                healthCodeIndex++;
-                participantVersionList = getBridgeHelper().getAllParticipantVersionsForUser(appId,
-                        "healthcode:" + nextHealthCode);
-                participantVersionIndex = 0;
-
-                // The list can be empty. In that case, just loop around to the next health code.
-            } while (participantVersionList.isEmpty());
-        }
+        return participantVersionList.iterator();
     }
 }

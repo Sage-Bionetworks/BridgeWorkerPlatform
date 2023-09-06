@@ -1,7 +1,7 @@
 package org.sagebionetworks.bridge.exporter3;
 
 /** Base class of BatchExport, Redrive, and Ex3 Participant Version Requests. */
-public abstract class BaseParticipantVersionRequest {
+public class BaseParticipantVersionRequest {
     private String appId;
 
     /** App ID of the participant version to export. */

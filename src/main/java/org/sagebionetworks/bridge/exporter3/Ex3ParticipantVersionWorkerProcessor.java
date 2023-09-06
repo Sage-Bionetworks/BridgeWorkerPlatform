@@ -16,6 +16,8 @@ public class Ex3ParticipantVersionWorkerProcessor
         extends BaseParticipantVersionWorkerProcessor<Ex3ParticipantVersionRequest> {
     private static final Logger LOG = LoggerFactory.getLogger(Ex3ParticipantVersionWorkerProcessor.class);
 
+    static final String WORKER_ID = "Ex3ParticipantVersionWorker";
+
     @Override
     protected Class<Ex3ParticipantVersionRequest> getWorkerRequestClass() {
         return Ex3ParticipantVersionRequest.class;
@@ -23,7 +25,7 @@ public class Ex3ParticipantVersionWorkerProcessor
 
     @Override
     protected String getWorkerId() {
-        return "Ex3ParticipantVersionWorker";
+        return WORKER_ID;
     }
 
     @Override

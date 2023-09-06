@@ -18,6 +18,8 @@ public class BatchExportParticipantVersionWorkerProcessor
         extends BaseParticipantVersionWorkerProcessor<BatchExportParticipantVersionRequest> {
     private static final Logger LOG = LoggerFactory.getLogger(BatchExportParticipantVersionWorkerProcessor.class);
 
+    static final String WORKER_ID = "BatchExportParticipantVersionWorker";
+
     @Override
     protected Class<BatchExportParticipantVersionRequest> getWorkerRequestClass() {
         return BatchExportParticipantVersionRequest.class;
@@ -25,7 +27,7 @@ public class BatchExportParticipantVersionWorkerProcessor
 
     @Override
     protected String getWorkerId() {
-        return "BatchExportParticipantVersionWorker";
+        return WORKER_ID;
     }
 
     @Override
@@ -67,7 +69,7 @@ public class BatchExportParticipantVersionWorkerProcessor
         public ParticipantVersion next() {
             BatchExportParticipantVersionRequest.ParticipantVersionIdentifier identifier = identifierIterator.next();
             try {
-                return getBridgeHelper().getParticipantVersion(appId, "healthCode:" + identifier.getHealthCode(),
+                return getBridgeHelper().getParticipantVersion(appId, "healthcode:" + identifier.getHealthCode(),
                         identifier.getParticipantVersion());
             } catch (IOException ex) {
                 throw new RuntimeException(ex);

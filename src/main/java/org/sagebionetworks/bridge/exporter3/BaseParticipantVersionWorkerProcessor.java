@@ -43,6 +43,60 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
         implements ThrowingConsumer<JsonNode> {
     private static final Logger LOG = LoggerFactory.getLogger(BaseParticipantVersionWorkerProcessor.class);
 
+    // Helper class that encapsulates relevant study info for exporter.
+    private static class StudyInfo {
+        private String name;
+        private boolean exportEnabled;
+        private String participantVersionTableId;
+        private boolean demographicsExportEnabled;
+        private String demographicsTableId;
+
+        // Study name.
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        // True if Exporter 3.0 is enabled for this study.
+        public boolean isExportEnabled() {
+            return exportEnabled;
+        }
+
+        public void setExportEnabled(boolean exportEnabled) {
+            this.exportEnabled = exportEnabled;
+        }
+
+        // Synapse table ID to export participant versions.
+        public String getParticipantVersionTableId() {
+            return participantVersionTableId;
+        }
+
+        public void setParticipantVersionTableId(String participantVersionTableId) {
+            this.participantVersionTableId = participantVersionTableId;
+        }
+
+        // True if demographics export is enabled for this study.
+        public boolean isDemographicsExportEnabled() {
+            return demographicsExportEnabled;
+        }
+
+        public void setDemographicsExportEnabled(boolean demographicsExportEnabled) {
+            this.demographicsExportEnabled = demographicsExportEnabled;
+        }
+
+        // Synapse table ID to export demographics.
+        public String getDemographicsTableId() {
+            return demographicsTableId;
+        }
+
+        public void setDemographicsTableId(String demographicsTableId) {
+            this.demographicsTableId = demographicsTableId;
+        }
+    }
+
     // Backoff plan for polling Synapse async get calls. Each element is how long in seconds we wait before making the
     // next async get call. Default uses exponential back-off, starting at 1 second, maximum of 60 seconds.
     // Total of 8 tries, totalling a little over 3 minutes.
@@ -171,11 +225,7 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
         logStartMessage(request);
 
         // Export participant versions in a loop.
-        Map<String, String> studyIdToName = new HashMap<>();
-        Map<String, Boolean> studyIdToExportEnabled = new HashMap<>();
-        Map<String, String> studyIdToParticipantVersionTableId = new HashMap<>();
-        Map<String, Boolean> studyIdToDemographicsExportEnabled = new HashMap<>();
-        Map<String, String> studyIdToDemographicsTableId = new HashMap<>();
+        Map<String, StudyInfo> studiesById = new HashMap<>();
         Map<String, List<PartialRow>> tableIdToRows = new HashMap<>();
         int numParticipantVersions = 0;
         Stopwatch stopwatch = Stopwatch.createStarted();
@@ -189,9 +239,7 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
                 ParticipantVersion participantVersion = participantVersionIterator.next();
                 try {
                     processParticipantVersion(appId, participantVersion, exportForApp, appParticipantVersionTableId,
-                            exportDemographicsForApp, appDemographicsTableId, studyIdToName, studyIdToExportEnabled,
-                            studyIdToParticipantVersionTableId, studyIdToDemographicsExportEnabled,
-                            studyIdToDemographicsTableId, tableIdToRows);
+                            exportDemographicsForApp, appDemographicsTableId, studiesById, tableIdToRows);
                 } catch (Exception ex) {
                     LOG.error("Error exporting participant version for app " + appId + " health code " +
                             participantVersion.getHealthCode() + " version number " +
@@ -224,10 +272,7 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
 
     private void processParticipantVersion(String appId, ParticipantVersion participantVersion, boolean exportForApp,
             String appParticipantVersionTableId, boolean exportDemographicsForApp, String appDemographicsTableId,
-            Map<String, String> studyIdToName, Map<String, Boolean> studyIdToExportEnabled,
-            Map<String, String> studyIdToParticipantVersionTableId,
-            Map<String, Boolean> studyIdToDemographicsExportEnabled, Map<String, String> studyIdToDemographicsTableId,
-            Map<String, List<PartialRow>> tableIdToRows)
+            Map<String, StudyInfo> studiesById, Map<String, List<PartialRow>> tableIdToRows)
             throws IOException, SynapseException {
         String healthCode = participantVersion.getHealthCode();
         int versionNum = participantVersion.getParticipantVersion();
@@ -236,31 +281,23 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
         List<String> studyIdsToExport = new ArrayList<>();
         if (participantVersion.getStudyMemberships() != null) {
             for (String studyId : participantVersion.getStudyMemberships().keySet()) {
-                Boolean studyExportEnabled = studyIdToExportEnabled.get(studyId);
-                if (studyExportEnabled == null) {
-                    // Study not in our cache. Fetch the study from Bridge.
+                StudyInfo studyInfo = studiesById.get(studyId);
+                if (studyInfo == null) {
+                    // Study not in our cache. Fetch the study from Bridge and add it to our cache.
                     Study study = bridgeHelper.getStudy(appId, studyId);
-                    studyExportEnabled = BridgeUtils.isExporter3Configured(study);
-                    studyIdToExportEnabled.put(studyId, studyExportEnabled);
-                    if (studyExportEnabled) {
-                        String studyName = study.getName();
-                        studyIdToName.put(studyId, studyName);
-                        String studyParticipantVersionTableId = study.getExporter3Configuration()
-                                .getParticipantVersionTableId();
-                        studyIdToParticipantVersionTableId.put(studyId, studyParticipantVersionTableId);
-
-                        boolean studyDemographicsExportEnabled = BridgeUtils.isExporter3ConfiguredForDemographics(
-                                study);
-                        studyIdToDemographicsExportEnabled.put(studyId, studyDemographicsExportEnabled);
-                        if (studyDemographicsExportEnabled) {
-                            String studyDemographicsTableId = study.getExporter3Configuration()
-                                    .getParticipantVersionDemographicsTableId();
-                            studyIdToDemographicsTableId.put(studyId, studyDemographicsTableId);
-                        }
-                    }
+                    studyInfo = new StudyInfo();
+                    studyInfo.setName(study.getName());
+                    studyInfo.setExportEnabled(BridgeUtils.isExporter3Configured(study));
+                    studyInfo.setParticipantVersionTableId(study.getExporter3Configuration()
+                            .getParticipantVersionTableId());
+                    studyInfo.setDemographicsExportEnabled(BridgeUtils.isExporter3ConfiguredForDemographics(study));
+                    studyInfo.setDemographicsTableId(study.getExporter3Configuration()
+                            .getParticipantVersionDemographicsTableId());
+                    studiesById.put(studyId, studyInfo);
                 }
 
-                if (studyExportEnabled) {
+                // If study is configured for export, add it to the list of studies to export.
+                if (studyInfo.isExportEnabled()) {
                     studyIdsToExport.add(studyId);
                 }
             }
@@ -288,7 +325,8 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
                     healthCode + ", version=" + versionNum);
         }
         for (String studyId : studyIdsToExport) {
-            String studyParticipantVersionTableId = studyIdToParticipantVersionTableId.get(studyId);
+            StudyInfo studyInfo = studiesById.get(studyId);
+            String studyParticipantVersionTableId = studyInfo.getParticipantVersionTableId();
             PartialRow row = participantVersionHelper.makeRowForParticipantVersion(studyId,
                     studyParticipantVersionTableId, participantVersion);
             List<PartialRow> rowList = tableIdToRows.computeIfAbsent(studyParticipantVersionTableId,
@@ -296,9 +334,9 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
             rowList.add(row);
 
             // Don't export if demographics table/view is not yet set up.
-            Boolean studyDemographicsExportEnabled = studyIdToDemographicsExportEnabled.get(studyId);
-            if (Boolean.TRUE.equals(studyDemographicsExportEnabled)) {
-                String studyDemographicsTableId = studyIdToDemographicsTableId.get(studyId);
+            boolean studyDemographicsExportEnabled = studyInfo.isDemographicsExportEnabled();
+            if (studyDemographicsExportEnabled) {
+                String studyDemographicsTableId = studyInfo.getDemographicsTableId();
                 List<PartialRow> participantVersionDemographicsRows = participantVersionHelper
                         .makeRowsForParticipantVersionDemographics(studyId, studyDemographicsTableId,
                                 participantVersion);
@@ -309,7 +347,7 @@ public abstract class BaseParticipantVersionWorkerProcessor<T extends BasePartic
 
             // Log message for our dashboards.
             LOG.info("Exported participant version to study-specific project: appId=" + appId + ", study=" + studyId +
-                    "-" + studyIdToName.get(studyId) + ", healthCode=" + healthCode + ", version=" + versionNum);
+                    "-" + studyInfo.getName() + ", healthCode=" + healthCode + ", version=" + versionNum);
         }
     }
 
