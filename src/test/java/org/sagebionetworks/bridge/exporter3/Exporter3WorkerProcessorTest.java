@@ -796,7 +796,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(s3Metadata.getContentType(), CONTENT_TYPE);
 
         Map<String, String> userMetadataMap = s3Metadata.getUserMetadata();
-        assertEquals(userMetadataMap.size(), 9);
+        assertEquals(userMetadataMap.size(), 10);
         assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO), CLIENT_INFO);
         assertEquals(DateTime.parse(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_EXPORTED_ON)).getMillis(),
                 MOCK_NOW_MILLIS);
@@ -809,6 +809,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_USER_AGENT), USER_AGENT);
         assertEquals(userMetadataMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE_CLEAN);
         assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_CONTENT_TYPE), CONTENT_TYPE);
+        assertEquals(userMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_APP_ID), Exporter3TestUtil.APP_ID);
     }
 
     private void verifySynapseExport(String expectedS3Key) throws Exception {
@@ -838,7 +839,7 @@ public class Exporter3WorkerProcessorTest {
         verify(mockSynapseHelper).addAnnotationsToEntity(eq(EXPORTED_FILE_ENTITY_ID), annotationMapCaptor.capture());
 
         Map<String, AnnotationsValue> annotationMap = annotationMapCaptor.getValue();
-        assertEquals(annotationMap.size(), 9);
+        assertEquals(annotationMap.size(), 10);
 
         // Verify that all annotations are of type string and have one value.
         Map<String, String> flattenedAnnotationMap = new HashMap<>();
@@ -857,7 +858,7 @@ public class Exporter3WorkerProcessorTest {
             flattenedAnnotationMap.put(name, valueString);
         }
 
-        assertEquals(flattenedAnnotationMap.size(), 9);
+        assertEquals(flattenedAnnotationMap.size(), 10);
         assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO), CLIENT_INFO);
         assertEquals(DateTime.parse(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_EXPORTED_ON)).getMillis(),
                 MOCK_NOW_MILLIS);
@@ -870,6 +871,7 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_USER_AGENT), USER_AGENT);
         assertEquals(flattenedAnnotationMap.get(CUSTOM_METADATA_KEY_SANITIZED), CUSTOM_METADATA_VALUE_CLEAN);
         assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_CONTENT_TYPE), CONTENT_TYPE);
+        assertEquals(flattenedAnnotationMap.get(Exporter3WorkerProcessor.METADATA_KEY_APP_ID), Exporter3TestUtil.APP_ID);
     }
 
     private void verifyUpdatedRecordForApp() throws Exception {
