@@ -8,8 +8,15 @@ import java.util.List;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 
+import org.sagebionetworks.bridge.rest.api.AssessmentsApi;
+import org.sagebionetworks.bridge.rest.api.SharedAssessmentsApi;
+import org.sagebionetworks.bridge.rest.api.StudiesApi;
+import org.sagebionetworks.bridge.rest.api.UploadsApi;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
+import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
+import org.sagebionetworks.bridge.rest.model.Assessment;
+import org.sagebionetworks.bridge.rest.model.AssessmentConfig;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
@@ -31,6 +38,7 @@ import org.sagebionetworks.bridge.rest.model.SmsTemplate;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.UploadList;
+import org.sagebionetworks.bridge.rest.model.UploadTableRow;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 import org.sagebionetworks.bridge.rest.ClientManager;
@@ -375,6 +383,30 @@ public class BridgeHelper {
     public TimelineMetadata getTimelineMetadata(String appId, String instanceGuid) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getTimelineMetadata(appId, instanceGuid)
                 .execute().body();
+    }
+
+    public Assessment getAssessment(String appID, String assessmentGuid) throws IOException {
+        try {
+            return clientManager.getClient(AssessmentsApi.class).getAssessmentByGuidForWorker(appID, assessmentGuid)
+                    .execute().body();
+        } catch (EntityNotFoundException e) {
+            return clientManager.getClient(SharedAssessmentsApi.class).getSharedAssessmentByGUID(assessmentGuid)
+                    .execute().body();
+        }
+    }
+
+    public AssessmentConfig getAssessmentConfig(String appID, String assessmentGuid) throws IOException {
+        try {
+            return clientManager.getClient(AssessmentsApi.class).getAssessmentConfigForWorker(appID, assessmentGuid)
+                    .execute().body();
+        } catch (EntityNotFoundException e) {
+            return clientManager.getClient(SharedAssessmentsApi.class).getSharedAssessmentConfig(assessmentGuid)
+                    .execute().body();
+        }
+    }
+
+    public void saveUploadTableRow(String appId, String studyId, UploadTableRow tableRow) throws IOException {
+        clientManager.getClient(UploadsApi.class).saveUploadTableRowForWorker(appId, studyId, tableRow).execute();
     }
 
     private List<StudyParticipant> getStudyParticipantsFromAccountSummaries(List<AccountSummary> accountSummaries) throws IOException, InterruptedException {

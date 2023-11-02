@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateEncodingException;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -21,15 +22,20 @@ import java.util.regex.Pattern;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
+import com.google.common.base.Strings;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.UncheckedExecutionException;
+import net.lingala.zip4j.ZipFile;
+import net.lingala.zip4j.exception.ZipException;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.io.IOUtils;
 import org.bouncycastle.cms.CMSException;
+import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.jsoup.Jsoup;
 import org.jsoup.safety.Safelist;
@@ -47,18 +53,24 @@ import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.crypto.CmsEncryptor;
 import org.sagebionetworks.bridge.crypto.WrongEncryptionKeyException;
 import org.sagebionetworks.bridge.exceptions.BridgeSynapseException;
+import org.sagebionetworks.bridge.exporter3.results.AssessmentSummarizer;
+import org.sagebionetworks.bridge.exporter3.results.AssessmentSummarizerProvider;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.App;
+import org.sagebionetworks.bridge.rest.model.Assessment;
+import org.sagebionetworks.bridge.rest.model.AssessmentConfig;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.ExportedRecordInfo;
 import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
+import org.sagebionetworks.bridge.rest.model.HealthDataRecord;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
 import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.Upload;
+import org.sagebionetworks.bridge.rest.model.UploadTableRow;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerRetryableException;
@@ -258,6 +270,15 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             // Log message for our dashboards.
             LOG.info("Exported upload to app-wide project: appId=" + appId + ", recordId=" + recordId);
         }
+
+        //Generate TableRow for csv file
+        UploadTableRow tableRow = null;
+        try {
+            tableRow = getUploadTableRow(upload, record, recordId, metadataMap);
+        } catch (Exception exception) {
+            LOG.error("Error getting UploadTableRow for upload", exception);
+        }
+
         for (Study study : studiesToExport) {
             String studyId = study.getIdentifier();
             ExportedRecordInfo recordInfo = exportToSynapse(appId, studyId,
@@ -268,6 +289,11 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             // Log message for our dashboards.
             LOG.info("Exported upload to study-specific project: appId=" + appId + ", study=" + studyId + "-" +
                     study.getName() + ", recordId=" + recordId);
+
+            // Save result table row to each study
+            if (tableRow != null) {
+                bridgeHelper.saveUploadTableRow(appId, studyId, tableRow);
+            }
         }
 
         // Mark record as exported.
@@ -528,6 +554,89 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         return builder.toString();
     }
 
+    UploadTableRow getUploadTableRow(Upload upload, HealthDataRecordEx3 record, String recordId, Map<String, String> metadataMap )
+            throws IOException {
+        UploadTableRow tableRow = null;
+        String instanceGuid = metadataMap.get(METADATA_KEY_INSTANCE_GUID);
+        String assessmentGuid = metadataMap.get("assessmentGuid");
+        String appID = record.getAppId();
+
+        if (instanceGuid != null) {
+            tableRow = new UploadTableRow();
+            tableRow.setAssessmentGuid(metadataMap.get("assessmentGuid"));
+            String startedOn = metadataMap.get("startedOn");
+            DateTime createdOn = upload.getRequestedOn();
+            if (!Strings.isNullOrEmpty(startedOn)) {
+                createdOn = DateTime.parse(metadataMap.get("startedOn"));
+            }
+            tableRow.setCreatedOn(createdOn);
+            tableRow.setRecordId(recordId);
+            tableRow.setHealthCode(record.getHealthCode());
+            tableRow.setParticipantVersion(record.getParticipantVersion());
+            Map<String, String> metaData = new HashMap<>();
+            metaData.put("clientInfo", record.getClientInfo());
+            String[] metadataKeys = new String[] {
+                    "sessionGuid", "sessionStartEventId", "sessionStartEventTimestamp", "sessionStartEventTimestamp",
+                    "startedOn", "finishedOn", "declined", "sessionName"
+            };
+            for (String key: metadataKeys) {
+                String value = metadataMap.get(key);
+                if (value != null) {
+                    metaData.put(key, value);
+                }
+            }
+            tableRow.setMetadata(metaData);
+
+            boolean isTestData = false;
+            HealthDataRecord healthData = upload.getHealthData();
+            if (healthData != null) {
+                isTestData = healthData.getUserDataGroups().contains("test_user");
+                metaData.put("externalId", healthData.getUserExternalId());
+                metaData.put("dataGroups", String.join(",", healthData.getUserDataGroups()));
+            }
+            tableRow.setTestData(isTestData);
+
+            Assessment assessment = bridgeHelper.getAssessment(appID, assessmentGuid);
+            AssessmentConfig assessmentConfig = bridgeHelper.getAssessmentConfig(appID, assessmentGuid);
+            AssessmentSummarizerProvider summarizerProvider = new AssessmentSummarizerProvider();
+            AssessmentSummarizer summarizer = summarizerProvider.getSummarizer(assessment, assessmentConfig);
+            if (summarizer != null) {
+                File tempDir = null;
+                try {
+                    tempDir = fileHelper.createTempDir();
+                    File downloadedFile = fileHelper.newFile(tempDir, upload.getUploadId());
+                    s3Helper.downloadS3File(rawHealthDataBucket, upload.getUploadId(), downloadedFile);
+
+                    File resultFile = extractFileFromZip(tempDir, downloadedFile, summarizer.getResultFilename());
+                    if (resultFile != null && resultFile.exists()) {
+                        String resultString = IOUtils.toString(fileHelper.getInputStream(resultFile),
+                                StandardCharsets.UTF_8);
+                        Map<String, String> data = summarizer.summarizeResults(resultString);
+                        tableRow.setData(data);
+
+                        // TODO: Load jsonSchema from metadata.json file and validate against schema -nbrown 11/2/23
+                        //File metadataJsonFile = extractFileFromZip(tempDir, downloadedFile, "metadata.json");
+                    } else {
+                        // TODO: Do we want more logging? -nbrown 11/2/23
+                        LOG.warn("Unable to load result file");
+                    }
+
+                } finally {
+                    // Delete temp directory used for unzipping archive
+                    try {
+                        if (tempDir != null) {
+                            fileHelper.deleteDirRecursively(tempDir);
+                        }
+                    } catch (IOException ex) {
+                        LOG.warn("Error deleting temp directory", ex);
+                    }
+                }
+
+            }
+        }
+        return tableRow;
+    }
+
     private String getFilenameForUpload(Upload upload) {
         return upload.getUploadId() + '-' + upload.getFilename();
     }
@@ -545,4 +654,20 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     InputStream getBufferedInputStream(InputStream inputStream) {
         return new BufferedInputStream(inputStream);
     }
+
+
+    protected File extractFileFromZip(java.io.File directory, java.io.File zipFile, String fileName) {
+        try {
+            ZipFile zFile = new ZipFile(zipFile);
+            zFile.extractFile(fileName, directory.getPath());
+            return fileHelper.newFile(directory, fileName);
+        } catch (ZipException e) {
+            LOG.error("Error extracting file from zip", e);
+        }
+        return null;
+    }
+
+
+
+
 }
