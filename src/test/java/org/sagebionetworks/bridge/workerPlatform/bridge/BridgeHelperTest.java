@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
@@ -34,7 +35,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
+import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
+import org.sagebionetworks.bridge.rest.model.Assessment;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
@@ -69,6 +72,9 @@ import org.sagebionetworks.bridge.rest.model.SmsTemplate;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.UploadList;
+import org.sagebionetworks.bridge.rest.model.UploadTableRow;
+import org.sagebionetworks.bridge.rest.model.UploadTableRowList;
+import org.sagebionetworks.bridge.rest.model.UploadTableRowQuery;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 import org.sagebionetworks.bridge.rest.ClientManager;
@@ -85,6 +91,7 @@ import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTimeoutExceptio
 public class BridgeHelperTest {
     private static final String INSTANCE_GUID = "instanceGuid";
     private static final String ACCESS_TOKEN = "test-token";
+    private static final String ASSESSMENT_GUID = "test-assessment-guid";
     private static final LocalDate START_DATE = LocalDate.parse("2018-10-31");
     private static final LocalDate END_DATE = LocalDate.parse("2018-11-01");
     private static final DateTime START_DATETIME = DateTime.parse("2019-09-30T08:33:44.914-0700");
@@ -256,6 +263,39 @@ public class BridgeHelperTest {
         assertEquals(outputList.get(0), activityEvent);
 
         verify(mockWorkerApi).getActivityEventsForParticipantAndApp(APP_ID, USER_ID);
+    }
+
+    @Test
+    public void getAssessmentByGuid_LocalAssessment() throws Exception {
+        // Set up mocks.
+        Assessment assessment = new Assessment();
+        Call<Assessment> mockCall = mockCallForValue(assessment);
+        when(mockWorkerApi.getAssessmentByGuidForWorker(APP_ID, ASSESSMENT_GUID)).thenReturn(mockCall);
+
+        // Execute and validate.
+        Assessment result = bridgeHelper.getAssessmentByGuid(APP_ID, ASSESSMENT_GUID);
+        assertSame(result, assessment);
+
+        verify(mockWorkerApi).getAssessmentByGuidForWorker(APP_ID, ASSESSMENT_GUID);
+        verifyNoMoreInteractions(mockWorkerApi);
+    }
+
+    @Test
+    public void getAssessmentByGuid_SharedAssessment() throws Exception {
+        // Set up mocks.
+        when(mockWorkerApi.getAssessmentByGuidForWorker(any(), any())).thenThrow(EntityNotFoundException.class);
+
+        Assessment assessment = new Assessment();
+        Call<Assessment> mockCall = mockCallForValue(assessment);
+        when(mockWorkerApi.getSharedAssessmentByGUID(ASSESSMENT_GUID)).thenReturn(mockCall);
+
+        // Execute and validate.
+        Assessment result = bridgeHelper.getAssessmentByGuid(APP_ID, ASSESSMENT_GUID);
+        assertSame(result, assessment);
+
+        verify(mockWorkerApi).getAssessmentByGuidForWorker(APP_ID, ASSESSMENT_GUID);
+        verify(mockWorkerApi).getSharedAssessmentByGUID(ASSESSMENT_GUID);
+        verifyNoMoreInteractions(mockWorkerApi);
     }
 
     @Test
@@ -465,6 +505,20 @@ public class BridgeHelperTest {
         assertSame(result, participantVersionList);
 
         verify(mockWorkerApi).getAllParticipantVersionsForUser(APP_ID, USER_ID);
+    }
+
+    @Test
+    public void getLatestParticipantVersion() throws Exception {
+        // Set up mocks.
+        ParticipantVersion participantVersion = new ParticipantVersion();
+        Call<ParticipantVersion> mockCall = mockCallForValue(participantVersion);
+        when(mockWorkerApi.getLatestParticipantVersion(APP_ID, USER_ID)).thenReturn(mockCall);
+
+        // Execute and validate.
+        ParticipantVersion result = bridgeHelper.getLatestParticipantVersion(APP_ID, USER_ID);
+        assertSame(result, participantVersion);
+
+        verify(mockWorkerApi).getLatestParticipantVersion(APP_ID, USER_ID);
     }
 
     @Test
@@ -934,7 +988,25 @@ public class BridgeHelperTest {
 
         verify(mockWorkerApi).getUploadByRecordId(RECORD_ID);
     }
-    
+
+    @Test
+    public void queryUploadTableRows() throws Exception {
+        // Set up mocks.
+        UploadTableRowQuery query = new UploadTableRowQuery();
+
+        List<UploadTableRow> uploadTableRowList = new ArrayList<>();
+        UploadTableRowList mockList = mock(UploadTableRowList.class);
+        when(mockList.getItems()).thenReturn(uploadTableRowList);
+        Call<UploadTableRowList> mockCall = mockCallForValue(mockList);
+        when(mockWorkerApi.queryUploadTableRowsForWorker(eq(APP_ID), eq(STUDY_ID), same(query))).thenReturn(mockCall);
+
+        // Execute and validate.
+        List<UploadTableRow> result = bridgeHelper.queryUploadTableRows(APP_ID, STUDY_ID, query);
+        assertSame(result, uploadTableRowList);
+
+        verify(mockWorkerApi).queryUploadTableRowsForWorker(eq(APP_ID), eq(STUDY_ID), same(query));
+    }
+
     @Test
     public void getTimelineMetadata() throws IOException {
         TimelineMetadata metadata = new TimelineMetadata();

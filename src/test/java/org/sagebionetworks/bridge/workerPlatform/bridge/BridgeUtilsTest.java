@@ -1,5 +1,6 @@
 package org.sagebionetworks.bridge.workerPlatform.bridge;
 
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
@@ -10,6 +11,39 @@ import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
 import org.sagebionetworks.bridge.rest.model.Study;
 
 public class BridgeUtilsTest {
+    @Test
+    public void cleanupString() {
+        // Test alphanumeric.
+        String input = "abc123";
+        String output = BridgeUtils.cleanupString(input);
+        assertEquals(input, output);
+
+        // Test dash.
+        input = "abc-123";
+        output = BridgeUtils.cleanupString(input);
+        assertEquals(input, output);
+
+        // Test underscore.
+        input = "abc_123";
+        output = BridgeUtils.cleanupString(input);
+        assertEquals(input, output);
+
+        // Test space.
+        input = "abc 123";
+        output = BridgeUtils.cleanupString(input);
+        assertEquals(output, "abc123");
+
+        // Test punctuation.
+        input = "abc!@#$%^&*()123";
+        output = BridgeUtils.cleanupString(input);
+        assertEquals(output, "abc123");
+
+        // Test mixed.
+        input = "abc-!@#$%^&*()_123";
+        output = BridgeUtils.cleanupString(input);
+        assertEquals(output, "abc-_123");
+    }
+
     @Test
     public void isExporter3Configured_IsExporter3EnabledNull() {
         App app = makeEx3EnabledApp();

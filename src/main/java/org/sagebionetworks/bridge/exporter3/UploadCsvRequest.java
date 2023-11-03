@@ -3,17 +3,19 @@ package org.sagebionetworks.bridge.exporter3;
 import java.util.HashSet;
 import java.util.Set;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import org.joda.time.DateTime;
+
+import org.sagebionetworks.bridge.json.DateTimeDeserializer;
 
 /** Request to generate the CSVs of all uploads for a given study. */
 public class UploadCsvRequest {
     private String appId;
     private String studyId;
-    private Set<String> assessmentGuids;
+    private Set<String> assessmentGuids = new HashSet<>();
     private DateTime startTime;
     private DateTime endTime;
     private boolean includeTestData;
-    private boolean useHistoricalParticipantVersion = true;
     private String zipFileSuffix;
 
     /** App to generate CSVs for. */
@@ -52,6 +54,7 @@ public class UploadCsvRequest {
         return startTime;
     }
 
+    @JsonDeserialize(using = DateTimeDeserializer.class)
     public void setStartTime(DateTime startTime) {
         this.startTime = startTime;
     }
@@ -61,6 +64,7 @@ public class UploadCsvRequest {
         return endTime;
     }
 
+    @JsonDeserialize(using = DateTimeDeserializer.class)
     public void setEndTime(DateTime endTime) {
         this.endTime = endTime;
     }
@@ -72,18 +76,6 @@ public class UploadCsvRequest {
 
     public void setIncludeTestData(boolean includeTestData) {
         this.includeTestData = includeTestData;
-    }
-
-    /**
-     * True if the CSV should use participant attributes from the version that submitted the upload. False if the CSV
-     * should use the participant attributes from the current version. Defaults to true.
-     */
-    public boolean useHistoricalParticipantVersion() {
-        return useHistoricalParticipantVersion;
-    }
-
-    public void setUseHistoricalParticipantVersion(boolean useHistoricalParticipantVersion) {
-        this.useHistoricalParticipantVersion = useHistoricalParticipantVersion;
     }
 
     /**

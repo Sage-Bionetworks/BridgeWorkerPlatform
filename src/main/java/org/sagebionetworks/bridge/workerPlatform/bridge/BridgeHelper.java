@@ -11,6 +11,7 @@ import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
+import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
 import org.sagebionetworks.bridge.rest.model.Assessment;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
@@ -118,7 +119,16 @@ public class BridgeHelper {
     @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
             types = { BridgeSDKException.class, IOException.class }, randomize = false)
     public Assessment getAssessmentByGuid(String appId, String guid) throws IOException {
-        return clientManager.getClient(ForWorkersApi.class).getAssessmentByGuidForWorker(appId, guid).execute().body();
+        // https://sagebionetworks.jira.com/browse/DHP-1129 - Currently, we can schedule both local assessments and
+        // shared assessments, and the worker has no way of knowing which one to use. In the short term, we use this
+        // hack. First try the local assessment API. If that throws a 404, try the shared assessment API.
+        ForWorkersApi forWorkersApi = clientManager.getClient(ForWorkersApi.class);
+        try {
+            return forWorkersApi.getAssessmentByGuidForWorker(appId, guid).execute()
+                    .body();
+        } catch (EntityNotFoundException ex) {
+            return forWorkersApi.getSharedAssessmentByGUID(guid).execute().body();
+        }
     }
 
     /**
