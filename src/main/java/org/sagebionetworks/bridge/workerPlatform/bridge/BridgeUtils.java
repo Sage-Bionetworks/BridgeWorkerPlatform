@@ -5,6 +5,11 @@ import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
 import org.sagebionetworks.bridge.rest.model.Study;
 
 public class BridgeUtils {
+    /** Removes any character that's not alphanumeric, dash, or underscore. */
+    public static String cleanupString(String in) {
+        return in.replaceAll("[^a-zA-Z0-9-_]", "");
+    }
+
     /** Returns true if the given app is configured for Exporter 3.0. */
     public static boolean isExporter3Configured(App app) {
         return app.isExporter3Enabled() != null && app.isExporter3Enabled() &&

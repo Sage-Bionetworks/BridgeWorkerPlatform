@@ -4,16 +4,21 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
+import com.jcabi.aspects.RetryOnFailure;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
+import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
+import org.sagebionetworks.bridge.rest.model.Assessment;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
 import org.sagebionetworks.bridge.rest.model.Study;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +36,8 @@ import org.sagebionetworks.bridge.rest.model.SmsTemplate;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.UploadList;
+import org.sagebionetworks.bridge.rest.model.UploadTableRow;
+import org.sagebionetworks.bridge.rest.model.UploadTableRowQuery;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
 import org.sagebionetworks.bridge.rest.ClientManager;
@@ -44,6 +51,7 @@ import org.sagebionetworks.bridge.workerPlatform.exceptions.AsyncTimeoutExceptio
 
 /** Abstracts away calls to Bridge. */
 @Component("BridgeHelper")
+@SuppressWarnings({ "DataFlowIssue", "DefaultAnnotationParam" })
 public class BridgeHelper {
     private static final Logger LOG = LoggerFactory.getLogger(BridgeHelper.class);
 
@@ -107,6 +115,22 @@ public class BridgeHelper {
                 .body().getItems();
     }
 
+    /** Get an assessment by guid. */
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
+            types = { BridgeSDKException.class, IOException.class }, randomize = false)
+    public Assessment getAssessmentByGuid(String appId, String guid) throws IOException {
+        // https://sagebionetworks.jira.com/browse/DHP-1129 - Currently, we can schedule both local assessments and
+        // shared assessments, and the worker has no way of knowing which one to use. In the short term, we use this
+        // hack. First try the local assessment API. If that throws a 404, try the shared assessment API.
+        ForWorkersApi forWorkersApi = clientManager.getClient(ForWorkersApi.class);
+        try {
+            return forWorkersApi.getAssessmentByGuidForWorker(appId, guid).execute()
+                    .body();
+        } catch (EntityNotFoundException ex) {
+            return forWorkersApi.getSharedAssessmentByGUID(guid).execute().body();
+        }
+    }
+
     /**
      * Sends notifications to Bridge Server, which then sends notifications to all subscribers. This includes
      * subscribers for both the app-wide Synapse project and all study-specific Synapse projects that the record was
@@ -145,6 +169,8 @@ public class BridgeHelper {
     }
 
     /** Gets a participant for the given health code in the given app. */
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
+            types = { BridgeSDKException.class, IOException.class }, randomize = false)
     public StudyParticipant getParticipantByHealthCode(String appId, String healthCode, boolean withConsents)
             throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getParticipantByHealthCodeForApp(appId, healthCode,
@@ -194,7 +220,17 @@ public class BridgeHelper {
                 .body().getItems();
     }
 
+    /** Gets the latest participant version for the app and user ID. */
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
+            types = { BridgeSDKException.class, IOException.class }, randomize = false)
+    public ParticipantVersion getLatestParticipantVersion(String appId, String userId) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getLatestParticipantVersion(appId, userId).execute()
+                .body();
+    }
+
     /** Gets the participant version for the app and user ID and version number. */
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
+            types = { BridgeSDKException.class, IOException.class }, randomize = false)
     public ParticipantVersion getParticipantVersion(String appId, String userId, int participantVersion)
             throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getParticipantVersion(appId, userId, participantVersion)
@@ -234,6 +270,8 @@ public class BridgeHelper {
     }
 
     /** Gets the study for the given app and study IDs. */
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
+            types = { BridgeSDKException.class, IOException.class }, randomize = false)
     public Study getStudy(String appId, String studyId) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getStudyForWorker(appId, studyId).execute().body();
     }
@@ -349,6 +387,15 @@ public class BridgeHelper {
     /** Gets an upload by record ID. */
     public Upload getUploadByRecordId(String recordId) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getUploadByRecordId(recordId).execute().body();
+    }
+
+    /** Query table rows for uploads. */
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
+            types = { BridgeSDKException.class, IOException.class }, randomize = false)
+    public List<UploadTableRow> queryUploadTableRows(String appId, String studyId, UploadTableRowQuery query)
+            throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).queryUploadTableRowsForWorker(appId, studyId, query)
+                .execute().body().getItems();
     }
 
     /** Get account summaries by caller's appId and enrollment in a study. */
