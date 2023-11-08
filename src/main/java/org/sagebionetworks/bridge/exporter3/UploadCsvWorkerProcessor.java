@@ -26,6 +26,8 @@ import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.Assessment;
 import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.rest.model.UploadTableJob;
+import org.sagebionetworks.bridge.rest.model.UploadTableJobStatus;
 import org.sagebionetworks.bridge.rest.model.UploadTableRow;
 import org.sagebionetworks.bridge.rest.model.UploadTableRowQuery;
 import org.sagebionetworks.bridge.s3.S3Helper;
@@ -154,6 +156,10 @@ public class UploadCsvWorkerProcessor implements ThrowingConsumer<JsonNode> {
                 " assessmentGuids=" + assessmentGuidsAsString + " startTime=" + request.getStartTime() +
                 ", endTime=" + request.getEndTime() + " includeTestData=" + request.isIncludeTestData());
 
+        // Get the table job from Bridge Server.
+        UploadTableJob job = bridgeHelper.getUploadTableJob(request.getAppId(), request.getStudyId(),
+                request.getJobGuid());
+
         // Create temp dir to store CSVs.
         File tmpDir = fileHelper.createTempDir();
 
@@ -199,12 +205,25 @@ public class UploadCsvWorkerProcessor implements ThrowingConsumer<JsonNode> {
             // Upload the zip file to S3.
             s3Helper.writeFileToS3(rawHealthDataBucket, zipFilename, zipFile);
 
-            // TODO https://sagebionetworks.jira.com/browse/DHP-1026 Write the S3 Key to Bridge Server with the CSV
-            // Job ID.
+            // Update the job status with the status "succeeded" and the S3 key.
+            job.setS3Key(zipFilename);
+            job.setStatus(UploadTableJobStatus.SUCCEEDED);
+            bridgeHelper.updateUploadTableJob(request.getAppId(), request.getStudyId(), request.getJobGuid(), job);
 
             // Write to Worker Log in DDB so we can signal end of processing.
             String tag = "app=" + request.getAppId() + ", studyId=" + request.getStudyId();
             dynamoHelper.writeWorkerLog(WORKER_ID, tag);
+        } catch (Exception ex) {
+            // Update the job status with status "failed" and re-throw the exception.
+            try {
+                job.setStatus(UploadTableJobStatus.FAILED);
+                bridgeHelper.updateUploadTableJob(request.getAppId(), request.getStudyId(), request.getJobGuid(), job);
+            } catch (Exception innerEx) {
+                // If we can't update the job status, log an error, but continue throwing the original exception.
+                LOG.error("Error updating job status for CSV request for app " + request.getAppId() + " study " +
+                        request.getStudyId(), innerEx);
+            }
+            throw ex;
         } finally {
             try {
                 fileHelper.deleteDirRecursively(tmpDir);
