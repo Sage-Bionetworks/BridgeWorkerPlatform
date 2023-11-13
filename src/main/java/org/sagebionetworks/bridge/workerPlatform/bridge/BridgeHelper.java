@@ -393,17 +393,17 @@ public class BridgeHelper {
     /** Get the upload table job. Does not include the downloadable S3 URL. */
     @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
             types = { BridgeSDKException.class, IOException.class }, randomize = false)
-    public UploadTableJob getUploadTableJob(String appId, String studyId, String uploadId) throws IOException {
-        return clientManager.getClient(ForWorkersApi.class).getUploadTableJobForWorker(appId, studyId, uploadId)
+    public UploadTableJob getUploadTableJob(String appId, String studyId, String jobGuid) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getUploadTableJobForWorker(appId, studyId, jobGuid)
                 .execute().body();
     }
 
     /** Update the upload table job. */
     @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
             types = { BridgeSDKException.class, IOException.class }, randomize = false)
-    public void updateUploadTableJob(String appId, String studyId, String uploadId, UploadTableJob job)
+    public void updateUploadTableJob(String appId, String studyId, String jobGuid, UploadTableJob job)
             throws IOException {
-        clientManager.getClient(ForWorkersApi.class).updateUploadTableJobForWorker(appId, studyId, uploadId, job)
+        clientManager.getClient(ForWorkersApi.class).updateUploadTableJobForWorker(appId, studyId, jobGuid, job)
                 .execute();
     }
 
