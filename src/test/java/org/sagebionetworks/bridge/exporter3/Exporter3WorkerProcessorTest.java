@@ -40,6 +40,7 @@ import org.joda.time.DateTimeUtils;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 import org.sagebionetworks.repo.model.FileEntity;
@@ -54,9 +55,13 @@ import org.testng.annotations.Test;
 import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.crypto.CmsEncryptor;
 import org.sagebionetworks.bridge.crypto.WrongEncryptionKeyException;
+import org.sagebionetworks.bridge.exporter3.results.AssessmentResultSummarizer;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.rest.RestUtils;
 import org.sagebionetworks.bridge.rest.model.App;
+import org.sagebionetworks.bridge.rest.model.Assessment;
+import org.sagebionetworks.bridge.rest.model.AssessmentConfig;
 import org.sagebionetworks.bridge.rest.model.ExportedRecordInfo;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
@@ -65,6 +70,7 @@ import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.Upload;
+import org.sagebionetworks.bridge.rest.model.UploadTableRow;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerRetryableException;
@@ -85,6 +91,685 @@ public class Exporter3WorkerProcessorTest {
             .getBytes(StandardCharsets.UTF_8);
     private static final byte[] DUMMY_UNENCRYPTED_FILE_BYTES = "dummy unencrypted file content"
             .getBytes(StandardCharsets.UTF_8);
+    private static final String ASSESSMENT_CONFIG = "{\n" +
+            "  \"type\": \"assessment\",\n" +
+            "  \"identifier\": \"xhcsds\",\n" +
+            "  \"$schema\": \"https://sage-bionetworks.github.io/mobile-client-json/schemas/v2/AssessmentObject" +
+            ".json\",\n" +
+            "  \"versionString\": \"1.0.0\",\n" +
+            "  \"estimatedMinutes\": 3,\n" +
+            "  \"copyright\": \"Copyright © 2022 Sage Bionetworks. All rights reserved.\",\n" +
+            "  \"title\": \"Example Survey A\",\n" +
+            "  \"detail\": \"This is intended as an example of a survey with a list of questions. There are no " +
+            "sections and there are no additional instructions. In this survey, pause navigation is hidden for all " +
+            "nodes. For all questions, the skip button should say 'Skip me'. Default behavior is that buttons that " +
+            "make logical sense to be displayed are shown unless they are explicitly hidden.\",\n" +
+            "  \"steps\": [\n" +
+            "    {\n" +
+            "      \"type\": \"overview\",\n" +
+            "      \"identifier\": \"overview\",\n" +
+            "      \"title\": \"Example Survey A\",\n" +
+            "      \"detail\": \"You will be shown a series of example questions. This survey has no additional " +
+            "instructions.\",\n" +
+            "      \"image\": {\n" +
+            "        \"imageName\": \"day_to_day\",\n" +
+            "        \"type\": \"sageResource\"\n" +
+            "      }\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"choiceQuestion\",\n" +
+            "      \"identifier\": \"choiceQ1\",\n" +
+            "      \"comment\": \"Go to the question selected by the participant. If they skip the question then go " +
+            "directly to follow-up.\",\n" +
+            "      \"title\": \"Choose which question to answer\",\n" +
+            "      \"surveyRules\": [\n" +
+            "        {\n" +
+            "          \"skipToIdentifier\": \"followupQ\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"matchingAnswer\": 1,\n" +
+            "          \"skipToIdentifier\": \"simpleQ1\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"matchingAnswer\": 2,\n" +
+            "          \"skipToIdentifier\": \"simpleQ2\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"matchingAnswer\": 3,\n" +
+            "          \"skipToIdentifier\": \"simpleQ3\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"matchingAnswer\": 4,\n" +
+            "          \"skipToIdentifier\": \"simpleQ4\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"matchingAnswer\": 5,\n" +
+            "          \"skipToIdentifier\": \"simpleQ5\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"matchingAnswer\": 6,\n" +
+            "          \"skipToIdentifier\": \"simpleQ6\"\n" +
+            "        }\n" +
+            "      ],\n" +
+            "      \"baseType\": \"integer\",\n" +
+            "      \"singleChoice\": true,\n" +
+            "      \"choices\": [\n" +
+            "        {\n" +
+            "          \"value\": 1,\n" +
+            "          \"text\": \"Enter some text\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": 2,\n" +
+            "          \"text\": \"Birth year\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": 3,\n" +
+            "          \"text\": \"Likert Scale\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": 4,\n" +
+            "          \"text\": \"Sliding Scale\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": 5,\n" +
+            "          \"text\": \"Duration\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": 6,\n" +
+            "          \"text\": \"Time\"\n" +
+            "        }\n" +
+            "      ]\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"simpleQuestion\",\n" +
+            "      \"identifier\": \"simpleQ1\",\n" +
+            "      \"nextStepIdentifier\": \"followupQ\",\n" +
+            "      \"title\": \"Enter some text\",\n" +
+            "      \"inputItem\": {\n" +
+            "        \"type\": \"string\",\n" +
+            "        \"placeholder\": \"I like cake\"\n" +
+            "      }\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"simpleQuestion\",\n" +
+            "      \"identifier\": \"simpleQ2\",\n" +
+            "      \"nextStepIdentifier\": \"followupQ\",\n" +
+            "      \"title\": \"Enter a birth year\",\n" +
+            "      \"inputItem\": {\n" +
+            "        \"type\": \"year\",\n" +
+            "        \"fieldLabel\": \"year of birth\",\n" +
+            "        \"placeholder\": \"YYYY\",\n" +
+            "        \"formatOptions\": {\n" +
+            "          \"allowFuture\": false,\n" +
+            "          \"minimumYear\": 1900\n" +
+            "        }\n" +
+            "      }\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"simpleQuestion\",\n" +
+            "      \"identifier\": \"simpleQ3\",\n" +
+            "      \"nextStepIdentifier\": \"followupQ\",\n" +
+            "      \"title\": \"How much do you like apples?\",\n" +
+            "      \"uiHint\": \"likert\",\n" +
+            "      \"inputItem\": {\n" +
+            "        \"type\": \"integer\",\n" +
+            "        \"formatOptions\": {\n" +
+            "          \"maximumLabel\": \"Very much\",\n" +
+            "          \"maximumValue\": 7,\n" +
+            "          \"minimumLabel\": \"Not at all\",\n" +
+            "          \"minimumValue\": 1\n" +
+            "        }\n" +
+            "      },\n" +
+            "      \"shouldHideActions\": []\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"simpleQuestion\",\n" +
+            "      \"identifier\": \"simpleQ4\",\n" +
+            "      \"nextStepIdentifier\": \"followupQ\",\n" +
+            "      \"title\": \"How much do you like apples?\",\n" +
+            "      \"uiHint\": \"slider\",\n" +
+            "      \"inputItem\": {\n" +
+            "        \"type\": \"integer\",\n" +
+            "        \"formatOptions\": {\n" +
+            "          \"maximumLabel\": \"Very much\",\n" +
+            "          \"maximumValue\": 100,\n" +
+            "          \"minimumLabel\": \"Not at all\",\n" +
+            "          \"minimumValue\": 0\n" +
+            "        }\n" +
+            "      }\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"simpleQuestion\",\n" +
+            "      \"identifier\": \"simpleQ5\",\n" +
+            "      \"nextStepIdentifier\": \"followupQ\",\n" +
+            "      \"title\": \"How long does it take to travel to the moon?\",\n" +
+            "      \"inputItem\": {\n" +
+            "        \"type\": \"duration\"\n" +
+            "      }\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"simpleQuestion\",\n" +
+            "      \"identifier\": \"simpleQ6\",\n" +
+            "      \"nextStepIdentifier\": \"followupQ\",\n" +
+            "      \"title\": \"What time is it on the moon?\",\n" +
+            "      \"inputItem\": {\n" +
+            "        \"type\": \"time\"\n" +
+            "      }\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"choiceQuestion\",\n" +
+            "      \"identifier\": \"followupQ\",\n" +
+            "      \"title\": \"Are you happy with your choice?\",\n" +
+            "      \"subtitle\": \"After thinking it over...\",\n" +
+            "      \"detail\": \"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor " +
+            "incididunt ut labore et dolore magna aliqua.\",\n" +
+            "      \"surveyRules\": [\n" +
+            "        {\n" +
+            "          \"matchingAnswer\": false,\n" +
+            "          \"skipToIdentifier\": \"choiceQ1\"\n" +
+            "        }\n" +
+            "      ],\n" +
+            "      \"baseType\": \"boolean\",\n" +
+            "      \"singleChoice\": true,\n" +
+            "      \"choices\": [\n" +
+            "        {\n" +
+            "          \"value\": true,\n" +
+            "          \"text\": \"Yes\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": false,\n" +
+            "          \"text\": \"No\"\n" +
+            "        }\n" +
+            "      ]\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"choiceQuestion\",\n" +
+            "      \"identifier\": \"favoriteFood\",\n" +
+            "      \"title\": \"What are you having for dinner next Tuesday after the soccer game?\",\n" +
+            "      \"subtitle\": \"After thinking it over...\",\n" +
+            "      \"detail\": \"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor " +
+            "incididunt ut labore et dolore magna aliqua.\",\n" +
+            "      \"surveyRules\": [\n" +
+            "        {\n" +
+            "          \"matchingAnswer\": \"Pizza\",\n" +
+            "          \"skipToIdentifier\": \"multipleChoice\",\n" +
+            "          \"ruleOperator\": \"ne\"\n" +
+            "        }\n" +
+            "      ],\n" +
+            "      \"baseType\": \"string\",\n" +
+            "      \"singleChoice\": true,\n" +
+            "      \"choices\": [\n" +
+            "        {\n" +
+            "          \"value\": \"Pizza\",\n" +
+            "          \"text\": \"Pizza\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": \"Sushi\",\n" +
+            "          \"text\": \"Sushi\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": \"Ice Cream\",\n" +
+            "          \"text\": \"Ice Cream\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": \"Beans & Rice\",\n" +
+            "          \"text\": \"Beans & Rice\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": \"Tofu Tacos\",\n" +
+            "          \"text\": \"Tofu Tacos\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": \"Bucatini Alla Carbonara\",\n" +
+            "          \"text\": \"Bucatini Alla Carbonara\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": \"Hot Dogs, Kraft Dinner & Potato Salad\",\n" +
+            "          \"text\": \"Hot Dogs, Kraft Dinner & Potato Salad\"\n" +
+            "        }\n" +
+            "      ],\n" +
+            "      \"other\": {\n" +
+            "        \"type\": \"string\"\n" +
+            "      }\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"instruction\",\n" +
+            "      \"identifier\": \"pizza\",\n" +
+            "      \"title\": \"Mmmmm, pizza...\"\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"choiceQuestion\",\n" +
+            "      \"identifier\": \"multipleChoice\",\n" +
+            "      \"actions\": {\n" +
+            "        \"goForward\": {\n" +
+            "          \"buttonTitle\": \"Submit\",\n" +
+            "          \"type\": \"default\"\n" +
+            "        }\n" +
+            "      },\n" +
+            "      \"title\": \"What are your favorite colors?\",\n" +
+            "      \"baseType\": \"string\",\n" +
+            "      \"singleChoice\": false,\n" +
+            "      \"choices\": [\n" +
+            "        {\n" +
+            "          \"value\": \"Blue\",\n" +
+            "          \"text\": \"Blue\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": \"Yellow\",\n" +
+            "          \"text\": \"Yellow\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": \"Red\",\n" +
+            "          \"text\": \"Red\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"text\": \"All of the above\",\n" +
+            "          \"selectorType\": \"all\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"text\": \"None of the above\",\n" +
+            "          \"selectorType\": \"exclusive\"\n" +
+            "        }\n" +
+            "      ]\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"completion\",\n" +
+            "      \"identifier\": \"completion\",\n" +
+            "      \"title\": \"You're done!\"\n" +
+            "    }\n" +
+            "  ],\n" +
+            "  \"shouldHideActions\": [],\n" +
+            "  \"webConfig\": {\n" +
+            "    \"skipOption\": \"SKIP\"\n" +
+            "  },\n" +
+            "  \"interruptionHandling\": {\n" +
+            "    \"canResume\": true,\n" +
+            "    \"reviewIdentifier\": \"beginning\",\n" +
+            "    \"canSkip\": true,\n" +
+            "    \"canSaveForLater\": true\n" +
+            "  }\n" +
+            "}";
+    private static final String DUMMY_ASSESSMENT_RESULTS = "{\n" +
+            "   \"type\":\"assessment\",\n" +
+            "   \"identifier\":\"xhcsds\",\n" +
+            "   \"assessmentIdentifier\":\"xhcsds\",\n" +
+            "   \"schemaIdentifier\":null,\n" +
+            "   \"versionString\":\"1.0.0\",\n" +
+            "   \"stepHistory\":[\n" +
+            "      {\n" +
+            "         \"type\":\"base\",\n" +
+            "         \"identifier\":\"overview\",\n" +
+            "         \"startDate\":\"2023-11-02T09:41:50.983-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:41:52.635-07:00\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"integer\"\n" +
+            "         },\n" +
+            "         \"value\":1,\n" +
+            "         \"startDate\":\"2023-11-02T09:41:52.635-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:41:54.278-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"simpleQ1\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"string\"\n" +
+            "         },\n" +
+            "         \"value\":\"test text\",\n" +
+            "         \"startDate\":\"2023-11-02T09:41:54.278-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:00.516-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"followupQ\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"boolean\"\n" +
+            "         },\n" +
+            "         \"value\":false,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:00.516-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:02.357-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"integer\"\n" +
+            "         },\n" +
+            "         \"value\":2,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:02.357-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:03.439-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"simpleQ2\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"integer\"\n" +
+            "         },\n" +
+            "         \"value\":1945,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:03.439-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:07.803-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"followupQ\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"boolean\"\n" +
+            "         },\n" +
+            "         \"value\":false,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:07.803-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:08.663-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"integer\"\n" +
+            "         },\n" +
+            "         \"value\":3,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:08.663-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:09.864-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"simpleQ3\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"integer\"\n" +
+            "         },\n" +
+            "         \"value\":4,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:09.865-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:11.051-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"followupQ\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"boolean\"\n" +
+            "         },\n" +
+            "         \"value\":false,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:11.052-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:12.076-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"integer\"\n" +
+            "         },\n" +
+            "         \"value\":4,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:12.076-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:13.243-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"simpleQ4\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"integer\"\n" +
+            "         },\n" +
+            "         \"value\":50,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:13.243-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:21.662-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"followupQ\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"boolean\"\n" +
+            "         },\n" +
+            "         \"value\":false,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:21.662-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:22.496-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"integer\"\n" +
+            "         },\n" +
+            "         \"value\":5,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:22.496-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:23.773-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"simpleQ5\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"duration\",\n" +
+            "            \"displayUnits\":[\n" +
+            "               \"hour\",\n" +
+            "               \"minute\"\n" +
+            "            ],\n" +
+            "            \"significantDigits\":0\n" +
+            "         },\n" +
+            "         \"value\":28800.0,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:23.773-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:29.907-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"followupQ\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"boolean\"\n" +
+            "         },\n" +
+            "         \"value\":false,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:29.907-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:31.462-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"integer\"\n" +
+            "         },\n" +
+            "         \"value\":6,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:31.462-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:32.779-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"simpleQ6\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"time\",\n" +
+            "            \"codingFormat\":\"HH:mm:SS.SSS\"\n" +
+            "         },\n" +
+            "         \"value\":\"09:42\",\n" +
+            "         \"startDate\":\"2023-11-02T09:42:32.779-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:36.374-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"followupQ\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"boolean\"\n" +
+            "         },\n" +
+            "         \"value\":true,\n" +
+            "         \"startDate\":\"2023-11-02T09:42:36.374-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:39.175-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"favoriteFood\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"string\"\n" +
+            "         },\n" +
+            "         \"value\":\"Pizza\",\n" +
+            "         \"startDate\":\"2023-11-02T09:42:39.175-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:42.061-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"base\",\n" +
+            "         \"identifier\":\"pizza\",\n" +
+            "         \"startDate\":\"2023-11-02T09:42:42.061-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:42.957-07:00\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"multipleChoice\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"array\",\n" +
+            "            \"baseType\":\"string\",\n" +
+            "            \"sequenceSeparator\":null\n" +
+            "         },\n" +
+            "         \"value\":[\n" +
+            "            \"Blue\",\n" +
+            "            \"Yellow\",\n" +
+            "            \"Red\"\n" +
+            "         ],\n" +
+            "         \"startDate\":\"2023-11-02T09:42:42.957-07:00\",\n" +
+            "         \"endDate\":\"2023-11-02T09:42:45.999-07:00\",\n" +
+            "         \"questionText\":null,\n" +
+            "         \"questionData\":null\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"base\",\n" +
+            "         \"identifier\":\"completion\",\n" +
+            "         \"startDate\":\"2023-11-02T09:42:45.999-07:00\",\n" +
+            "         \"endDate\":null\n" +
+            "      }\n" +
+            "   ],\n" +
+            "   \"asyncResults\":[\n" +
+            "      \n" +
+            "   ],\n" +
+            "   \"taskRunUUID\":\"b4bf1453-ec1b-4247-840f-2cf6ffaeb8b6\",\n" +
+            "   \"startDate\":\"2023-11-02T09:41:50.983-07:00\",\n" +
+            "   \"endDate\":\"2023-11-02T09:42:45.999-07:00\",\n" +
+            "   \"path\":[\n" +
+            "      {\n" +
+            "         \"identifier\":\"overview\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"simpleQ1\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"followupQ\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"direction\":\"backward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"simpleQ2\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"followupQ\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"direction\":\"backward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"simpleQ3\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"followupQ\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"direction\":\"backward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"simpleQ4\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"followupQ\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"direction\":\"backward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"simpleQ5\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"followupQ\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"direction\":\"backward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"simpleQ6\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"followupQ\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"favoriteFood\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"pizza\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"multipleChoice\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"identifier\":\"completion\",\n" +
+            "         \"direction\":\"forward\"\n" +
+            "      }\n" +
+            "   ],\n" +
+            "   \"$schema\":\"https://sage-bionetworks.github.io/mobile-client-json/schemas/v2/AssessmentResultObject" +
+            ".json\"\n" +
+            "}";
     private static final String EXPORTED_FILE_ENTITY_ID = "syn2222";
     private static final String EXPORTED_FILE_HANDLE_ID = "3333";
     private static final String FILENAME = "filename.txt";
@@ -99,6 +784,8 @@ public class Exporter3WorkerProcessorTest {
     private static final String USER_AGENT = "dummy user agent";
     private static final String INSTANCE_GUID = "instanceGuid";
     private static final String ASSESSMENT_INSTANCE_GUID = "assessmentInstanceGuid";
+    private static final String ASSESSMENT_GUID = "assessmentGuid";
+    private static final String ASSESSMENT_ID = "assessmentId";
     private static final String SESSION_GUID = "session-guid";
     
     private static final long MOCK_NOW_MILLIS = DateTime.parse(TODAYS_DATE_STRING + "T15:32:38.914-0700")
@@ -560,6 +1247,72 @@ public class Exporter3WorkerProcessorTest {
         Map<String, String> userMetadataMap = s3MetadataCaptor.getValue().getUserMetadata();
         assertEquals(userMetadataMap.get("assessmentInstanceGuid"), ASSESSMENT_INSTANCE_GUID);
         assertEquals(userMetadataMap.get("sessionGuid"), SESSION_GUID);
+    }
+
+    @Test
+    public void uploadTableRow() throws Exception {
+        //Mock getAssessment
+        Assessment assessment = new Assessment().title(ASSESSMENT_ID).osName("Universal").ownerId("sage-bionetworks")
+                .identifier(ASSESSMENT_ID).guid(ASSESSMENT_GUID).frameworkIdentifier(
+                        AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER);
+        when(mockBridgeHelper.getAssessment(any(), eq(ASSESSMENT_GUID))).thenReturn(assessment);
+        // Mock getAssessmentConfig
+        AssessmentConfig assessmentConfig = new AssessmentConfig();
+        assessmentConfig.setConfig(ASSESSMENT_CONFIG);
+
+        // Mock extractFileFromZip to return assessmentResult.json file
+        doAnswer(invocation -> {
+            File file = inMemoryFileHelper.newFile(inMemoryFileHelper.createTempDir(), "assessmentResult.json");
+            inMemoryFileHelper.writeBytes(file, DUMMY_ASSESSMENT_RESULTS.getBytes(StandardCharsets.UTF_8));
+            Mockito.when(file.exists()).thenReturn(true);
+            return file;
+        }).when(processor).extractFileFromZip(any(), any(), eq("assessmentResult.json"));
+
+        doAnswer(invocation -> {
+            File file = invocation.getArgumentAt(2, File.class);
+            inMemoryFileHelper.writeBytes(file, DUMMY_ENCRYPTED_FILE_BYTES);
+            return null;
+        }).when(mockS3Helper).downloadS3File(eq(UPLOAD_BUCKET), eq(RECORD_ID), any());
+
+        when(mockBridgeHelper.getAssessmentConfig(any(), eq(ASSESSMENT_GUID))).thenReturn(assessmentConfig);
+
+        Upload upload = mockUpload(true);
+        HealthDataRecordEx3 record = makeRecord();
+        record.putMetadataItem(METADATA_KEY_INSTANCE_GUID, INSTANCE_GUID);
+        Map<String, String> metadataMap = ImmutableMap.of(
+                "assessmentGuid", ASSESSMENT_GUID,
+                "instanceGuid", ASSESSMENT_INSTANCE_GUID,
+                "sessionGuid", SESSION_GUID);
+
+        UploadTableRow tableRow = processor.getUploadTableRow(upload, record, RECORD_ID, metadataMap);
+        assertNotNull(tableRow);
+        assertEquals(RECORD_ID, tableRow.getRecordId());
+        assertEquals(ASSESSMENT_GUID, tableRow.getAssessmentGuid());
+        assertEquals(HEALTH_CODE, tableRow.getHealthCode());
+        assertEquals(PARTICIPANT_VERSION, tableRow.getParticipantVersion().intValue());
+
+        // Check metadata values
+        ImmutableMap.Builder<String,String> expectedMetaBuilder = ImmutableMap.builder();
+        expectedMetaBuilder.put("clientInfo", CLIENT_INFO);
+        expectedMetaBuilder.put("sessionGuid", SESSION_GUID);
+        Map<String, String> expectedMetaResults = expectedMetaBuilder.build();
+        assertEquals(expectedMetaResults, tableRow.getMetadata());
+
+        // Check data values
+        ImmutableMap.Builder<String,String> builder = ImmutableMap.builder();
+        builder.put("choiceQ1", "6");
+        builder.put("simpleQ1", "test text");
+        builder.put("followupQ", "true");
+        builder.put("simpleQ2", "1945");
+        builder.put("simpleQ3", "4");
+        builder.put("simpleQ4", "50");
+        builder.put("simpleQ5", "28800.0");
+        builder.put("simpleQ6", "09:42");
+        builder.put("favoriteFood", "Pizza");
+        builder.put("multipleChoice", "Blue,Yellow,Red");
+        Map<String, String> expectedDataResults = builder.build();
+        assertEquals(expectedDataResults, tableRow.getData());
+
     }
 
     @Test
