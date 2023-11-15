@@ -49,6 +49,8 @@ import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.model.Assessment;
 import org.sagebionetworks.bridge.rest.model.Study;
+import org.sagebionetworks.bridge.rest.model.UploadTableJob;
+import org.sagebionetworks.bridge.rest.model.UploadTableJobStatus;
 import org.sagebionetworks.bridge.rest.model.UploadTableRow;
 import org.sagebionetworks.bridge.rest.model.UploadTableRowQuery;
 import org.sagebionetworks.bridge.s3.S3Helper;
@@ -70,6 +72,7 @@ public class UploadCsvWorkerProcessorTest {
     private static final DateTime CREATED_ON_2B = DateTime.parse("2017-05-13T18:06:36.803Z");
     private static final String HEALTH_CODE_1 = "health-code-1";
     private static final String HEALTH_CODE_2 = "health-code-2";
+    private static final String JOB_GUID = "test-job-guid";
     private static final long MOCK_NOW_MILLIS = DateTime.parse("2018-05-23T14:18:36.026Z").getMillis();
     private static final String RAW_DATA_BUCKET = "raw-data-bucket";
     private static final String RECORD_ID_1A = "record-id-1a";
@@ -229,12 +232,17 @@ public class UploadCsvWorkerProcessorTest {
 
     @Test
     public void allAssessments() throws Exception {
-        // Mock Bridge query for rows.
+        // Mock Bridge.
         when(mockBridgeHelper.queryUploadTableRows(eq(APP_ID), eq(STUDY_ID), any()))
                 .thenReturn(ImmutableList.of(ROW_1A, ROW_1B, ROW_2A, ROW_2B)).thenReturn(ImmutableList.of());
 
+        UploadTableJob job = new UploadTableJob();
+        when(mockBridgeHelper.getUploadTableJob(APP_ID, STUDY_ID, JOB_GUID)).thenReturn(job);
+
         // Execute.
-        processor.process(makeRequest());
+        UploadCsvRequest request = makeRequest();
+        request.setJobGuid(JOB_GUID);
+        processor.process(request);
 
         // Validate CSVs.
         assertEquals(csvContentByFilename.size(), 2);
@@ -272,6 +280,13 @@ public class UploadCsvWorkerProcessorTest {
         File zipFile = zipFileCaptor.getValue();
 
         verify(mockS3Helper).writeFileToS3(eq(RAW_DATA_BUCKET), eq(ZIP_FILENAME), same(zipFile));
+
+        ArgumentCaptor<UploadTableJob> updatedJobCaptor = ArgumentCaptor.forClass(UploadTableJob.class);
+        verify(mockBridgeHelper).updateUploadTableJob(eq(APP_ID), eq(STUDY_ID), eq(JOB_GUID),
+                updatedJobCaptor.capture());
+        UploadTableJob updatedJob = updatedJobCaptor.getValue();
+        assertEquals(updatedJob.getStatus(), UploadTableJobStatus.SUCCEEDED);
+        assertEquals(updatedJob.getS3Key(), ZIP_FILENAME);
 
         verify(mockDynamoHelper).writeWorkerLog(eq(UploadCsvWorkerProcessor.WORKER_ID), notNull(String.class));
 
@@ -446,6 +461,33 @@ public class UploadCsvWorkerProcessorTest {
 
         byte[] assessmentBCsvContent = csvContentByFilename.get(ASSESSMENT_B_CSV_FILENAME);
         assertCsvContent(assessmentBCsvContent, ADDITIONAL_HEADERS, EXPECTED_RESULTS_BY_RECORD_ID_B);
+    }
+
+    @Test
+    public void setJobStatusFailed() throws Exception {
+        // Mock Bridge with a table job.
+        UploadTableJob job = new UploadTableJob();
+        when(mockBridgeHelper.getUploadTableJob(APP_ID, STUDY_ID, JOB_GUID)).thenReturn(job);
+
+        // The first call inside the try (getStudy) throws.
+        doThrow(RuntimeException.class).when(mockBridgeHelper).getStudy(APP_ID, STUDY_ID);
+
+        // Execute - throws exception.
+        UploadCsvRequest request = makeRequest();
+        request.setJobGuid(JOB_GUID);
+        try {
+            processor.process(request);
+            fail("expected exception");
+        } catch (RuntimeException ex) {
+            // expected exception
+        }
+
+        // Verify call to save the table job status.
+        ArgumentCaptor<UploadTableJob> updatedJobCaptor = ArgumentCaptor.forClass(UploadTableJob.class);
+        verify(mockBridgeHelper).updateUploadTableJob(eq(APP_ID), eq(STUDY_ID), eq(JOB_GUID),
+                updatedJobCaptor.capture());
+        UploadTableJob updatedJob = updatedJobCaptor.getValue();
+        assertEquals(updatedJob.getStatus(), UploadTableJobStatus.FAILED);
     }
 
     @Test

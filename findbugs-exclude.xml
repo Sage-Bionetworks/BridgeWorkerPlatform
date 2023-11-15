@@ -1,5 +1,11 @@
 <FindBugsFilter>
     <Match>
+        <!-- If an exception is thrown, we need to set the job status. In all cases, we re-throw the exception. -->
+        <Class name="org.sagebionetworks.bridge.exporter3.UploadCsvWorkerProcessor" />
+        <Method name="process" />
+        <Bug pattern="REC_CATCH_EXCEPTION" />
+    </Match>
+    <Match>
         <!-- We're counting lines, so we don't actually care about the value returned by readline() -->
         <Class name="org.sagebionetworks.bridge.udd.synapse.SynapseDownloadFromTableTask" />
         <Method name="filterNoDataCsvFiles" />
