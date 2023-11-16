@@ -27,14 +27,14 @@ class AssessmentResultSummarizer(private val assessment: Assessment, private val
      * Returns a flattened map of results for a survey where the key is the column name and the value is a string
      * representation of the result.
      */
-    override fun summarizeResults(resultJson: String): Map<String, String> {
+    override fun summarizeResults(appId: String, recordId: String, resultJson: String): Map<String, String> {
         val assessmentResult: AssessmentResult = Serialization.JsonCoder.default.decodeFromString(resultJson)
         val answers = assessmentResult.toFlatAnswers()
         val columnNames = getColumnNames()
         for (column in answers.keys) {
             if (!columnNames.contains(column)) {
-                // TODO: How should we best log any unexpected columns? -nbrown 11/2/23
-                LOG.debug("Unexpected column: " + column + " when summarizing results for assessment: " + assessment.identifier)
+                LOG.warn("Unexpected column: " + column + " when summarizing results for appId=" + appId +
+                        ", recordId=" + recordId + ", assessmentGuid=" + assessment.guid)
             }
         }
 
@@ -53,12 +53,12 @@ class AssessmentResultSummarizer(private val assessment: Assessment, private val
      * the result.
      */
     fun getSurveyColumns() : List<AnswerColumn> {
-        if (assessmentConfig.config != null) {
+        return if (assessmentConfig.config != null) {
             val configString = RestUtils.toJSON(assessmentConfig.config).asString;
             val assessment: org.sagebionetworks.assessmentmodel.Assessment = Serialization.JsonCoder.default.decodeFromString(configString)
-            return assessment.toFlatAnswersDefinition()
+            assessment.toFlatAnswersDefinition()
         } else {
-            return listOf()
+            listOf()
         }
     }
 

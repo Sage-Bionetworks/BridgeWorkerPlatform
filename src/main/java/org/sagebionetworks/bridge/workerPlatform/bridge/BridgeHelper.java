@@ -10,9 +10,6 @@ import com.jcabi.aspects.RetryOnFailure;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 
-import org.sagebionetworks.bridge.rest.api.AssessmentsApi;
-import org.sagebionetworks.bridge.rest.api.SharedAssessmentsApi;
-import org.sagebionetworks.bridge.rest.api.StudiesApi;
 import org.sagebionetworks.bridge.rest.api.UploadsApi;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
@@ -133,6 +130,21 @@ public class BridgeHelper {
                     .body();
         } catch (EntityNotFoundException ex) {
             return forWorkersApi.getSharedAssessmentByGUID(guid).execute().body();
+        }
+    }
+
+    /** Get an assessment config by guid. */
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
+            types = { BridgeSDKException.class, IOException.class }, randomize = false)
+    public AssessmentConfig getAssessmentConfigByGuid(String appId, String guid) throws IOException {
+        // https://sagebionetworks.jira.com/browse/DHP-1129 - Currently, we can schedule both local assessments and
+        // shared assessments, and the worker has no way of knowing which one to use. In the short term, we use this
+        // hack. First try the local assessment API. If that throws a 404, try the shared assessment API.
+        ForWorkersApi forWorkersApi = clientManager.getClient(ForWorkersApi.class);
+        try {
+            return forWorkersApi.getAssessmentConfigForWorker(appId, guid).execute().body();
+        } catch (EntityNotFoundException ex) {
+            return forWorkersApi.getSharedAssessmentConfig(guid).execute().body();
         }
     }
 
@@ -429,26 +441,8 @@ public class BridgeHelper {
                 .execute().body();
     }
 
-    public Assessment getAssessment(String appID, String assessmentGuid) throws IOException {
-        try {
-            return clientManager.getClient(AssessmentsApi.class).getAssessmentByGuidForWorker(appID, assessmentGuid)
-                    .execute().body();
-        } catch (EntityNotFoundException e) {
-            return clientManager.getClient(SharedAssessmentsApi.class).getSharedAssessmentByGUID(assessmentGuid)
-                    .execute().body();
-        }
-    }
-
-    public AssessmentConfig getAssessmentConfig(String appID, String assessmentGuid) throws IOException {
-        try {
-            return clientManager.getClient(AssessmentsApi.class).getAssessmentConfigForWorker(appID, assessmentGuid)
-                    .execute().body();
-        } catch (EntityNotFoundException e) {
-            return clientManager.getClient(SharedAssessmentsApi.class).getSharedAssessmentConfig(assessmentGuid)
-                    .execute().body();
-        }
-    }
-
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
+            types = { BridgeSDKException.class, IOException.class }, randomize = false)
     public void saveUploadTableRow(String appId, String studyId, UploadTableRow tableRow) throws IOException {
         clientManager.getClient(UploadsApi.class).saveUploadTableRowForWorker(appId, studyId, tableRow).execute();
     }

@@ -2,7 +2,9 @@ package org.sagebionetworks.bridge.exporter3.results
 
 import org.sagebionetworks.bridge.rest.model.Assessment
 import org.sagebionetworks.bridge.rest.model.AssessmentConfig
+import org.springframework.stereotype.Component
 
+@Component
 class AssessmentSummarizerProvider {
 
     fun getSummarizer(assessment: Assessment?, assessmentConfig: AssessmentConfig?) : AssessmentSummarizer? {

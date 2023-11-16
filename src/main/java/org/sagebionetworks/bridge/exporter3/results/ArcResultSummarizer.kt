@@ -15,7 +15,7 @@ class ArcResultSummarizer(val assessment: Assessment) : AssessmentSummarizer {
         return assessment.frameworkIdentifier == FRAMEWORK_IDENTIFIER
     }
 
-    override fun summarizeResults(resultJson: String): Map<String, String> {
+    override fun summarizeResults(appId: String, recordId: String, resultJson: String): Map<String, String> {
         TODO("Not yet implemented")
     }
 

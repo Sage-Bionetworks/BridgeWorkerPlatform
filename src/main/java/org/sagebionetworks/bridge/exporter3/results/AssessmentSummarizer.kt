@@ -8,7 +8,7 @@ interface AssessmentSummarizer {
 
     fun canSummarize(assessment: Assessment) : Boolean
 
-    fun summarizeResults(resultJson: String) : Map<String, String>
+    fun summarizeResults(appId: String, recordId: String, resultJson: String) : Map<String, String>
 
     fun getColumnNames() : List<String>
 

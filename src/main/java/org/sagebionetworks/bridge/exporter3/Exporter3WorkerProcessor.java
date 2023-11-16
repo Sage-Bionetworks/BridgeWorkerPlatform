@@ -22,20 +22,16 @@ import java.util.regex.Pattern;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Stopwatch;
-import com.google.common.base.Strings;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.UncheckedExecutionException;
-import net.lingala.zip4j.ZipFile;
-import net.lingala.zip4j.exception.ZipException;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.IOUtils;
 import org.bouncycastle.cms.CMSException;
-import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.jsoup.Jsoup;
 import org.jsoup.safety.Safelist;
@@ -63,7 +59,6 @@ import org.sagebionetworks.bridge.rest.model.AssessmentConfig;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.ExportedRecordInfo;
 import org.sagebionetworks.bridge.rest.model.Exporter3Configuration;
-import org.sagebionetworks.bridge.rest.model.HealthDataRecord;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.SharingScope;
 import org.sagebionetworks.bridge.rest.model.Study;
@@ -76,6 +71,7 @@ import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerRetryableException;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
 import org.sagebionetworks.bridge.time.DateUtils;
+import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.worker.ThrowingConsumer;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeUtils;
@@ -89,7 +85,11 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
     static final String CONFIG_KEY_RAW_HEALTH_DATA_BUCKET = "health.data.bucket.raw";
     static final String CONFIG_KEY_UPLOAD_BUCKET = "upload.bucket";
+    private static final String DATA_GROUP_TEST_USER = "test_user";
+    private static final String FILENAME_METADATA_JSON = "metadata.json";
+    private static final String METADATA_KEY_ASSESSMENT_GUID = "assessmentGuid";
     static final String METADATA_KEY_CLIENT_INFO = "clientInfo";
+    private static final String METADATA_KEY_DATA_GROUPS = "dataGroups";
     static final String METADATA_KEY_EXPORTED_ON = "exportedOn";
     static final String METADATA_KEY_HEALTH_CODE = "healthCode";
     static final String METADATA_KEY_PARTICIPANT_VERSION = "participantVersion";
@@ -100,9 +100,23 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     static final String METADATA_KEY_INSTANCE_GUID = "instanceGuid";
     static final String METADATA_KEY_CONTENT_TYPE = "contentType";
 
+    private static final String[] TABLE_ROW_METADATA_JSON_KEYS = {
+            "deviceInfo",
+            "startDate",
+            "endDate",
+    };
+
+    private static final String[] TABLE_ROW_UPLOAD_METADATA_KEYS = {
+            "sessionGuid",
+            "sessionName",
+            "sessionStartEventId",
+    };
+
     // Valid characters are alphanumeric, underscores, and periods. This pattern is used to match invalid characters to
     // convert them to underscores.
     private static final Pattern METADATA_NAME_REPLACEMENT_PATTERN = Pattern.compile("[^\\w\\.]");
+
+    private AssessmentSummarizerProvider summarizerProvider;
     private BridgeHelper bridgeHelper;
     private LoadingCache<String, CmsEncryptor> cmsEncryptorCache;
     private FileHelper fileHelper;
@@ -111,11 +125,17 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     private S3Helper s3Helper;
     private SynapseHelper synapseHelper;
     private String uploadBucket;
+    private ZipHelper zipHelper;
 
     @Autowired
     public final void setBridgeConfig(Config config) {
         rawHealthDataBucket = config.get(CONFIG_KEY_RAW_HEALTH_DATA_BUCKET);
         uploadBucket = config.get(CONFIG_KEY_UPLOAD_BUCKET);
+    }
+
+    @Autowired
+    public final void setSummarizerProvider(AssessmentSummarizerProvider summarizerProvider) {
+        this.summarizerProvider = summarizerProvider;
     }
 
     @Autowired
@@ -146,6 +166,11 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     @Autowired
     public final void setSynapseHelper(SynapseHelper synapseHelper) {
         this.synapseHelper = synapseHelper;
+    }
+
+    @Autowired
+    public final void setZipHelper(ZipHelper zipHelper) {
+        this.zipHelper = zipHelper;
     }
 
     @Override
@@ -261,6 +286,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         ExportToAppNotification notification = new ExportToAppNotification();
         notification.setAppId(appId);
         notification.setRecordId(recordId);
+        UploadTableRow tableRow = null;
         if (exportForApp) {
             ExportedRecordInfo recordInfo = exportToSynapse(appId, null,
                     app.getExporter3Configuration(), upload, record, metadataMap, hexMd5);
@@ -269,14 +295,19 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
             // Log message for our dashboards.
             LOG.info("Exported upload to app-wide project: appId=" + appId + ", recordId=" + recordId);
-        }
 
-        //Generate TableRow for csv file
-        UploadTableRow tableRow = null;
-        try {
-            tableRow = getUploadTableRow(upload, record, recordId, metadataMap);
-        } catch (Exception exception) {
-            LOG.error("Error getting UploadTableRow for upload", exception);
+            // https://sagebionetworks.jira.com/browse/DHP-1151 - Right now, JSON to Table Row is only available if the
+            // app is configured for export.
+            if (app.getExporter3Configuration().isUploadTableEnabled()) {
+                try {
+                    tableRow = getUploadTableRow(upload, record, participant, recordId, metadataMap);
+                } catch (PollSqsWorkerBadRequestException ex) {
+                    // We won't be able to generate a CSV row no matter how hard we try. However, we don't want to
+                    // prevent export to Synapse. Log an error and move on.
+                    LOG.error("Bad request getting UploadTableRow for appId=" + appId + ", recordId=" + recordId +
+                            ": " + ex.getMessage(), ex);
+                }
+            }
         }
 
         for (Study study : studiesToExport) {
@@ -291,7 +322,21 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
                     study.getName() + ", recordId=" + recordId);
 
             // Save result table row to each study
-            if (tableRow != null) {
+            if (tableRow != null && study.getExporter3Configuration().isUploadTableEnabled()) {
+                // Add external ID to table row metadata. The value is study-specific, so we need to put the logic here.
+                String externalId = participant.getExternalIds().get(studyId);
+                if (externalId != null) {
+                    // externalId may contain the studyId as a suffix. If it does, we need to remove it.
+                    if (externalId.endsWith(":" + studyId)) {
+                        externalId = externalId.substring(0, externalId.length() - studyId.length() - 1);
+                    }
+
+                    tableRow.getMetadata().put("externalId", externalId);
+                } else {
+                    // We're re-using tableRow for each study, so we need to remove the external ID if it's not present.
+                    tableRow.getMetadata().remove("externalId");
+                }
+
                 bridgeHelper.saveUploadTableRow(appId, studyId, tableRow);
             }
         }
@@ -554,81 +599,93 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         return builder.toString();
     }
 
-    UploadTableRow getUploadTableRow(Upload upload, HealthDataRecordEx3 record, String recordId, Map<String, String> metadataMap )
-            throws IOException {
+    // Creates the upload table row for the upload.
+    private UploadTableRow getUploadTableRow(Upload upload, HealthDataRecordEx3 record, StudyParticipant participant,
+            String recordId, Map<String, String> metadataMap) throws IOException, PollSqsWorkerBadRequestException {
         UploadTableRow tableRow = null;
-        String instanceGuid = metadataMap.get(METADATA_KEY_INSTANCE_GUID);
-        String assessmentGuid = metadataMap.get("assessmentGuid");
-        String appID = record.getAppId();
+        String assessmentGuid = metadataMap.get(METADATA_KEY_ASSESSMENT_GUID);
+        String appId = record.getAppId();
 
-        if (instanceGuid != null) {
+        if (assessmentGuid != null) {
+            // Top-level parameters.
             tableRow = new UploadTableRow();
-            tableRow.setAssessmentGuid(metadataMap.get("assessmentGuid"));
-            String startedOn = metadataMap.get("startedOn");
-            DateTime createdOn = upload.getRequestedOn();
-            if (!Strings.isNullOrEmpty(startedOn)) {
-                createdOn = DateTime.parse(metadataMap.get("startedOn"));
-            }
-            tableRow.setCreatedOn(createdOn);
+            tableRow.setAssessmentGuid(assessmentGuid);
+            tableRow.setCreatedOn(upload.getRequestedOn());
             tableRow.setRecordId(recordId);
             tableRow.setHealthCode(record.getHealthCode());
             tableRow.setParticipantVersion(record.getParticipantVersion());
-            Map<String, String> metaData = new HashMap<>();
-            metaData.put("clientInfo", record.getClientInfo());
-            String[] metadataKeys = new String[] {
-                    "sessionGuid", "sessionStartEventId", "sessionStartEventTimestamp", "sessionStartEventTimestamp",
-                    "startedOn", "finishedOn", "declined", "sessionName"
-            };
-            for (String key: metadataKeys) {
+
+            // Metadata.
+            Map<String, String> tableRowMetadata = new HashMap<>();
+            tableRowMetadata.put(METADATA_KEY_CLIENT_INFO, record.getClientInfo());
+            tableRowMetadata.put(METADATA_KEY_USER_AGENT, record.getUserAgent());
+            for (String key: TABLE_ROW_UPLOAD_METADATA_KEYS) {
                 String value = metadataMap.get(key);
                 if (value != null) {
-                    metaData.put(key, value);
+                    tableRowMetadata.put(key, value);
                 }
             }
-            tableRow.setMetadata(metaData);
+            tableRow.setMetadata(tableRowMetadata);
 
-            boolean isTestData = false;
-            HealthDataRecord healthData = upload.getHealthData();
-            if (healthData != null) {
-                isTestData = healthData.getUserDataGroups().contains("test_user");
-                metaData.put("externalId", healthData.getUserExternalId());
-                metaData.put("dataGroups", String.join(",", healthData.getUserDataGroups()));
-            }
-            tableRow.setTestData(isTestData);
+            // Get data groups from participant.
+            List<String> dataGroupList = participant.getDataGroups();
+            tableRow.setTestData(dataGroupList.contains(DATA_GROUP_TEST_USER));
+            tableRowMetadata.put(METADATA_KEY_DATA_GROUPS, Constants.COMMA_JOINER.join(dataGroupList));
 
-            Assessment assessment = bridgeHelper.getAssessment(appID, assessmentGuid);
-            AssessmentConfig assessmentConfig = bridgeHelper.getAssessmentConfig(appID, assessmentGuid);
-            AssessmentSummarizerProvider summarizerProvider = new AssessmentSummarizerProvider();
+            // Open the zip file only if we recognize the assessment.
+            Assessment assessment = bridgeHelper.getAssessmentByGuid(appId, assessmentGuid);
+            AssessmentConfig assessmentConfig = bridgeHelper.getAssessmentConfigByGuid(appId, assessmentGuid);
             AssessmentSummarizer summarizer = summarizerProvider.getSummarizer(assessment, assessmentConfig);
             if (summarizer != null) {
-                File tempDir = null;
+                File tempDir = fileHelper.createTempDir();
                 try {
-                    tempDir = fileHelper.createTempDir();
+                    // Local file name doesn't matter here because it's temporary.
                     File downloadedFile = fileHelper.newFile(tempDir, upload.getUploadId());
-                    s3Helper.downloadS3File(rawHealthDataBucket, upload.getUploadId(), downloadedFile);
+                    String s3Key = getRawS3KeyForUpload(appId, null, upload, record);
+                    s3Helper.downloadS3File(rawHealthDataBucket, s3Key, downloadedFile);
 
-                    File resultFile = extractFileFromZip(tempDir, downloadedFile, summarizer.getResultFilename());
+                    Map<String, File> unzippedFileMap = zipHelper.unzip(downloadedFile, tempDir);
+
+                    // Load some metadata params from the metadata.json file.
+                    File metadataJsonFile = unzippedFileMap.get(FILENAME_METADATA_JSON);
+                    if (metadataJsonFile != null && metadataJsonFile.exists()) {
+                        String metadataJsonString = IOUtils.toString(fileHelper.getInputStream(metadataJsonFile),
+                                StandardCharsets.UTF_8);
+                        JsonNode metadataJsonNode = DefaultObjectMapper.INSTANCE.readTree(metadataJsonString);
+
+                        // TODO https://sagebionetworks.jira.com/browse/DHP-1074 Load jsonSchema from metadata.json file
+                        // and validate against schema
+
+                        for (String key: TABLE_ROW_METADATA_JSON_KEYS) {
+                            JsonNode valueNode = metadataJsonNode.get(key);
+                            if (valueNode != null && valueNode.isTextual()) {
+                                tableRowMetadata.put(key, valueNode.textValue());
+                            }
+                        }
+                    } else {
+                        LOG.warn("Unable to load metadata.json file for appId=" + appId + ", recordId=" + recordId +
+                                ", assessmentGuid=" + assessmentGuid);
+                    }
+
+                    // Summarize results file.
+                    File resultFile = unzippedFileMap.get(summarizer.getResultFilename());
                     if (resultFile != null && resultFile.exists()) {
                         String resultString = IOUtils.toString(fileHelper.getInputStream(resultFile),
                                 StandardCharsets.UTF_8);
-                        Map<String, String> data = summarizer.summarizeResults(resultString);
+                        Map<String, String> data = summarizer.summarizeResults(appId, recordId, resultString);
                         tableRow.setData(data);
-
-                        // TODO: Load jsonSchema from metadata.json file and validate against schema -nbrown 11/2/23
-                        //File metadataJsonFile = extractFileFromZip(tempDir, downloadedFile, "metadata.json");
                     } else {
-                        // TODO: Do we want more logging? -nbrown 11/2/23
-                        LOG.warn("Unable to load result file");
+                        LOG.warn("Unable to load result file for appId=" + appId + ", recordId=" + recordId +
+                                ", assessmentGuid=" + assessmentGuid);
                     }
-
                 } finally {
                     // Delete temp directory used for unzipping archive
                     try {
-                        if (tempDir != null) {
-                            fileHelper.deleteDirRecursively(tempDir);
-                        }
+                        fileHelper.deleteDirRecursively(tempDir);
                     } catch (IOException ex) {
-                        LOG.warn("Error deleting temp directory", ex);
+                        // Deleting the temp dir is best-effort. If we can't delete it, just log an error and move on.
+                        LOG.error("Error deleting temp dir " + tempDir.getAbsolutePath() + " for appId=" + appId +
+                                ", recordId=" + recordId, ex);
                     }
                 }
 
@@ -654,20 +711,4 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     InputStream getBufferedInputStream(InputStream inputStream) {
         return new BufferedInputStream(inputStream);
     }
-
-
-    protected File extractFileFromZip(java.io.File directory, java.io.File zipFile, String fileName) {
-        try {
-            ZipFile zFile = new ZipFile(zipFile);
-            zFile.extractFile(fileName, directory.getPath());
-            return fileHelper.newFile(directory, fileName);
-        } catch (ZipException e) {
-            LOG.error("Error extracting file from zip", e);
-        }
-        return null;
-    }
-
-
-
-
 }
