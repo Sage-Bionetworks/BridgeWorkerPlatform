@@ -15,6 +15,7 @@ public class UploadCsvRequestTest {
     private static final String APP_ID = "test-app";
     private static final String ASSESSMENT_GUID = "test-assessment-guid";
     private static final Set<String> ASSESSMENT_GUIDS = ImmutableSet.of(ASSESSMENT_GUID);
+    private static final String JOB_GUID = "test-job-guid";
     private static final String STUDY_ID = "test-study";
     private static final String START_TIME_STR = "2018-05-01T06:18:01.006Z";
     private static final String END_TIME_STR = "2018-05-02T21:19:28.398Z";
@@ -39,6 +40,7 @@ public class UploadCsvRequestTest {
     public void deserialize() throws JsonProcessingException {
         // We only ever de-serialize this, so start with JSON.
         String jsonText = "{\n" +
+                "   \"jobGuid\":\"" + JOB_GUID + "\",\n" +
                 "   \"appId\":\"" + APP_ID + "\",\n" +
                 "   \"studyId\":\"" + STUDY_ID + "\",\n" +
                 "   \"assessmentGuids\":[\"" + ASSESSMENT_GUID + "\"],\n" +
@@ -50,6 +52,7 @@ public class UploadCsvRequestTest {
 
         // Convert to Java object.
         UploadCsvRequest request = DefaultObjectMapper.INSTANCE.readValue(jsonText, UploadCsvRequest.class);
+        assertEquals(request.getJobGuid(), JOB_GUID);
         assertEquals(request.getAppId(), APP_ID);
         assertEquals(request.getStudyId(), STUDY_ID);
         assertEquals(request.getAssessmentGuids(), ASSESSMENT_GUIDS);

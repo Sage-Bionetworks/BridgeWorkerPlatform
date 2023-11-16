@@ -72,6 +72,7 @@ import org.sagebionetworks.bridge.rest.model.SmsTemplate;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.UploadList;
+import org.sagebionetworks.bridge.rest.model.UploadTableJob;
 import org.sagebionetworks.bridge.rest.model.UploadTableRow;
 import org.sagebionetworks.bridge.rest.model.UploadTableRowList;
 import org.sagebionetworks.bridge.rest.model.UploadTableRowQuery;
@@ -99,6 +100,7 @@ public class BridgeHelperTest {
     private static final List<String> DUMMY_MESSAGE_LIST = ImmutableList.of("This is a message");
     private static final String EMAIL = "eggplant@example.com";
     private static final String HEALTH_CODE = "test-health-code";
+    private static final String JOB_GUID = "test-job-guid";
     private static final int PARTICIPANT_VERSION = 13;
     private static final Phone PHONE = new Phone().regionCode("US").number("4082588569");
     private static final String RECORD_ID = "dummy-record";
@@ -987,6 +989,35 @@ public class BridgeHelperTest {
         assertSame(outputUpload, upload);
 
         verify(mockWorkerApi).getUploadByRecordId(RECORD_ID);
+    }
+
+    @Test
+    public void getUploadTableJob() throws Exception {
+        // Set up mocks.
+        UploadTableJob job = new UploadTableJob();
+        Call<UploadTableJob> mockCall = mockCallForValue(job);
+        when(mockWorkerApi.getUploadTableJobForWorker(APP_ID, STUDY_ID, JOB_GUID)).thenReturn(mockCall);
+
+        // Execute and validate.
+        UploadTableJob result = bridgeHelper.getUploadTableJob(APP_ID, STUDY_ID, JOB_GUID);
+        assertSame(result, job);
+
+        verify(mockWorkerApi).getUploadTableJobForWorker(APP_ID, STUDY_ID, JOB_GUID);
+    }
+
+    @Test
+    public void updateUploadTableJob() throws IOException {
+        // Set up mocks.
+        UploadTableJob job = new UploadTableJob();
+
+        Call<Message> mockCall = mock(Call.class);
+        when(mockWorkerApi.updateUploadTableJobForWorker(eq(APP_ID), eq(STUDY_ID), eq(JOB_GUID), same(job)))
+                .thenReturn(mockCall);
+
+        // Execute and validate.
+        bridgeHelper.updateUploadTableJob(APP_ID, STUDY_ID, JOB_GUID, job);
+        verify(mockWorkerApi).updateUploadTableJobForWorker(eq(APP_ID), eq(STUDY_ID), eq(JOB_GUID), same(job));
+        verify(mockCall).execute();
     }
 
     @Test

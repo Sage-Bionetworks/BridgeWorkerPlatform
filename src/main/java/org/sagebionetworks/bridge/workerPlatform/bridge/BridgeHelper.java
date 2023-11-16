@@ -38,6 +38,7 @@ import org.sagebionetworks.bridge.rest.model.SmsTemplate;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.UploadList;
+import org.sagebionetworks.bridge.rest.model.UploadTableJob;
 import org.sagebionetworks.bridge.rest.model.UploadTableRow;
 import org.sagebionetworks.bridge.rest.model.UploadTableRowQuery;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
@@ -404,6 +405,23 @@ public class BridgeHelper {
     /** Gets an upload by record ID. */
     public Upload getUploadByRecordId(String recordId) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getUploadByRecordId(recordId).execute().body();
+    }
+
+    /** Get the upload table job. Does not include the downloadable S3 URL. */
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
+            types = { BridgeSDKException.class, IOException.class }, randomize = false)
+    public UploadTableJob getUploadTableJob(String appId, String studyId, String jobGuid) throws IOException {
+        return clientManager.getClient(ForWorkersApi.class).getUploadTableJobForWorker(appId, studyId, jobGuid)
+                .execute().body();
+    }
+
+    /** Update the upload table job. */
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
+            types = { BridgeSDKException.class, IOException.class }, randomize = false)
+    public void updateUploadTableJob(String appId, String studyId, String jobGuid, UploadTableJob job)
+            throws IOException {
+        clientManager.getClient(ForWorkersApi.class).updateUploadTableJobForWorker(appId, studyId, jobGuid, job)
+                .execute();
     }
 
     /** Query table rows for uploads. */
