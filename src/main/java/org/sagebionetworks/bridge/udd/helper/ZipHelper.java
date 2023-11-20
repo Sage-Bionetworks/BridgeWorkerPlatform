@@ -7,10 +7,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -37,6 +35,8 @@ public class ZipHelper {
     private int maxNumZipEntries = DEFAULT_MAX_NUM_ZIP_ENTRIES;
     private int maxZipEntrySize = DEFAULT_MAX_ZIP_ENTRY_SIZE;
 
+    // Temporary buffer size for unzipping, in bytes. This is big enough that there should be no churn for most files,
+    // but small enough to have minimal memory overhead.
     public static final int BUFFER_SIZE = 4096;
 
     /** File helper, used to read data from the input files and write to the output file. */
@@ -86,13 +86,32 @@ public class ZipHelper {
                 fileMap.put(entryName, outputFile);
 
                 try (OutputStream outputStream = fileHelper.getOutputStream(outputFile)) {
-                    ByteStreams.copy(zis, outputStream);
+                    copyByteStream(entryName, zis, outputStream);
                 }
                 zipEntry = zis.getNextEntry();
             }
         }
 
         return fileMap;
+    }
+
+    private void copyByteStream(String entryName, InputStream inputStream, OutputStream outputStream)
+            throws IOException, PollSqsWorkerBadRequestException {
+        // We want copy data from the stream to a byte array manually, so we can count the bytes and protect against
+        // zip bombs.
+        byte[] tempBuffer = new byte[BUFFER_SIZE];
+        int totalBytes = 0;
+        int bytesRead;
+        while ((bytesRead = inputStream.read(tempBuffer, 0, BUFFER_SIZE)) >= 0) {
+            totalBytes += bytesRead;
+            if (totalBytes > maxZipEntrySize) {
+                throw new PollSqsWorkerBadRequestException("Zip entry size is over the max allowed size. The entry " +
+                        entryName + " has size more than " + totalBytes + ". The max allowed size is" +
+                        maxZipEntrySize + ".");
+            }
+
+            outputStream.write(tempBuffer, 0, bytesRead);
+        }
     }
 
     /**

@@ -600,7 +600,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     }
 
     // Creates the upload table row for the upload.
-    private UploadTableRow getUploadTableRow(Upload upload, HealthDataRecordEx3 record, StudyParticipant participant,
+    UploadTableRow getUploadTableRow(Upload upload, HealthDataRecordEx3 record, StudyParticipant participant,
             String recordId, Map<String, String> metadataMap) throws IOException, PollSqsWorkerBadRequestException {
         UploadTableRow tableRow = null;
         String assessmentGuid = metadataMap.get(METADATA_KEY_ASSESSMENT_GUID);
@@ -627,8 +627,10 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             }
             tableRow.setMetadata(tableRowMetadata);
 
-            // Get data groups from participant.
+            // Get data groups from participant. Sort the data groups so that the order is deterministic. (Null means
+            // it sorts using the natural ordering, ie alphabetical order.)
             List<String> dataGroupList = participant.getDataGroups();
+            dataGroupList.sort(null);
             tableRow.setTestData(dataGroupList.contains(DATA_GROUP_TEST_USER));
             tableRowMetadata.put(METADATA_KEY_DATA_GROUPS, Constants.COMMA_JOINER.join(dataGroupList));
 
@@ -660,6 +662,10 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
                             JsonNode valueNode = metadataJsonNode.get(key);
                             if (valueNode != null && valueNode.isTextual()) {
                                 tableRowMetadata.put(key, valueNode.textValue());
+                            } else {
+                                // We still want to include a blank value in the table row, so that the column is
+                                // present in the CSV.
+                                tableRowMetadata.put(key, "");
                             }
                         }
                     } else {
@@ -672,6 +678,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
                     if (resultFile != null && resultFile.exists()) {
                         String resultString = IOUtils.toString(fileHelper.getInputStream(resultFile),
                                 StandardCharsets.UTF_8);
+                        LOG.info("resultJson: " + resultString);
                         Map<String, String> data = summarizer.summarizeResults(appId, recordId, resultString);
                         tableRow.setData(data);
                     } else {
@@ -688,7 +695,6 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
                                 ", recordId=" + recordId, ex);
                     }
                 }
-
             }
         }
         return tableRow;

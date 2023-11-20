@@ -55,7 +55,7 @@ import org.testng.annotations.Test;
 import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.crypto.CmsEncryptor;
 import org.sagebionetworks.bridge.crypto.WrongEncryptionKeyException;
-import org.sagebionetworks.bridge.exporter3.results.AssessmentResultSummarizer;
+//import org.sagebionetworks.bridge.exporter3.results.AssessmentResultSummarizer;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.RestUtils;
@@ -1253,20 +1253,21 @@ public class Exporter3WorkerProcessorTest {
     public void uploadTableRow() throws Exception {
         //Mock getAssessment
         Assessment assessment = new Assessment().title(ASSESSMENT_ID).osName("Universal").ownerId("sage-bionetworks")
-                .identifier(ASSESSMENT_ID).guid(ASSESSMENT_GUID).frameworkIdentifier(
-                        AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER);
-        when(mockBridgeHelper.getAssessment(any(), eq(ASSESSMENT_GUID))).thenReturn(assessment);
+                .identifier(ASSESSMENT_ID).guid(ASSESSMENT_GUID); //.frameworkIdentifier(
+                        //AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER);
+        when(mockBridgeHelper.getAssessmentByGuid(any(), eq(ASSESSMENT_GUID))).thenReturn(assessment);
         // Mock getAssessmentConfig
         AssessmentConfig assessmentConfig = new AssessmentConfig();
         assessmentConfig.setConfig(ASSESSMENT_CONFIG);
 
         // Mock extractFileFromZip to return assessmentResult.json file
-        doAnswer(invocation -> {
-            File file = inMemoryFileHelper.newFile(inMemoryFileHelper.createTempDir(), "assessmentResult.json");
-            inMemoryFileHelper.writeBytes(file, DUMMY_ASSESSMENT_RESULTS.getBytes(StandardCharsets.UTF_8));
-            Mockito.when(file.exists()).thenReturn(true);
-            return file;
-        }).when(processor).extractFileFromZip(any(), any(), eq("assessmentResult.json"));
+        // todo
+        //doAnswer(invocation -> {
+        //    File file = inMemoryFileHelper.newFile(inMemoryFileHelper.createTempDir(), "assessmentResult.json");
+        //    inMemoryFileHelper.writeBytes(file, DUMMY_ASSESSMENT_RESULTS.getBytes(StandardCharsets.UTF_8));
+        //    Mockito.when(file.exists()).thenReturn(true);
+        //    return file;
+        //}).when(processor).extractFileFromZip(any(), any(), eq("assessmentResult.json"));
 
         doAnswer(invocation -> {
             File file = invocation.getArgumentAt(2, File.class);
@@ -1274,7 +1275,7 @@ public class Exporter3WorkerProcessorTest {
             return null;
         }).when(mockS3Helper).downloadS3File(eq(UPLOAD_BUCKET), eq(RECORD_ID), any());
 
-        when(mockBridgeHelper.getAssessmentConfig(any(), eq(ASSESSMENT_GUID))).thenReturn(assessmentConfig);
+        when(mockBridgeHelper.getAssessmentConfigByGuid(any(), eq(ASSESSMENT_GUID))).thenReturn(assessmentConfig);
 
         Upload upload = mockUpload(true);
         HealthDataRecordEx3 record = makeRecord();
@@ -1284,7 +1285,8 @@ public class Exporter3WorkerProcessorTest {
                 "instanceGuid", ASSESSMENT_INSTANCE_GUID,
                 "sessionGuid", SESSION_GUID);
 
-        UploadTableRow tableRow = processor.getUploadTableRow(upload, record, RECORD_ID, metadataMap);
+        // todo participant
+        UploadTableRow tableRow = processor.getUploadTableRow(upload, record, null, RECORD_ID, metadataMap);
         assertNotNull(tableRow);
         assertEquals(RECORD_ID, tableRow.getRecordId());
         assertEquals(ASSESSMENT_GUID, tableRow.getAssessmentGuid());

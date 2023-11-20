@@ -5,7 +5,6 @@ import org.sagebionetworks.assessmentmodel.AssessmentResult
 import org.sagebionetworks.assessmentmodel.serialization.Serialization
 import org.sagebionetworks.assessmentmodel.toFlatAnswers
 import org.sagebionetworks.assessmentmodel.toFlatAnswersDefinition
-import org.sagebionetworks.bridge.rest.RestUtils
 import org.sagebionetworks.bridge.rest.model.Assessment
 import org.sagebionetworks.bridge.rest.model.AssessmentConfig
 import org.slf4j.LoggerFactory
@@ -53,9 +52,9 @@ class AssessmentResultSummarizer(private val assessment: Assessment, private val
      * the result.
      */
     fun getSurveyColumns() : List<AnswerColumn> {
-        return if (assessmentConfig.config != null) {
-            val configString = RestUtils.toJSON(assessmentConfig.config).asString;
-            val assessment: org.sagebionetworks.assessmentmodel.Assessment = Serialization.JsonCoder.default.decodeFromString(configString)
+        return if (assessmentConfig.config != null && assessmentConfig.config is String) {
+            val assessment: org.sagebionetworks.assessmentmodel.Assessment = Serialization.JsonCoder.default
+                .decodeFromString(assessmentConfig.config as String)
             assessment.toFlatAnswersDefinition()
         } else {
             listOf()
