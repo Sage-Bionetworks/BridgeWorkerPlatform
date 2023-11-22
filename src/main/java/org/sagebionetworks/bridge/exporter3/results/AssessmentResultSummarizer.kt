@@ -1,5 +1,6 @@
 package org.sagebionetworks.bridge.exporter3.results
 
+import org.slf4j.LoggerFactory
 import org.sagebionetworks.assessmentmodel.AnswerColumn
 import org.sagebionetworks.assessmentmodel.AssessmentResult
 import org.sagebionetworks.assessmentmodel.serialization.Serialization
@@ -7,19 +8,17 @@ import org.sagebionetworks.assessmentmodel.toFlatAnswers
 import org.sagebionetworks.assessmentmodel.toFlatAnswersDefinition
 import org.sagebionetworks.bridge.rest.model.Assessment
 import org.sagebionetworks.bridge.rest.model.AssessmentConfig
-import org.slf4j.LoggerFactory
 
 class AssessmentResultSummarizer(private val assessment: Assessment, private val assessmentConfig: AssessmentConfig): AssessmentSummarizer {
-
     init {
         assert(assessment.frameworkIdentifier == FRAMEWORK_IDENTIFIER)
     }
 
     override val resultFilename: String
-        get() = "assessmentResult.json"
+        get() = FILENAME_ASSESSMENT_RESULT_JSON
 
     override fun canSummarize(assessment: Assessment): Boolean {
-        return assessment.frameworkIdentifier == "health.bridgedigital.assessment"
+        return assessment.frameworkIdentifier == FRAMEWORK_IDENTIFIER
     }
 
     /**
@@ -41,9 +40,7 @@ class AssessmentResultSummarizer(private val assessment: Assessment, private val
     }
 
     override fun getColumnNames(): List<String> {
-        if (!canSummarize(assessment)) {
-            return listOf()
-        }
+        // Because of the assert in init, it's impossible for the assessment to have the wrong framework identifier.
         return getSurveyColumns().map { it.columnName }
     }
 
@@ -62,8 +59,8 @@ class AssessmentResultSummarizer(private val assessment: Assessment, private val
     }
 
     companion object {
+        const val FILENAME_ASSESSMENT_RESULT_JSON = "assessmentResult.json"
         const val FRAMEWORK_IDENTIFIER = "health.bridgedigital.assessment"
         private val LOG = LoggerFactory.getLogger(AssessmentResultSummarizer::class.java)
     }
-
 }

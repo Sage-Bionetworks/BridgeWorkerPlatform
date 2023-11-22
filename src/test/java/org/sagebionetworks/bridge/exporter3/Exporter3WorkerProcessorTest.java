@@ -3,8 +3,11 @@ package org.sagebionetworks.bridge.exporter3;
 import static org.junit.Assert.assertFalse;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -40,7 +43,6 @@ import org.joda.time.DateTimeUtils;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 import org.sagebionetworks.repo.model.FileEntity;
@@ -55,10 +57,10 @@ import org.testng.annotations.Test;
 import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.crypto.CmsEncryptor;
 import org.sagebionetworks.bridge.crypto.WrongEncryptionKeyException;
-//import org.sagebionetworks.bridge.exporter3.results.AssessmentResultSummarizer;
+import org.sagebionetworks.bridge.exporter3.results.AssessmentResultSummarizer;
+import org.sagebionetworks.bridge.exporter3.results.AssessmentSummarizerProvider;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
-import org.sagebionetworks.bridge.rest.RestUtils;
 import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.Assessment;
 import org.sagebionetworks.bridge.rest.model.AssessmentConfig;
@@ -75,6 +77,7 @@ import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerRetryableException;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
+import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 
@@ -86,71 +89,63 @@ public class Exporter3WorkerProcessorTest {
     private static final String CUSTOM_METADATA_KEY_SANITIZED = "custom_metadata_key";
     private static final String CUSTOM_METADATA_VALUE = "custom-<b>metadata</b>-value";
     private static final String CUSTOM_METADATA_VALUE_CLEAN = "custom-metadata-value";
+    private static final String START_DATE_STR = "2015-04-10T10:40:34.000-07:00";
+    private static final String END_DATE_STR = "2015-04-10T18:19:51.000-07:00";
+    private static final String DATA_GROUP_A = "aa_group";
+    private static final String DATA_GROUP_B = "bb_group";
+    private static final String DEVICE_INFO = "Unit Test Device Info";
     private static final byte[] DUMMY_MD5_BYTES = "dummy-md5".getBytes(StandardCharsets.UTF_8);
     private static final byte[] DUMMY_ENCRYPTED_FILE_BYTES = "dummy encrypted file content"
             .getBytes(StandardCharsets.UTF_8);
     private static final byte[] DUMMY_UNENCRYPTED_FILE_BYTES = "dummy unencrypted file content"
             .getBytes(StandardCharsets.UTF_8);
+    private static final String EXPORTED_FILE_ENTITY_ID = "syn2222";
+    private static final String EXPORTED_FILE_HANDLE_ID = "3333";
+    private static final String FILENAME = "filename.txt";
+    private static final String HEALTH_CODE = "health-code";
+    private static final int PARTICIPANT_VERSION = 42;
+    private static final String RAW_DATA_BUCKET = "raw-data-bucket";
+    private static final String RECORD_ID = "test-record";
+    private static final DateTime REQUESTED_ON = DateTime.parse("2015-04-10T18:19:51.047-07:00");
+    private static final String SCHEDULE_GUID = "test-schedule-guid";
+    private static final String SESSION_NAME = "test-session-name";
+    private static final String SESSION_START_EVENT_ID = "test-session-start-event-id";
+    private static final String STUDY_ID_2 = "test-study-2";
+    private static final String STUDY_ID_3 = "test-study-3";
+    private static final String STUDY_ID_4 = "test-study-4";
+    private static final String TODAYS_DATE_STRING = "2021-08-23";
+    private static final String TODAYS_FOLDER_ID = "syn7777";
+    private static final String UPLOAD_BUCKET = "upload-bucket";
+    private static final String USER_AGENT = "dummy user agent";
+    private static final String INSTANCE_GUID = "instanceGuid";
+    private static final String ASSESSMENT_INSTANCE_GUID = "assessmentInstanceGuid";
+    private static final String ASSESSMENT_GUID = "assessmentGuid";
+    private static final String ASSESSMENT_ID = "assessmentId";
+    private static final String SESSION_GUID = "session-guid";
+
+    private static final String EXTERNAL_ID_1 = "external-id-1";
+    private static final String EXTERNAL_ID_1_WITH_SUFFIX = EXTERNAL_ID_1 + ":" + Exporter3TestUtil.STUDY_ID;
+    private static final String EXTERNAL_ID_2 = "external-id-2";
+
+    private static final long MOCK_NOW_MILLIS = DateTime.parse(TODAYS_DATE_STRING + "T15:32:38.914-0700")
+            .getMillis();
+    private static final DateTime UPLOADED_ON = DateTime.parse(TODAYS_DATE_STRING + "T15:27:28.647-0700");
+    private static final long UPLOADED_ON_MILLIS = UPLOADED_ON.getMillis();
+
+    private static final String FULL_FILENAME = RECORD_ID + '-' + FILENAME;
+    private static final String EXPECTED_S3_KEY = Exporter3TestUtil.APP_ID + '/' + TODAYS_DATE_STRING + '/' + FULL_FILENAME;
+    private static final String EXPECTED_S3_KEY_FOR_STUDY = Exporter3TestUtil.APP_ID + '/' + Exporter3TestUtil.STUDY_ID + '/' + TODAYS_DATE_STRING + '/' +
+            FULL_FILENAME;
+
+    // Simplified assessment config with only the relevant fields.
     private static final String ASSESSMENT_CONFIG = "{\n" +
             "  \"type\": \"assessment\",\n" +
             "  \"identifier\": \"xhcsds\",\n" +
-            "  \"$schema\": \"https://sage-bionetworks.github.io/mobile-client-json/schemas/v2/AssessmentObject" +
-            ".json\",\n" +
-            "  \"versionString\": \"1.0.0\",\n" +
-            "  \"estimatedMinutes\": 3,\n" +
-            "  \"copyright\": \"Copyright © 2022 Sage Bionetworks. All rights reserved.\",\n" +
-            "  \"title\": \"Example Survey A\",\n" +
-            "  \"detail\": \"This is intended as an example of a survey with a list of questions. There are no " +
-            "sections and there are no additional instructions. In this survey, pause navigation is hidden for all " +
-            "nodes. For all questions, the skip button should say 'Skip me'. Default behavior is that buttons that " +
-            "make logical sense to be displayed are shown unless they are explicitly hidden.\",\n" +
             "  \"steps\": [\n" +
-            "    {\n" +
-            "      \"type\": \"overview\",\n" +
-            "      \"identifier\": \"overview\",\n" +
-            "      \"title\": \"Example Survey A\",\n" +
-            "      \"detail\": \"You will be shown a series of example questions. This survey has no additional " +
-            "instructions.\",\n" +
-            "      \"image\": {\n" +
-            "        \"imageName\": \"day_to_day\",\n" +
-            "        \"type\": \"sageResource\"\n" +
-            "      }\n" +
-            "    },\n" +
             "    {\n" +
             "      \"type\": \"choiceQuestion\",\n" +
             "      \"identifier\": \"choiceQ1\",\n" +
-            "      \"comment\": \"Go to the question selected by the participant. If they skip the question then go " +
-            "directly to follow-up.\",\n" +
             "      \"title\": \"Choose which question to answer\",\n" +
-            "      \"surveyRules\": [\n" +
-            "        {\n" +
-            "          \"skipToIdentifier\": \"followupQ\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"matchingAnswer\": 1,\n" +
-            "          \"skipToIdentifier\": \"simpleQ1\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"matchingAnswer\": 2,\n" +
-            "          \"skipToIdentifier\": \"simpleQ2\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"matchingAnswer\": 3,\n" +
-            "          \"skipToIdentifier\": \"simpleQ3\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"matchingAnswer\": 4,\n" +
-            "          \"skipToIdentifier\": \"simpleQ4\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"matchingAnswer\": 5,\n" +
-            "          \"skipToIdentifier\": \"simpleQ5\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"matchingAnswer\": 6,\n" +
-            "          \"skipToIdentifier\": \"simpleQ6\"\n" +
-            "        }\n" +
-            "      ],\n" +
             "      \"baseType\": \"integer\",\n" +
             "      \"singleChoice\": true,\n" +
             "      \"choices\": [\n" +
@@ -161,258 +156,43 @@ public class Exporter3WorkerProcessorTest {
             "        {\n" +
             "          \"value\": 2,\n" +
             "          \"text\": \"Birth year\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": 3,\n" +
-            "          \"text\": \"Likert Scale\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": 4,\n" +
-            "          \"text\": \"Sliding Scale\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": 5,\n" +
-            "          \"text\": \"Duration\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": 6,\n" +
-            "          \"text\": \"Time\"\n" +
             "        }\n" +
             "      ]\n" +
             "    },\n" +
             "    {\n" +
             "      \"type\": \"simpleQuestion\",\n" +
             "      \"identifier\": \"simpleQ1\",\n" +
-            "      \"nextStepIdentifier\": \"followupQ\",\n" +
             "      \"title\": \"Enter some text\",\n" +
             "      \"inputItem\": {\n" +
             "        \"type\": \"string\",\n" +
             "        \"placeholder\": \"I like cake\"\n" +
             "      }\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"type\": \"simpleQuestion\",\n" +
-            "      \"identifier\": \"simpleQ2\",\n" +
-            "      \"nextStepIdentifier\": \"followupQ\",\n" +
-            "      \"title\": \"Enter a birth year\",\n" +
-            "      \"inputItem\": {\n" +
-            "        \"type\": \"year\",\n" +
-            "        \"fieldLabel\": \"year of birth\",\n" +
-            "        \"placeholder\": \"YYYY\",\n" +
-            "        \"formatOptions\": {\n" +
-            "          \"allowFuture\": false,\n" +
-            "          \"minimumYear\": 1900\n" +
-            "        }\n" +
-            "      }\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"type\": \"simpleQuestion\",\n" +
-            "      \"identifier\": \"simpleQ3\",\n" +
-            "      \"nextStepIdentifier\": \"followupQ\",\n" +
-            "      \"title\": \"How much do you like apples?\",\n" +
-            "      \"uiHint\": \"likert\",\n" +
-            "      \"inputItem\": {\n" +
-            "        \"type\": \"integer\",\n" +
-            "        \"formatOptions\": {\n" +
-            "          \"maximumLabel\": \"Very much\",\n" +
-            "          \"maximumValue\": 7,\n" +
-            "          \"minimumLabel\": \"Not at all\",\n" +
-            "          \"minimumValue\": 1\n" +
-            "        }\n" +
-            "      },\n" +
-            "      \"shouldHideActions\": []\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"type\": \"simpleQuestion\",\n" +
-            "      \"identifier\": \"simpleQ4\",\n" +
-            "      \"nextStepIdentifier\": \"followupQ\",\n" +
-            "      \"title\": \"How much do you like apples?\",\n" +
-            "      \"uiHint\": \"slider\",\n" +
-            "      \"inputItem\": {\n" +
-            "        \"type\": \"integer\",\n" +
-            "        \"formatOptions\": {\n" +
-            "          \"maximumLabel\": \"Very much\",\n" +
-            "          \"maximumValue\": 100,\n" +
-            "          \"minimumLabel\": \"Not at all\",\n" +
-            "          \"minimumValue\": 0\n" +
-            "        }\n" +
-            "      }\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"type\": \"simpleQuestion\",\n" +
-            "      \"identifier\": \"simpleQ5\",\n" +
-            "      \"nextStepIdentifier\": \"followupQ\",\n" +
-            "      \"title\": \"How long does it take to travel to the moon?\",\n" +
-            "      \"inputItem\": {\n" +
-            "        \"type\": \"duration\"\n" +
-            "      }\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"type\": \"simpleQuestion\",\n" +
-            "      \"identifier\": \"simpleQ6\",\n" +
-            "      \"nextStepIdentifier\": \"followupQ\",\n" +
-            "      \"title\": \"What time is it on the moon?\",\n" +
-            "      \"inputItem\": {\n" +
-            "        \"type\": \"time\"\n" +
-            "      }\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"type\": \"choiceQuestion\",\n" +
-            "      \"identifier\": \"followupQ\",\n" +
-            "      \"title\": \"Are you happy with your choice?\",\n" +
-            "      \"subtitle\": \"After thinking it over...\",\n" +
-            "      \"detail\": \"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor " +
-            "incididunt ut labore et dolore magna aliqua.\",\n" +
-            "      \"surveyRules\": [\n" +
-            "        {\n" +
-            "          \"matchingAnswer\": false,\n" +
-            "          \"skipToIdentifier\": \"choiceQ1\"\n" +
-            "        }\n" +
-            "      ],\n" +
-            "      \"baseType\": \"boolean\",\n" +
-            "      \"singleChoice\": true,\n" +
-            "      \"choices\": [\n" +
-            "        {\n" +
-            "          \"value\": true,\n" +
-            "          \"text\": \"Yes\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": false,\n" +
-            "          \"text\": \"No\"\n" +
-            "        }\n" +
-            "      ]\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"type\": \"choiceQuestion\",\n" +
-            "      \"identifier\": \"favoriteFood\",\n" +
-            "      \"title\": \"What are you having for dinner next Tuesday after the soccer game?\",\n" +
-            "      \"subtitle\": \"After thinking it over...\",\n" +
-            "      \"detail\": \"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor " +
-            "incididunt ut labore et dolore magna aliqua.\",\n" +
-            "      \"surveyRules\": [\n" +
-            "        {\n" +
-            "          \"matchingAnswer\": \"Pizza\",\n" +
-            "          \"skipToIdentifier\": \"multipleChoice\",\n" +
-            "          \"ruleOperator\": \"ne\"\n" +
-            "        }\n" +
-            "      ],\n" +
-            "      \"baseType\": \"string\",\n" +
-            "      \"singleChoice\": true,\n" +
-            "      \"choices\": [\n" +
-            "        {\n" +
-            "          \"value\": \"Pizza\",\n" +
-            "          \"text\": \"Pizza\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": \"Sushi\",\n" +
-            "          \"text\": \"Sushi\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": \"Ice Cream\",\n" +
-            "          \"text\": \"Ice Cream\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": \"Beans & Rice\",\n" +
-            "          \"text\": \"Beans & Rice\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": \"Tofu Tacos\",\n" +
-            "          \"text\": \"Tofu Tacos\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": \"Bucatini Alla Carbonara\",\n" +
-            "          \"text\": \"Bucatini Alla Carbonara\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": \"Hot Dogs, Kraft Dinner & Potato Salad\",\n" +
-            "          \"text\": \"Hot Dogs, Kraft Dinner & Potato Salad\"\n" +
-            "        }\n" +
-            "      ],\n" +
-            "      \"other\": {\n" +
-            "        \"type\": \"string\"\n" +
-            "      }\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"type\": \"instruction\",\n" +
-            "      \"identifier\": \"pizza\",\n" +
-            "      \"title\": \"Mmmmm, pizza...\"\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"type\": \"choiceQuestion\",\n" +
-            "      \"identifier\": \"multipleChoice\",\n" +
-            "      \"actions\": {\n" +
-            "        \"goForward\": {\n" +
-            "          \"buttonTitle\": \"Submit\",\n" +
-            "          \"type\": \"default\"\n" +
-            "        }\n" +
-            "      },\n" +
-            "      \"title\": \"What are your favorite colors?\",\n" +
-            "      \"baseType\": \"string\",\n" +
-            "      \"singleChoice\": false,\n" +
-            "      \"choices\": [\n" +
-            "        {\n" +
-            "          \"value\": \"Blue\",\n" +
-            "          \"text\": \"Blue\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": \"Yellow\",\n" +
-            "          \"text\": \"Yellow\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"value\": \"Red\",\n" +
-            "          \"text\": \"Red\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"text\": \"All of the above\",\n" +
-            "          \"selectorType\": \"all\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "          \"text\": \"None of the above\",\n" +
-            "          \"selectorType\": \"exclusive\"\n" +
-            "        }\n" +
-            "      ]\n" +
-            "    },\n" +
-            "    {\n" +
-            "      \"type\": \"completion\",\n" +
-            "      \"identifier\": \"completion\",\n" +
-            "      \"title\": \"You're done!\"\n" +
             "    }\n" +
-            "  ],\n" +
-            "  \"shouldHideActions\": [],\n" +
-            "  \"webConfig\": {\n" +
-            "    \"skipOption\": \"SKIP\"\n" +
-            "  },\n" +
-            "  \"interruptionHandling\": {\n" +
-            "    \"canResume\": true,\n" +
-            "    \"reviewIdentifier\": \"beginning\",\n" +
-            "    \"canSkip\": true,\n" +
-            "    \"canSaveForLater\": true\n" +
-            "  }\n" +
+            "  ]\n" +
             "}";
+
+    // Simplified metadata.json file with only the relevant fields.
+    private static final String METADATA_JSON_CONTENT = "{\n" +
+            "   \"deviceInfo\":\"" + DEVICE_INFO + "\",\n" +
+            "   \"startDate\":\"" + START_DATE_STR + "\",\n" +
+            "   \"endDate\":\"" + END_DATE_STR +  "\"\n" +
+            "}";
+
+    // Empty metadata.json to test branch coverage.
+    private static final String EMPTY_METADATA_JSON_CONTENT = "{}";
+
+    // Simplified assessmentResults.json file with only the relevant fields.
     private static final String DUMMY_ASSESSMENT_RESULTS = "{\n" +
             "   \"type\":\"assessment\",\n" +
             "   \"identifier\":\"xhcsds\",\n" +
-            "   \"assessmentIdentifier\":\"xhcsds\",\n" +
-            "   \"schemaIdentifier\":null,\n" +
-            "   \"versionString\":\"1.0.0\",\n" +
             "   \"stepHistory\":[\n" +
             "      {\n" +
-            "         \"type\":\"base\",\n" +
-            "         \"identifier\":\"overview\",\n" +
-            "         \"startDate\":\"2023-11-02T09:41:50.983-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:41:52.635-07:00\"\n" +
-            "      },\n" +
-            "      {\n" +
             "         \"type\":\"answer\",\n" +
             "         \"identifier\":\"choiceQ1\",\n" +
             "         \"answerType\":{\n" +
             "            \"type\":\"integer\"\n" +
             "         },\n" +
-            "         \"value\":1,\n" +
-            "         \"startDate\":\"2023-11-02T09:41:52.635-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:41:54.278-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
+            "         \"value\":1\n" +
             "      },\n" +
             "      {\n" +
             "         \"type\":\"answer\",\n" +
@@ -420,383 +200,17 @@ public class Exporter3WorkerProcessorTest {
             "         \"answerType\":{\n" +
             "            \"type\":\"string\"\n" +
             "         },\n" +
-            "         \"value\":\"test text\",\n" +
-            "         \"startDate\":\"2023-11-02T09:41:54.278-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:00.516-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"followupQ\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"boolean\"\n" +
-            "         },\n" +
-            "         \"value\":false,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:00.516-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:02.357-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"choiceQ1\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"integer\"\n" +
-            "         },\n" +
-            "         \"value\":2,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:02.357-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:03.439-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"simpleQ2\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"integer\"\n" +
-            "         },\n" +
-            "         \"value\":1945,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:03.439-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:07.803-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"followupQ\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"boolean\"\n" +
-            "         },\n" +
-            "         \"value\":false,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:07.803-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:08.663-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"choiceQ1\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"integer\"\n" +
-            "         },\n" +
-            "         \"value\":3,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:08.663-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:09.864-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"simpleQ3\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"integer\"\n" +
-            "         },\n" +
-            "         \"value\":4,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:09.865-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:11.051-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"followupQ\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"boolean\"\n" +
-            "         },\n" +
-            "         \"value\":false,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:11.052-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:12.076-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"choiceQ1\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"integer\"\n" +
-            "         },\n" +
-            "         \"value\":4,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:12.076-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:13.243-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"simpleQ4\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"integer\"\n" +
-            "         },\n" +
-            "         \"value\":50,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:13.243-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:21.662-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"followupQ\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"boolean\"\n" +
-            "         },\n" +
-            "         \"value\":false,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:21.662-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:22.496-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"choiceQ1\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"integer\"\n" +
-            "         },\n" +
-            "         \"value\":5,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:22.496-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:23.773-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"simpleQ5\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"duration\",\n" +
-            "            \"displayUnits\":[\n" +
-            "               \"hour\",\n" +
-            "               \"minute\"\n" +
-            "            ],\n" +
-            "            \"significantDigits\":0\n" +
-            "         },\n" +
-            "         \"value\":28800.0,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:23.773-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:29.907-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"followupQ\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"boolean\"\n" +
-            "         },\n" +
-            "         \"value\":false,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:29.907-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:31.462-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"choiceQ1\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"integer\"\n" +
-            "         },\n" +
-            "         \"value\":6,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:31.462-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:32.779-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"simpleQ6\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"time\",\n" +
-            "            \"codingFormat\":\"HH:mm:SS.SSS\"\n" +
-            "         },\n" +
-            "         \"value\":\"09:42\",\n" +
-            "         \"startDate\":\"2023-11-02T09:42:32.779-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:36.374-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"followupQ\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"boolean\"\n" +
-            "         },\n" +
-            "         \"value\":true,\n" +
-            "         \"startDate\":\"2023-11-02T09:42:36.374-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:39.175-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"favoriteFood\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"string\"\n" +
-            "         },\n" +
-            "         \"value\":\"Pizza\",\n" +
-            "         \"startDate\":\"2023-11-02T09:42:39.175-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:42.061-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"base\",\n" +
-            "         \"identifier\":\"pizza\",\n" +
-            "         \"startDate\":\"2023-11-02T09:42:42.061-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:42.957-07:00\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"answer\",\n" +
-            "         \"identifier\":\"multipleChoice\",\n" +
-            "         \"answerType\":{\n" +
-            "            \"type\":\"array\",\n" +
-            "            \"baseType\":\"string\",\n" +
-            "            \"sequenceSeparator\":null\n" +
-            "         },\n" +
-            "         \"value\":[\n" +
-            "            \"Blue\",\n" +
-            "            \"Yellow\",\n" +
-            "            \"Red\"\n" +
-            "         ],\n" +
-            "         \"startDate\":\"2023-11-02T09:42:42.957-07:00\",\n" +
-            "         \"endDate\":\"2023-11-02T09:42:45.999-07:00\",\n" +
-            "         \"questionText\":null,\n" +
-            "         \"questionData\":null\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"type\":\"base\",\n" +
-            "         \"identifier\":\"completion\",\n" +
-            "         \"startDate\":\"2023-11-02T09:42:45.999-07:00\",\n" +
-            "         \"endDate\":null\n" +
+            "         \"value\":\"test text\"\n" +
             "      }\n" +
-            "   ],\n" +
-            "   \"asyncResults\":[\n" +
-            "      \n" +
-            "   ],\n" +
-            "   \"taskRunUUID\":\"b4bf1453-ec1b-4247-840f-2cf6ffaeb8b6\",\n" +
-            "   \"startDate\":\"2023-11-02T09:41:50.983-07:00\",\n" +
-            "   \"endDate\":\"2023-11-02T09:42:45.999-07:00\",\n" +
-            "   \"path\":[\n" +
-            "      {\n" +
-            "         \"identifier\":\"overview\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"choiceQ1\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"simpleQ1\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"followupQ\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"choiceQ1\",\n" +
-            "         \"direction\":\"backward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"simpleQ2\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"followupQ\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"choiceQ1\",\n" +
-            "         \"direction\":\"backward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"simpleQ3\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"followupQ\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"choiceQ1\",\n" +
-            "         \"direction\":\"backward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"simpleQ4\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"followupQ\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"choiceQ1\",\n" +
-            "         \"direction\":\"backward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"simpleQ5\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"followupQ\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"choiceQ1\",\n" +
-            "         \"direction\":\"backward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"simpleQ6\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"followupQ\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"favoriteFood\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"pizza\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"multipleChoice\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      },\n" +
-            "      {\n" +
-            "         \"identifier\":\"completion\",\n" +
-            "         \"direction\":\"forward\"\n" +
-            "      }\n" +
-            "   ],\n" +
-            "   \"$schema\":\"https://sage-bionetworks.github.io/mobile-client-json/schemas/v2/AssessmentResultObject" +
-            ".json\"\n" +
+            "   ]\n" +
             "}";
-    private static final String EXPORTED_FILE_ENTITY_ID = "syn2222";
-    private static final String EXPORTED_FILE_HANDLE_ID = "3333";
-    private static final String FILENAME = "filename.txt";
-    private static final String HEALTH_CODE = "health-code";
-    private static final int PARTICIPANT_VERSION = 42;
-    private static final String RAW_DATA_BUCKET = "raw-data-bucket";
-    private static final String RECORD_ID = "test-record";
-    private static final String SCHEDULE_GUID = "test-schedule-guid";
-    private static final String TODAYS_DATE_STRING = "2021-08-23";
-    private static final String TODAYS_FOLDER_ID = "syn7777";
-    private static final String UPLOAD_BUCKET = "upload-bucket";
-    private static final String USER_AGENT = "dummy user agent";
-    private static final String INSTANCE_GUID = "instanceGuid";
-    private static final String ASSESSMENT_INSTANCE_GUID = "assessmentInstanceGuid";
-    private static final String ASSESSMENT_GUID = "assessmentGuid";
-    private static final String ASSESSMENT_ID = "assessmentId";
-    private static final String SESSION_GUID = "session-guid";
-    
-    private static final long MOCK_NOW_MILLIS = DateTime.parse(TODAYS_DATE_STRING + "T15:32:38.914-0700")
-            .getMillis();
-    private static final DateTime UPLOADED_ON = DateTime.parse(TODAYS_DATE_STRING + "T15:27:28.647-0700");
-    private static final long UPLOADED_ON_MILLIS = UPLOADED_ON.getMillis();
 
-    private static final String FULL_FILENAME = RECORD_ID + '-' + FILENAME;
-    private static final String EXPECTED_S3_KEY = Exporter3TestUtil.APP_ID + '/' + TODAYS_DATE_STRING + '/' + FULL_FILENAME;
-    private static final String EXPECTED_S3_KEY_FOR_STUDY = Exporter3TestUtil.APP_ID + '/' + Exporter3TestUtil.STUDY_ID + '/' + TODAYS_DATE_STRING + '/' +
-            FULL_FILENAME;
+    // Empty assessmentResults.json to test branch coverage. Still need type and identifer or else the assessment
+    // summarizer throws.
+    private static final String EMPTY_ASSESSMENT_RESULTS = "{\n" +
+            "   \"type\":\"assessment\",\n" +
+            "   \"identifier\":\"xhcsds\"\n" +
+            "}";
 
     private static class EmptyCacheLoader extends CacheLoader<String, CmsEncryptor> {
         public static final LoadingCache<String, CmsEncryptor> LOADING_CACHE_INSTANCE = CacheBuilder.newBuilder()
@@ -850,6 +264,9 @@ public class Exporter3WorkerProcessorTest {
     @Mock
     private SynapseHelper mockSynapseHelper;
 
+    @Mock
+    private ZipHelper mockZipHelper;
+
     @InjectMocks
     @Spy
     private Exporter3WorkerProcessor processor;
@@ -862,6 +279,9 @@ public class Exporter3WorkerProcessorTest {
     @BeforeMethod
     public void beforeMethod() throws Exception {
         MockitoAnnotations.initMocks(this);
+
+        // Use the real assessment summarizer provider.
+        processor.setSummarizerProvider(new AssessmentSummarizerProvider());
 
         // Use InMemoryFileHelper for FileHelper.
         inMemoryFileHelper = new InMemoryFileHelper();
@@ -1250,74 +670,6 @@ public class Exporter3WorkerProcessorTest {
     }
 
     @Test
-    public void uploadTableRow() throws Exception {
-        //Mock getAssessment
-        Assessment assessment = new Assessment().title(ASSESSMENT_ID).osName("Universal").ownerId("sage-bionetworks")
-                .identifier(ASSESSMENT_ID).guid(ASSESSMENT_GUID); //.frameworkIdentifier(
-                        //AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER);
-        when(mockBridgeHelper.getAssessmentByGuid(any(), eq(ASSESSMENT_GUID))).thenReturn(assessment);
-        // Mock getAssessmentConfig
-        AssessmentConfig assessmentConfig = new AssessmentConfig();
-        assessmentConfig.setConfig(ASSESSMENT_CONFIG);
-
-        // Mock extractFileFromZip to return assessmentResult.json file
-        // todo
-        //doAnswer(invocation -> {
-        //    File file = inMemoryFileHelper.newFile(inMemoryFileHelper.createTempDir(), "assessmentResult.json");
-        //    inMemoryFileHelper.writeBytes(file, DUMMY_ASSESSMENT_RESULTS.getBytes(StandardCharsets.UTF_8));
-        //    Mockito.when(file.exists()).thenReturn(true);
-        //    return file;
-        //}).when(processor).extractFileFromZip(any(), any(), eq("assessmentResult.json"));
-
-        doAnswer(invocation -> {
-            File file = invocation.getArgumentAt(2, File.class);
-            inMemoryFileHelper.writeBytes(file, DUMMY_ENCRYPTED_FILE_BYTES);
-            return null;
-        }).when(mockS3Helper).downloadS3File(eq(UPLOAD_BUCKET), eq(RECORD_ID), any());
-
-        when(mockBridgeHelper.getAssessmentConfigByGuid(any(), eq(ASSESSMENT_GUID))).thenReturn(assessmentConfig);
-
-        Upload upload = mockUpload(true);
-        HealthDataRecordEx3 record = makeRecord();
-        record.putMetadataItem(METADATA_KEY_INSTANCE_GUID, INSTANCE_GUID);
-        Map<String, String> metadataMap = ImmutableMap.of(
-                "assessmentGuid", ASSESSMENT_GUID,
-                "instanceGuid", ASSESSMENT_INSTANCE_GUID,
-                "sessionGuid", SESSION_GUID);
-
-        // todo participant
-        UploadTableRow tableRow = processor.getUploadTableRow(upload, record, null, RECORD_ID, metadataMap);
-        assertNotNull(tableRow);
-        assertEquals(RECORD_ID, tableRow.getRecordId());
-        assertEquals(ASSESSMENT_GUID, tableRow.getAssessmentGuid());
-        assertEquals(HEALTH_CODE, tableRow.getHealthCode());
-        assertEquals(PARTICIPANT_VERSION, tableRow.getParticipantVersion().intValue());
-
-        // Check metadata values
-        ImmutableMap.Builder<String,String> expectedMetaBuilder = ImmutableMap.builder();
-        expectedMetaBuilder.put("clientInfo", CLIENT_INFO);
-        expectedMetaBuilder.put("sessionGuid", SESSION_GUID);
-        Map<String, String> expectedMetaResults = expectedMetaBuilder.build();
-        assertEquals(expectedMetaResults, tableRow.getMetadata());
-
-        // Check data values
-        ImmutableMap.Builder<String,String> builder = ImmutableMap.builder();
-        builder.put("choiceQ1", "6");
-        builder.put("simpleQ1", "test text");
-        builder.put("followupQ", "true");
-        builder.put("simpleQ2", "1945");
-        builder.put("simpleQ3", "4");
-        builder.put("simpleQ4", "50");
-        builder.put("simpleQ5", "28800.0");
-        builder.put("simpleQ6", "09:42");
-        builder.put("favoriteFood", "Pizza");
-        builder.put("multipleChoice", "Blue,Yellow,Red");
-        Map<String, String> expectedDataResults = builder.build();
-        assertEquals(expectedDataResults, tableRow.getData());
-
-    }
-
-    @Test
     public void encryptedUploadForStudy() throws Exception {
         // Mock services.
         App app = new App();
@@ -1473,6 +825,283 @@ public class Exporter3WorkerProcessorTest {
     }
 
     @Test
+    public void uploadTableEnabled() throws Exception {
+        // Mock services.
+        App app = Exporter3TestUtil.makeAppWithEx3Config();
+        app.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        Upload mockUpload = mockUpload(false);
+        when(mockUpload.getRequestedOn()).thenReturn(REQUESTED_ON);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
+
+        Assessment assessment = new Assessment().guid(ASSESSMENT_GUID).identifier(ASSESSMENT_ID).title(ASSESSMENT_ID)
+                .frameworkIdentifier(AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER);
+        when(mockBridgeHelper.getAssessmentByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(assessment);
+
+        AssessmentConfig assessmentConfig = new AssessmentConfig().config(ASSESSMENT_CONFIG);
+        when(mockBridgeHelper.getAssessmentConfigByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(
+                assessmentConfig);
+
+        mockSynapseHelper();
+
+        // Mock timeline and record with metadata.
+        Map<String, String> timelineMetadataMap = new HashMap<>();
+        timelineMetadataMap.put(Exporter3WorkerProcessor.METADATA_KEY_ASSESSMENT_GUID, ASSESSMENT_GUID);
+        timelineMetadataMap.put("sessionGuid", SESSION_GUID);
+        timelineMetadataMap.put("sessionName", SESSION_NAME);
+        timelineMetadataMap.put("sessionStartEventId", SESSION_START_EVENT_ID);
+
+        TimelineMetadata meta = mock(TimelineMetadata.class);
+        when(meta.getMetadata()).thenReturn(timelineMetadataMap);
+        when(mockBridgeHelper.getTimelineMetadata(Exporter3TestUtil.APP_ID, INSTANCE_GUID)).thenReturn(meta);
+
+        HealthDataRecordEx3 record = makeRecord();
+        record.putMetadataItem(METADATA_KEY_INSTANCE_GUID, INSTANCE_GUID);
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(
+                record);
+
+        // Make 4 studies enabled for EX3.0. Studies 1, 2, and 4 are enabled for upload table. Study 3 isn't.
+        Study study1 = Exporter3TestUtil.makeStudyWithEx3Config().identifier(Exporter3TestUtil.STUDY_ID);
+        study1.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, Exporter3TestUtil.STUDY_ID)).thenReturn(study1);
+
+        Study study2 = Exporter3TestUtil.makeStudyWithEx3Config().identifier(STUDY_ID_2);
+        study2.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, STUDY_ID_2)).thenReturn(study2);
+
+        Study study3 = Exporter3TestUtil.makeStudyWithEx3Config().identifier(STUDY_ID_3);
+        study3.getExporter3Configuration().uploadTableEnabled(false);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, STUDY_ID_3)).thenReturn(study3);
+
+        Study study4 = Exporter3TestUtil.makeStudyWithEx3Config().identifier(STUDY_ID_4);
+        study4.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, STUDY_ID_4)).thenReturn(study4);
+
+        // Participant is enrolled in all 4 studies. Study 1 external ID is suffixed with the study ID. Study 2
+        // external ID is not. Studies 3 and 4 have no external IDs.
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockParticipant.getExternalIds()).thenReturn(ImmutableMap.of(
+                Exporter3TestUtil.STUDY_ID, EXTERNAL_ID_1_WITH_SUFFIX,
+                STUDY_ID_2, EXTERNAL_ID_2));
+        when(mockParticipant.getStudyIds()).thenReturn(ImmutableList.of(Exporter3TestUtil.STUDY_ID, STUDY_ID_2,
+                STUDY_ID_3, STUDY_ID_4));
+        // Server can return data groups in any order. We will need to sort them alphabetically. To simulate this,
+        // return data groups in a non-sorted order.
+        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of(
+                Exporter3WorkerProcessor.DATA_GROUP_TEST_USER, DATA_GROUP_B, DATA_GROUP_A));
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
+
+        // Mock zip helper.
+        mockZipHelper(ImmutableMap.of(Exporter3WorkerProcessor.FILENAME_METADATA_JSON, METADATA_JSON_CONTENT,
+                AssessmentResultSummarizer.FILENAME_ASSESSMENT_RESULT_JSON, DUMMY_ASSESSMENT_RESULTS));
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // The details of the back-end calls are tested elsewhere. Just verify that we called Synapse.
+        verify(mockSynapseHelper, atLeastOnce()).createEntityWithRetry(any());
+
+        // Verify that we download and unzip the file.
+        ArgumentCaptor<File> downloadedZipFileCaptor = ArgumentCaptor.forClass(File.class);
+        verify(mockS3Helper).downloadS3File(eq(RAW_DATA_BUCKET), eq(EXPECTED_S3_KEY),
+                downloadedZipFileCaptor.capture());
+        File downloadedZipFile = downloadedZipFileCaptor.getValue();
+
+        verify(mockZipHelper).unzip(same(downloadedZipFile), any());
+
+        // Verify upload table rows.
+        ArgumentCaptor<UploadTableRow> tableRowCaptor = ArgumentCaptor.forClass(UploadTableRow.class);
+        verify(mockBridgeHelper).saveUploadTableRow(eq(Exporter3TestUtil.APP_ID), eq(Exporter3TestUtil.STUDY_ID),
+                tableRowCaptor.capture());
+        verifyUploadTableRow(tableRowCaptor.getValue(), EXTERNAL_ID_1);
+
+        tableRowCaptor = ArgumentCaptor.forClass(UploadTableRow.class);
+        verify(mockBridgeHelper).saveUploadTableRow(eq(Exporter3TestUtil.APP_ID), eq(STUDY_ID_2),
+                tableRowCaptor.capture());
+        verifyUploadTableRow(tableRowCaptor.getValue(), EXTERNAL_ID_2);
+
+        verify(mockBridgeHelper, never()).saveUploadTableRow(any(), eq(STUDY_ID_3), any());
+
+        tableRowCaptor = ArgumentCaptor.forClass(UploadTableRow.class);
+        verify(mockBridgeHelper).saveUploadTableRow(eq(Exporter3TestUtil.APP_ID), eq(STUDY_ID_4),
+                tableRowCaptor.capture());
+        verifyUploadTableRow(tableRowCaptor.getValue(), null);
+
+        // Verify we delete our files when we're done.
+        assertTrue(inMemoryFileHelper.isEmpty());
+    }
+
+    // branch coverage
+    @Test
+    public void uploadTableEnabled_getUploadTableRowThrows() throws Exception {
+        // Mock services.
+        App app = Exporter3TestUtil.makeAppWithEx3Config();
+        app.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        Upload mockUpload = mockUpload(false);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
+
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(
+                makeRecord());
+
+        mockSynapseHelper();
+
+        // We need at least one study with table rows enabled. Otherwise, it's ambiguous whether saveUploadTableRow()
+        // wasn't called because there was no row or because there was no study.
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockParticipant.getStudyIds()).thenReturn(ImmutableList.of(Exporter3TestUtil.STUDY_ID));
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
+
+        Study study = Exporter3TestUtil.makeStudyWithEx3Config().identifier(Exporter3TestUtil.STUDY_ID);
+        study.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, Exporter3TestUtil.STUDY_ID)).thenReturn(study);
+
+        // getUploadTableRow() throws.
+        doThrow(PollSqsWorkerBadRequestException.class).when(processor).getUploadTableRow(any(), any(), any(), any(),
+                any());
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // The details of the back-end calls are tested elsewhere. Just verify that we called Synapse.
+        verify(mockSynapseHelper, atLeastOnce()).createEntityWithRetry(any());
+
+        // However, because getUploadTableRow() throws, we don't save any upload table rows.
+        verify(mockBridgeHelper, never()).saveUploadTableRow(any(), any(), any());
+    }
+
+    @Test
+    public void getUploadTableRow_NoAssessmentGuid() throws Exception {
+        // Make inputs.
+        Upload mockUpload = mockUpload(false);
+        HealthDataRecordEx3 record = makeRecord();
+        StudyParticipant mockParticipant = mockParticipant();
+        Map<String, String> metadataMap = ImmutableMap.of();
+
+        // Execute.
+        UploadTableRow row = processor.getUploadTableRow(mockUpload, record, mockParticipant, RECORD_ID, metadataMap);
+        assertNull(row);
+    }
+
+    // branch coverage
+    @Test
+    public void getUploadTableRow_NoOptionalValues() throws Exception {
+        // Make inputs.
+        Upload mockUpload = mockUpload(false);
+        HealthDataRecordEx3 record = makeRecord();
+        StudyParticipant mockParticipant = mockParticipant();
+
+        Map<String, String> metadataMap = new HashMap<>();
+        metadataMap.put(Exporter3WorkerProcessor.METADATA_KEY_ASSESSMENT_GUID, ASSESSMENT_GUID);
+
+        // We still need an assessment and assessment config to exercise the code.
+        Assessment assessment = new Assessment().guid(ASSESSMENT_GUID).identifier(ASSESSMENT_ID).title(ASSESSMENT_ID)
+                .frameworkIdentifier(AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER);
+        when(mockBridgeHelper.getAssessmentByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(assessment);
+
+        AssessmentConfig assessmentConfig = new AssessmentConfig().config(ASSESSMENT_CONFIG);
+        when(mockBridgeHelper.getAssessmentConfigByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(
+                assessmentConfig);
+
+        // Mock zip helper. The files should still exist, but have no data, to exercise the code.
+        mockZipHelper(ImmutableMap.of(Exporter3WorkerProcessor.FILENAME_METADATA_JSON, EMPTY_METADATA_JSON_CONTENT,
+                AssessmentResultSummarizer.FILENAME_ASSESSMENT_RESULT_JSON, EMPTY_ASSESSMENT_RESULTS));
+
+        // Execute.
+        UploadTableRow row = processor.getUploadTableRow(mockUpload, record, mockParticipant, RECORD_ID, metadataMap);
+
+        // The code path that we're specifically interested in exercising is that the common metadata rows are still
+        // created, but with blank values.
+        Map<String, String> rowMetadataMap = row.getMetadata();
+        for (String key : Exporter3WorkerProcessor.TABLE_ROW_METADATA_JSON_KEYS) {
+            assertEquals(rowMetadataMap.get(key), "");
+        }
+        for (String key : Exporter3WorkerProcessor.TABLE_ROW_UPLOAD_METADATA_KEYS) {
+            assertEquals(rowMetadataMap.get(key), "");
+        }
+
+        // branch coverage: isTestData
+        assertFalse(row.isTestData());
+
+        // Verify that we download and unzip the file.
+        ArgumentCaptor<File> downloadedZipFileCaptor = ArgumentCaptor.forClass(File.class);
+        verify(mockS3Helper).downloadS3File(eq(RAW_DATA_BUCKET), eq(EXPECTED_S3_KEY),
+                downloadedZipFileCaptor.capture());
+        File downloadedZipFile = downloadedZipFileCaptor.getValue();
+
+        verify(mockZipHelper).unzip(same(downloadedZipFile), any());
+    }
+
+    // branch coverage
+    @Test
+    public void getUploadTableRow_NoMetadataJsonNoAssessmentResultJson() throws Exception {
+        // Make inputs.
+        Upload mockUpload = mockUpload(false);
+        HealthDataRecordEx3 record = makeRecord();
+        StudyParticipant mockParticipant = mockParticipant();
+
+        Map<String, String> metadataMap = new HashMap<>();
+        metadataMap.put(Exporter3WorkerProcessor.METADATA_KEY_ASSESSMENT_GUID, ASSESSMENT_GUID);
+
+        // We still need an assessment and assessment config to exercise the code.
+        Assessment assessment = new Assessment().guid(ASSESSMENT_GUID).identifier(ASSESSMENT_ID).title(ASSESSMENT_ID)
+                .frameworkIdentifier(AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER);
+        when(mockBridgeHelper.getAssessmentByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(assessment);
+
+        AssessmentConfig assessmentConfig = new AssessmentConfig().config(ASSESSMENT_CONFIG);
+        when(mockBridgeHelper.getAssessmentConfigByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(
+                assessmentConfig);
+
+        // Mock zip helper. In this test, the zip file is empty.
+        when(mockZipHelper.unzip(any(), any())).thenReturn(ImmutableMap.of());
+
+        // Execute.
+        UploadTableRow row = processor.getUploadTableRow(mockUpload, record, mockParticipant, RECORD_ID, metadataMap);
+        assertNotNull(row);
+
+        // We still download and unzip the file.
+        ArgumentCaptor<File> downloadedZipFileCaptor = ArgumentCaptor.forClass(File.class);
+        verify(mockS3Helper).downloadS3File(eq(RAW_DATA_BUCKET), eq(EXPECTED_S3_KEY),
+                downloadedZipFileCaptor.capture());
+        File downloadedZipFile = downloadedZipFileCaptor.getValue();
+
+        verify(mockZipHelper).unzip(same(downloadedZipFile), any());
+    }
+
+    // branch coverage
+    @Test
+    public void getUploadTableRow_WrongFrameworkIdentifier() throws Exception {
+        // Make inputs.
+        Upload mockUpload = mockUpload(false);
+        HealthDataRecordEx3 record = makeRecord();
+        StudyParticipant mockParticipant = mockParticipant();
+
+        Map<String, String> metadataMap = new HashMap<>();
+        metadataMap.put(Exporter3WorkerProcessor.METADATA_KEY_ASSESSMENT_GUID, ASSESSMENT_GUID);
+
+        // Make an assessment with the wrong framework identifier.
+        Assessment assessment = new Assessment().guid(ASSESSMENT_GUID).identifier(ASSESSMENT_ID).title(ASSESSMENT_ID)
+                .frameworkIdentifier("wrong-framework");
+        when(mockBridgeHelper.getAssessmentByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(assessment);
+
+        AssessmentConfig assessmentConfig = new AssessmentConfig().config(ASSESSMENT_CONFIG);
+        when(mockBridgeHelper.getAssessmentConfigByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(
+                assessmentConfig);
+
+        // Execute.
+        UploadTableRow row = processor.getUploadTableRow(mockUpload, record, mockParticipant, RECORD_ID, metadataMap);
+        assertNotNull(row);
+
+        // Now, we don't download or unzip the file.
+        verify(mockS3Helper, never()).downloadS3File(any(), any(), any());
+        verify(mockZipHelper, never()).unzip(any(), any());
+    }
+
+    @Test
     public void appAndStudiesNotConfigured() throws Exception {
         // Mock services.
         App app = new App();
@@ -1544,6 +1173,23 @@ public class Exporter3WorkerProcessorTest {
         FileEntity createdFileEntity = new FileEntity();
         createdFileEntity.setId(EXPORTED_FILE_ENTITY_ID);
         when(mockSynapseHelper.createEntityWithRetry(any(FileEntity.class))).thenReturn(createdFileEntity);
+    }
+
+    private void mockZipHelper(Map<String, String> fileContentMap) throws Exception {
+        when(mockZipHelper.unzip(any(), any())).thenAnswer(invocation -> {
+            File destDir = invocation.getArgumentAt(1, File.class);
+            Map<String, File> fileMap = new HashMap<>();
+            for (Map.Entry<String, String> oneFileEntry : fileContentMap.entrySet()) {
+                String filename = oneFileEntry.getKey();
+                String fileContent = oneFileEntry.getValue();
+
+                File file = inMemoryFileHelper.newFile(destDir, filename);
+                inMemoryFileHelper.writeBytes(file, fileContent.getBytes(StandardCharsets.UTF_8));
+                fileMap.put(filename, file);
+            }
+
+            return fileMap;
+        });
     }
 
     private void verifyS3Metadata(ObjectMetadata s3Metadata) {
@@ -1683,6 +1329,36 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(recordInfo.getFileEntityId(), EXPORTED_FILE_ENTITY_ID);
         assertEquals(recordInfo.getS3Bucket(), RAW_DATA_BUCKET);
         assertEquals(recordInfo.getS3Key(), expectedS3Key);
+    }
+
+    private static void verifyUploadTableRow(UploadTableRow tableRow, String expectedExternalId) {
+        assertEquals(tableRow.getAssessmentGuid(), ASSESSMENT_GUID);
+        assertEquals(tableRow.getCreatedOn(), REQUESTED_ON);
+        assertEquals(tableRow.getRecordId(), RECORD_ID);
+        assertEquals(tableRow.getHealthCode(), HEALTH_CODE);
+        assertEquals(tableRow.getParticipantVersion().intValue(), PARTICIPANT_VERSION);
+        assertTrue(tableRow.isTestData());
+
+        Map<String, String> tableRowMetadataMap = tableRow.getMetadata();
+        assertEquals(tableRowMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO), CLIENT_INFO);
+        assertEquals(tableRowMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_DATA_GROUPS),
+                DATA_GROUP_A + "," + DATA_GROUP_B + "," + Exporter3WorkerProcessor.DATA_GROUP_TEST_USER);
+        assertEquals(tableRowMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_USER_AGENT), USER_AGENT);
+        assertEquals(tableRowMetadataMap.get("deviceInfo"), DEVICE_INFO);
+        assertEquals(tableRowMetadataMap.get("startDate"), START_DATE_STR);
+        assertEquals(tableRowMetadataMap.get("endDate"), END_DATE_STR);
+        assertEquals(tableRowMetadataMap.get("sessionGuid"), SESSION_GUID);
+        assertEquals(tableRowMetadataMap.get("sessionName"), SESSION_NAME);
+        assertEquals(tableRowMetadataMap.get("sessionStartEventId"), SESSION_START_EVENT_ID);
+        if (expectedExternalId != null) {
+            assertEquals(tableRowMetadataMap.get("externalId"), expectedExternalId);
+        } else {
+            assertNull(tableRowMetadataMap.get("externalId"));
+        }
+
+        Map<String, String> tableRowDataMap = tableRow.getData();
+        assertEquals(tableRowDataMap.get("choiceQ1"), "1");
+        assertEquals(tableRowDataMap.get("simpleQ1"), "test text");
     }
 
     private static Exporter3Request makeRequest() {

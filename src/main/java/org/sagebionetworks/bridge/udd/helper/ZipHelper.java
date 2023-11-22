@@ -2,7 +2,6 @@ package org.sagebionetworks.bridge.udd.helper;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -63,7 +62,7 @@ public class ZipHelper {
     public Map<String, File> unzip(File sourceFile, File destinationDirectory) throws IOException,
             PollSqsWorkerBadRequestException {
         Map<String, File> fileMap = new HashMap<>();
-        try (ZipInputStream zis = new ZipInputStream(new FileInputStream(sourceFile))) {
+        try (ZipInputStream zis = new ZipInputStream(fileHelper.getInputStream(sourceFile))) {
             ZipEntry zipEntry = zis.getNextEntry();
             while (zipEntry != null) {
                 if (fileMap.size() >= maxNumZipEntries) {

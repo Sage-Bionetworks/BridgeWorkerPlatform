@@ -2,8 +2,8 @@ package org.sagebionetworks.bridge.exporter3.results
 
 import org.sagebionetworks.bridge.rest.model.Assessment
 
+// See https://sagebionetworks.jira.com/browse/DHP-1025
 class ArcResultSummarizer(val assessment: Assessment) : AssessmentSummarizer {
-
     init {
         assert(assessment.frameworkIdentifier == FRAMEWORK_IDENTIFIER)
     }
@@ -26,5 +26,4 @@ class ArcResultSummarizer(val assessment: Assessment) : AssessmentSummarizer {
     companion object {
         const val FRAMEWORK_IDENTIFIER = "edu.wustl.arc"
     }
-
 }

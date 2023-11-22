@@ -10,7 +10,6 @@ import com.jcabi.aspects.RetryOnFailure;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 
-import org.sagebionetworks.bridge.rest.api.UploadsApi;
 import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
@@ -462,7 +461,7 @@ public class BridgeHelper {
     @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
             types = { BridgeSDKException.class, IOException.class }, randomize = false)
     public void saveUploadTableRow(String appId, String studyId, UploadTableRow tableRow) throws IOException {
-        clientManager.getClient(UploadsApi.class).saveUploadTableRowForWorker(appId, studyId, tableRow).execute();
+        clientManager.getClient(ForWorkersApi.class).saveUploadTableRowForWorker(appId, studyId, tableRow).execute();
     }
 
     private List<StudyParticipant> getStudyParticipantsFromAccountSummaries(List<AccountSummary> accountSummaries) throws IOException, InterruptedException {

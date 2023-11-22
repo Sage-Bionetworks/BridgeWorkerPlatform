@@ -1,10 +1,12 @@
 package org.sagebionetworks.bridge.exporter3.results
 
+import org.testng.Assert.assertEquals
+import org.testng.Assert.assertFalse
+import org.testng.Assert.assertTrue
+import org.testng.annotations.Test
 import org.sagebionetworks.bridge.exporter3.Exporter3TestUtil
 import org.sagebionetworks.bridge.rest.model.Assessment
 import org.sagebionetworks.bridge.rest.model.AssessmentConfig
-import org.testng.Assert.assertNotNull
-import org.testng.annotations.Test
 
 class AssessmentResultSummarizerTest {
     private val RECORD_ID = "test-record"
@@ -63,6 +65,14 @@ class AssessmentResultSummarizerTest {
             "type":"string"
          },
          "value":"test text"
+      },
+      {
+         "type":"answer",
+         "identifier":"extraQ",
+         "answerType":{
+            "type":"string"
+         },
+         "value":"not part of the assessment config"
       }
    ]
 }"""
@@ -70,15 +80,42 @@ class AssessmentResultSummarizerTest {
     @Test
     fun test() {
         // Make assessment and config with minimal parameters.
-        val assessment = Assessment().title("assessment title").osName("Universal").ownerId("sage-bionetworks")
-            .identifier("assessment ID").frameworkIdentifier(AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER)
-            .phase(Assessment.PhaseEnum.DRAFT)
+        val assessment = Assessment().frameworkIdentifier(AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER)
         val assessmentConfig = AssessmentConfig().config(ASSESSMENT_CONFIG)
         val assessmentResultSummarizer = AssessmentResultSummarizer(assessment, assessmentConfig)
+
+        // Simple functions.
+        assertEquals(assessmentResultSummarizer.resultFilename,
+            AssessmentResultSummarizer.FILENAME_ASSESSMENT_RESULT_JSON)
+        assertTrue(assessmentResultSummarizer.canSummarize(assessment))
+        assertFalse(assessmentResultSummarizer.canSummarize(Assessment().frameworkIdentifier("not the right one")))
+
+        // summarizeResults()
         val resultMap = assessmentResultSummarizer.summarizeResults(Exporter3TestUtil.APP_ID, RECORD_ID,
             RESULTS_JSON_TEXT)
-        assertNotNull(resultMap)
+        assertEquals(resultMap, mapOf("simpleQ1" to "test text", "choiceQ1" to "1",
+            "extraQ" to "not part of the assessment config"))
 
-        // todo more tests
+        // getColumnNames()
+        val columnNames = assessmentResultSummarizer.getColumnNames()
+        assertEquals(columnNames, listOf("choiceQ1", "simpleQ1"))
+    }
+
+    @Test
+    fun getSurveyColumnsNullConfig() {
+        val assessment = Assessment().frameworkIdentifier(AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER)
+        val assessmentConfig = AssessmentConfig().config(null)
+        val assessmentResultSummarizer = AssessmentResultSummarizer(assessment, assessmentConfig)
+        val surveyColumns = assessmentResultSummarizer.getSurveyColumns()
+        assertEquals(surveyColumns, listOf<String>())
+    }
+
+    @Test
+    fun getSurveyColumnsConfigNotString() {
+        val assessment = Assessment().frameworkIdentifier(AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER)
+        val assessmentConfig = AssessmentConfig().config(123)
+        val assessmentResultSummarizer = AssessmentResultSummarizer(assessment, assessmentConfig)
+        val surveyColumns = assessmentResultSummarizer.getSurveyColumns()
+        assertEquals(surveyColumns, listOf<String>())
     }
 }

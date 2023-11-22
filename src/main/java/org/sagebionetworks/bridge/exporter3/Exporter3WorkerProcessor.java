@@ -77,6 +77,7 @@ import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeUtils;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 import org.sagebionetworks.bridge.workerPlatform.util.Constants;
+import org.sagebionetworks.bridge.workerPlatform.util.JsonUtils;
 
 /** Worker for Exporter 3.0. */
 @Component("Exporter3Worker")
@@ -85,11 +86,11 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
     static final String CONFIG_KEY_RAW_HEALTH_DATA_BUCKET = "health.data.bucket.raw";
     static final String CONFIG_KEY_UPLOAD_BUCKET = "upload.bucket";
-    private static final String DATA_GROUP_TEST_USER = "test_user";
-    private static final String FILENAME_METADATA_JSON = "metadata.json";
-    private static final String METADATA_KEY_ASSESSMENT_GUID = "assessmentGuid";
+    static final String DATA_GROUP_TEST_USER = "test_user";
+    static final String FILENAME_METADATA_JSON = "metadata.json";
+    static final String METADATA_KEY_ASSESSMENT_GUID = "assessmentGuid";
     static final String METADATA_KEY_CLIENT_INFO = "clientInfo";
-    private static final String METADATA_KEY_DATA_GROUPS = "dataGroups";
+    static final String METADATA_KEY_DATA_GROUPS = "dataGroups";
     static final String METADATA_KEY_EXPORTED_ON = "exportedOn";
     static final String METADATA_KEY_HEALTH_CODE = "healthCode";
     static final String METADATA_KEY_PARTICIPANT_VERSION = "participantVersion";
@@ -100,13 +101,13 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     static final String METADATA_KEY_INSTANCE_GUID = "instanceGuid";
     static final String METADATA_KEY_CONTENT_TYPE = "contentType";
 
-    private static final String[] TABLE_ROW_METADATA_JSON_KEYS = {
+    static final String[] TABLE_ROW_METADATA_JSON_KEYS = {
             "deviceInfo",
             "startDate",
             "endDate",
     };
 
-    private static final String[] TABLE_ROW_UPLOAD_METADATA_KEYS = {
+    static final String[] TABLE_ROW_UPLOAD_METADATA_KEYS = {
             "sessionGuid",
             "sessionName",
             "sessionStartEventId",
@@ -298,7 +299,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
             // https://sagebionetworks.jira.com/browse/DHP-1151 - Right now, JSON to Table Row is only available if the
             // app is configured for export.
-            if (app.getExporter3Configuration().isUploadTableEnabled()) {
+            if (Boolean.TRUE.equals(app.getExporter3Configuration().isUploadTableEnabled())) {
                 try {
                     tableRow = getUploadTableRow(upload, record, participant, recordId, metadataMap);
                 } catch (PollSqsWorkerBadRequestException ex) {
@@ -323,6 +324,9 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
             // Save result table row to each study
             if (tableRow != null && study.getExporter3Configuration().isUploadTableEnabled()) {
+                // Copy the table row. This way, stuff we do for one study doesn't affect the other.
+                UploadTableRow studyTableRow = copyRow(tableRow);
+
                 // Add external ID to table row metadata. The value is study-specific, so we need to put the logic here.
                 String externalId = participant.getExternalIds().get(studyId);
                 if (externalId != null) {
@@ -331,13 +335,10 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
                         externalId = externalId.substring(0, externalId.length() - studyId.length() - 1);
                     }
 
-                    tableRow.getMetadata().put("externalId", externalId);
-                } else {
-                    // We're re-using tableRow for each study, so we need to remove the external ID if it's not present.
-                    tableRow.getMetadata().remove("externalId");
+                    studyTableRow.getMetadata().put("externalId", externalId);
                 }
 
-                bridgeHelper.saveUploadTableRow(appId, studyId, tableRow);
+                bridgeHelper.saveUploadTableRow(appId, studyId, studyTableRow);
             }
         }
 
@@ -600,6 +601,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
     }
 
     // Creates the upload table row for the upload.
+    // Package-scoped for unit tests.
     UploadTableRow getUploadTableRow(Upload upload, HealthDataRecordEx3 record, StudyParticipant participant,
             String recordId, Map<String, String> metadataMap) throws IOException, PollSqsWorkerBadRequestException {
         UploadTableRow tableRow = null;
@@ -623,13 +625,17 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
                 String value = metadataMap.get(key);
                 if (value != null) {
                     tableRowMetadata.put(key, value);
+                } else {
+                    // We still want to include a blank value in the table row, so that the column is
+                    // present in the CSV.
+                    tableRowMetadata.put(key, "");
                 }
             }
             tableRow.setMetadata(tableRowMetadata);
 
             // Get data groups from participant. Sort the data groups so that the order is deterministic. (Null means
             // it sorts using the natural ordering, ie alphabetical order.)
-            List<String> dataGroupList = participant.getDataGroups();
+            List<String> dataGroupList = new ArrayList<>(participant.getDataGroups());
             dataGroupList.sort(null);
             tableRow.setTestData(dataGroupList.contains(DATA_GROUP_TEST_USER));
             tableRowMetadata.put(METADATA_KEY_DATA_GROUPS, Constants.COMMA_JOINER.join(dataGroupList));
@@ -650,7 +656,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
                     // Load some metadata params from the metadata.json file.
                     File metadataJsonFile = unzippedFileMap.get(FILENAME_METADATA_JSON);
-                    if (metadataJsonFile != null && metadataJsonFile.exists()) {
+                    if (metadataJsonFile != null) {
                         String metadataJsonString = IOUtils.toString(fileHelper.getInputStream(metadataJsonFile),
                                 StandardCharsets.UTF_8);
                         JsonNode metadataJsonNode = DefaultObjectMapper.INSTANCE.readTree(metadataJsonString);
@@ -659,9 +665,9 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
                         // and validate against schema
 
                         for (String key: TABLE_ROW_METADATA_JSON_KEYS) {
-                            JsonNode valueNode = metadataJsonNode.get(key);
-                            if (valueNode != null && valueNode.isTextual()) {
-                                tableRowMetadata.put(key, valueNode.textValue());
+                            String value = JsonUtils.asText(metadataJsonNode, key);
+                            if (value != null) {
+                                tableRowMetadata.put(key, value);
                             } else {
                                 // We still want to include a blank value in the table row, so that the column is
                                 // present in the CSV.
@@ -675,10 +681,9 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
 
                     // Summarize results file.
                     File resultFile = unzippedFileMap.get(summarizer.getResultFilename());
-                    if (resultFile != null && resultFile.exists()) {
+                    if (resultFile != null) {
                         String resultString = IOUtils.toString(fileHelper.getInputStream(resultFile),
                                 StandardCharsets.UTF_8);
-                        LOG.info("resultJson: " + resultString);
                         Map<String, String> data = summarizer.summarizeResults(appId, recordId, resultString);
                         tableRow.setData(data);
                     } else {
@@ -698,6 +703,22 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             }
         }
         return tableRow;
+    }
+
+    private static UploadTableRow copyRow(UploadTableRow tableRow) {
+        UploadTableRow copy = new UploadTableRow();
+        copy.setAssessmentGuid(tableRow.getAssessmentGuid());
+        copy.setCreatedOn(tableRow.getCreatedOn());
+        copy.setHealthCode(tableRow.getHealthCode());
+        copy.setParticipantVersion(tableRow.getParticipantVersion());
+        copy.setRecordId(tableRow.getRecordId());
+        copy.setTestData(tableRow.isTestData());
+
+        // We need to make copies of these collections.
+        copy.setMetadata(new HashMap<>(tableRow.getMetadata()));
+        copy.setData(new HashMap<>(tableRow.getData()));
+
+        return copy;
     }
 
     private String getFilenameForUpload(Upload upload) {
