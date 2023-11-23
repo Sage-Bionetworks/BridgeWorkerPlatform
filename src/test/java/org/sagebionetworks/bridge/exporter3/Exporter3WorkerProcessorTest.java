@@ -61,6 +61,7 @@ import org.sagebionetworks.bridge.exporter3.results.AssessmentResultSummarizer;
 import org.sagebionetworks.bridge.exporter3.results.AssessmentSummarizerProvider;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.Assessment;
 import org.sagebionetworks.bridge.rest.model.AssessmentConfig;
@@ -1070,6 +1071,30 @@ public class Exporter3WorkerProcessorTest {
         File downloadedZipFile = downloadedZipFileCaptor.getValue();
 
         verify(mockZipHelper).unzip(same(downloadedZipFile), any());
+    }
+
+    // branch coverage
+    @Test
+    public void getUploadTableRow_AssessmentThrowsAssessmentConfigThrows() throws Exception {
+        // Make inputs.
+        Upload mockUpload = mockUpload(false);
+        HealthDataRecordEx3 record = makeRecord();
+        StudyParticipant mockParticipant = mockParticipant();
+
+        Map<String, String> metadataMap = new HashMap<>();
+        metadataMap.put(Exporter3WorkerProcessor.METADATA_KEY_ASSESSMENT_GUID, ASSESSMENT_GUID);
+
+        // getAssessment and getAssessmentConfig both throw EntityNotFoundExceptions.
+        when(mockBridgeHelper.getAssessmentByGuid(any(), any())).thenThrow(EntityNotFoundException.class);
+        when(mockBridgeHelper.getAssessmentConfigByGuid(any(), any())).thenThrow(EntityNotFoundException.class);
+
+        // Execute.
+        UploadTableRow row = processor.getUploadTableRow(mockUpload, record, mockParticipant, RECORD_ID, metadataMap);
+        assertNotNull(row);
+
+        // Now, we don't download or unzip the file.
+        verify(mockS3Helper, never()).downloadS3File(any(), any(), any());
+        verify(mockZipHelper, never()).unzip(any(), any());
     }
 
     // branch coverage

@@ -53,6 +53,7 @@ import org.sagebionetworks.bridge.exporter3.results.AssessmentSummarizer;
 import org.sagebionetworks.bridge.exporter3.results.AssessmentSummarizerProvider;
 import org.sagebionetworks.bridge.file.FileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.rest.model.App;
 import org.sagebionetworks.bridge.rest.model.Assessment;
 import org.sagebionetworks.bridge.rest.model.AssessmentConfig;
@@ -641,8 +642,22 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
             tableRowMetadata.put(METADATA_KEY_DATA_GROUPS, Constants.COMMA_JOINER.join(dataGroupList));
 
             // Open the zip file only if we recognize the assessment.
-            Assessment assessment = bridgeHelper.getAssessmentByGuid(appId, assessmentGuid);
-            AssessmentConfig assessmentConfig = bridgeHelper.getAssessmentConfigByGuid(appId, assessmentGuid);
+            Assessment assessment = null;
+            try {
+                assessment = bridgeHelper.getAssessmentByGuid(appId, assessmentGuid);
+            } catch (EntityNotFoundException ex) {
+                // This shouldn't happen. If it does, just log a warning and move on.
+                LOG.warn("Assessment not found for appId=" + appId + ", recordId=" + recordId + ", assessmentGuid=" +
+                        assessmentGuid);
+            }
+            AssessmentConfig assessmentConfig = null;
+            try {
+                assessmentConfig = bridgeHelper.getAssessmentConfigByGuid(appId, assessmentGuid);
+            } catch (EntityNotFoundException ex) {
+                // Similarly.
+                LOG.warn("Assessment config not found for appId=" + appId + ", recordId=" + recordId +
+                        ", assessmentGuid=" + assessmentGuid);
+            }
             AssessmentSummarizer summarizer = summarizerProvider.getSummarizer(assessment, assessmentConfig);
             if (summarizer != null) {
                 File tempDir = fileHelper.createTempDir();
@@ -680,6 +695,9 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
                     }
 
                     // Summarize results file.
+                    // Note: This may need to be refactored in the future to accommodate assessments that use multiple
+                    // files - voice analysis, images, motion sensors, etc. In those cases, we'll need to pass the
+                    // whole file map into the summarizer.
                     File resultFile = unzippedFileMap.get(summarizer.getResultFilename());
                     if (resultFile != null) {
                         String resultString = IOUtils.toString(fileHelper.getInputStream(resultFile),
