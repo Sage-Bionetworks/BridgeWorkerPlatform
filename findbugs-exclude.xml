@@ -6,6 +6,10 @@
         <Bug pattern="REC_CATCH_EXCEPTION" />
     </Match>
     <Match>
+        <!-- This is Kotlin code, which doesn't work with FindBugs. -->
+        <Package name="org.sagebionetworks.bridge.exporter3.results.*" />
+    </Match>
+    <Match>
         <!-- We're counting lines, so we don't actually care about the value returned by readline() -->
         <Class name="org.sagebionetworks.bridge.udd.synapse.SynapseDownloadFromTableTask" />
         <Method name="filterNoDataCsvFiles" />

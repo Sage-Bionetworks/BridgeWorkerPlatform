@@ -14,6 +14,7 @@ import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
 import org.sagebionetworks.bridge.rest.model.Assessment;
+import org.sagebionetworks.bridge.rest.model.AssessmentConfig;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
@@ -129,6 +130,21 @@ public class BridgeHelper {
                     .body();
         } catch (EntityNotFoundException ex) {
             return forWorkersApi.getSharedAssessmentByGUID(guid).execute().body();
+        }
+    }
+
+    /** Get an assessment config by guid. */
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
+            types = { BridgeSDKException.class, IOException.class }, randomize = false)
+    public AssessmentConfig getAssessmentConfigByGuid(String appId, String guid) throws IOException {
+        // https://sagebionetworks.jira.com/browse/DHP-1129 - Currently, we can schedule both local assessments and
+        // shared assessments, and the worker has no way of knowing which one to use. In the short term, we use this
+        // hack. First try the local assessment API. If that throws a 404, try the shared assessment API.
+        ForWorkersApi forWorkersApi = clientManager.getClient(ForWorkersApi.class);
+        try {
+            return forWorkersApi.getAssessmentConfigForWorker(appId, guid).execute().body();
+        } catch (EntityNotFoundException ex) {
+            return forWorkersApi.getSharedAssessmentConfig(guid).execute().body();
         }
     }
 
@@ -440,6 +456,12 @@ public class BridgeHelper {
     public TimelineMetadata getTimelineMetadata(String appId, String instanceGuid) throws IOException {
         return clientManager.getClient(ForWorkersApi.class).getTimelineMetadata(appId, instanceGuid)
                 .execute().body();
+    }
+
+    @RetryOnFailure(attempts = 2, delay = 100, unit = TimeUnit.MILLISECONDS,
+            types = { BridgeSDKException.class, IOException.class }, randomize = false)
+    public void saveUploadTableRow(String appId, String studyId, UploadTableRow tableRow) throws IOException {
+        clientManager.getClient(ForWorkersApi.class).saveUploadTableRowForWorker(appId, studyId, tableRow).execute();
     }
 
     private List<StudyParticipant> getStudyParticipantsFromAccountSummaries(List<AccountSummary> accountSummaries) throws IOException, InterruptedException {

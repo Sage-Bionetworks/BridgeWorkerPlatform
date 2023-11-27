@@ -38,6 +38,7 @@ import org.sagebionetworks.bridge.rest.exceptions.BridgeSDKException;
 import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.rest.model.AccountSummarySearch;
 import org.sagebionetworks.bridge.rest.model.Assessment;
+import org.sagebionetworks.bridge.rest.model.AssessmentConfig;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
 import org.sagebionetworks.bridge.rest.model.ParticipantVersion;
@@ -297,6 +298,39 @@ public class BridgeHelperTest {
 
         verify(mockWorkerApi).getAssessmentByGuidForWorker(APP_ID, ASSESSMENT_GUID);
         verify(mockWorkerApi).getSharedAssessmentByGUID(ASSESSMENT_GUID);
+        verifyNoMoreInteractions(mockWorkerApi);
+    }
+
+    @Test
+    public void getAssessmentConfigByGuid_LocalAssessment() throws Exception {
+        // Set up mocks.
+        AssessmentConfig assessment = new AssessmentConfig();
+        Call<AssessmentConfig> mockCall = mockCallForValue(assessment);
+        when(mockWorkerApi.getAssessmentConfigForWorker(APP_ID, ASSESSMENT_GUID)).thenReturn(mockCall);
+
+        // Execute and validate.
+        AssessmentConfig result = bridgeHelper.getAssessmentConfigByGuid(APP_ID, ASSESSMENT_GUID);
+        assertSame(result, assessment);
+
+        verify(mockWorkerApi).getAssessmentConfigForWorker(APP_ID, ASSESSMENT_GUID);
+        verifyNoMoreInteractions(mockWorkerApi);
+    }
+
+    @Test
+    public void getAssessmentConfigByGuid_SharedAssessment() throws Exception {
+        // Set up mocks.
+        when(mockWorkerApi.getAssessmentConfigForWorker(any(), any())).thenThrow(EntityNotFoundException.class);
+
+        AssessmentConfig assessment = new AssessmentConfig();
+        Call<AssessmentConfig> mockCall = mockCallForValue(assessment);
+        when(mockWorkerApi.getSharedAssessmentConfig(ASSESSMENT_GUID)).thenReturn(mockCall);
+
+        // Execute and validate.
+        AssessmentConfig result = bridgeHelper.getAssessmentConfigByGuid(APP_ID, ASSESSMENT_GUID);
+        assertSame(result, assessment);
+
+        verify(mockWorkerApi).getAssessmentConfigForWorker(APP_ID, ASSESSMENT_GUID);
+        verify(mockWorkerApi).getSharedAssessmentConfig(ASSESSMENT_GUID);
         verifyNoMoreInteractions(mockWorkerApi);
     }
 
@@ -1052,6 +1086,20 @@ public class BridgeHelperTest {
         assertSame(metadata, retValue);
         
         verify(mockWorkerApi).getTimelineMetadata(APP_ID, INSTANCE_GUID);
+    }
+
+    @Test
+    public void saveUploadTableRow() throws IOException {
+        // Set up mocks.
+        UploadTableRow row = new UploadTableRow();
+
+        Call<Message> mockCall = mock(Call.class);
+        when(mockWorkerApi.saveUploadTableRowForWorker(eq(APP_ID), eq(STUDY_ID), same(row))).thenReturn(mockCall);
+
+        // Execute and validate.
+        bridgeHelper.saveUploadTableRow(APP_ID, STUDY_ID, row);
+        verify(mockWorkerApi).saveUploadTableRowForWorker(eq(APP_ID), eq(STUDY_ID), same(row));
+        verify(mockCall).execute();
     }
 
     private static AccountSummary mockAccountSummary(String id, String email) {

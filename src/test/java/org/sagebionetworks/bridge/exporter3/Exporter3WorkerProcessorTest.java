@@ -3,8 +3,11 @@ package org.sagebionetworks.bridge.exporter3;
 import static org.junit.Assert.assertFalse;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -54,9 +57,14 @@ import org.testng.annotations.Test;
 import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.crypto.CmsEncryptor;
 import org.sagebionetworks.bridge.crypto.WrongEncryptionKeyException;
+import org.sagebionetworks.bridge.exporter3.results.AssessmentResultSummarizer;
+import org.sagebionetworks.bridge.exporter3.results.AssessmentSummarizerProvider;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
+import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.rest.model.App;
+import org.sagebionetworks.bridge.rest.model.Assessment;
+import org.sagebionetworks.bridge.rest.model.AssessmentConfig;
 import org.sagebionetworks.bridge.rest.model.ExportedRecordInfo;
 import org.sagebionetworks.bridge.rest.model.ExportToAppNotification;
 import org.sagebionetworks.bridge.rest.model.HealthDataRecordEx3;
@@ -65,10 +73,12 @@ import org.sagebionetworks.bridge.rest.model.Study;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.TimelineMetadata;
 import org.sagebionetworks.bridge.rest.model.Upload;
+import org.sagebionetworks.bridge.rest.model.UploadTableRow;
 import org.sagebionetworks.bridge.s3.S3Helper;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerBadRequestException;
 import org.sagebionetworks.bridge.sqs.PollSqsWorkerRetryableException;
 import org.sagebionetworks.bridge.synapse.SynapseHelper;
+import org.sagebionetworks.bridge.udd.helper.ZipHelper;
 import org.sagebionetworks.bridge.workerPlatform.bridge.BridgeHelper;
 import org.sagebionetworks.bridge.workerPlatform.exceptions.WorkerException;
 
@@ -80,6 +90,11 @@ public class Exporter3WorkerProcessorTest {
     private static final String CUSTOM_METADATA_KEY_SANITIZED = "custom_metadata_key";
     private static final String CUSTOM_METADATA_VALUE = "custom-<b>metadata</b>-value";
     private static final String CUSTOM_METADATA_VALUE_CLEAN = "custom-metadata-value";
+    private static final String START_DATE_STR = "2015-04-10T10:40:34.000-07:00";
+    private static final String END_DATE_STR = "2015-04-10T18:19:51.000-07:00";
+    private static final String DATA_GROUP_A = "aa_group";
+    private static final String DATA_GROUP_B = "bb_group";
+    private static final String DEVICE_INFO = "Unit Test Device Info";
     private static final byte[] DUMMY_MD5_BYTES = "dummy-md5".getBytes(StandardCharsets.UTF_8);
     private static final byte[] DUMMY_ENCRYPTED_FILE_BYTES = "dummy encrypted file content"
             .getBytes(StandardCharsets.UTF_8);
@@ -92,15 +107,27 @@ public class Exporter3WorkerProcessorTest {
     private static final int PARTICIPANT_VERSION = 42;
     private static final String RAW_DATA_BUCKET = "raw-data-bucket";
     private static final String RECORD_ID = "test-record";
+    private static final DateTime REQUESTED_ON = DateTime.parse("2015-04-10T18:19:51.047-07:00");
     private static final String SCHEDULE_GUID = "test-schedule-guid";
+    private static final String SESSION_NAME = "test-session-name";
+    private static final String SESSION_START_EVENT_ID = "test-session-start-event-id";
+    private static final String STUDY_ID_2 = "test-study-2";
+    private static final String STUDY_ID_3 = "test-study-3";
+    private static final String STUDY_ID_4 = "test-study-4";
     private static final String TODAYS_DATE_STRING = "2021-08-23";
     private static final String TODAYS_FOLDER_ID = "syn7777";
     private static final String UPLOAD_BUCKET = "upload-bucket";
     private static final String USER_AGENT = "dummy user agent";
     private static final String INSTANCE_GUID = "instanceGuid";
     private static final String ASSESSMENT_INSTANCE_GUID = "assessmentInstanceGuid";
+    private static final String ASSESSMENT_GUID = "assessmentGuid";
+    private static final String ASSESSMENT_ID = "assessmentId";
     private static final String SESSION_GUID = "session-guid";
-    
+
+    private static final String EXTERNAL_ID_1 = "external-id-1";
+    private static final String EXTERNAL_ID_1_WITH_SUFFIX = EXTERNAL_ID_1 + ":" + Exporter3TestUtil.STUDY_ID;
+    private static final String EXTERNAL_ID_2 = "external-id-2";
+
     private static final long MOCK_NOW_MILLIS = DateTime.parse(TODAYS_DATE_STRING + "T15:32:38.914-0700")
             .getMillis();
     private static final DateTime UPLOADED_ON = DateTime.parse(TODAYS_DATE_STRING + "T15:27:28.647-0700");
@@ -110,6 +137,81 @@ public class Exporter3WorkerProcessorTest {
     private static final String EXPECTED_S3_KEY = Exporter3TestUtil.APP_ID + '/' + TODAYS_DATE_STRING + '/' + FULL_FILENAME;
     private static final String EXPECTED_S3_KEY_FOR_STUDY = Exporter3TestUtil.APP_ID + '/' + Exporter3TestUtil.STUDY_ID + '/' + TODAYS_DATE_STRING + '/' +
             FULL_FILENAME;
+
+    // Simplified assessment config with only the relevant fields.
+    private static final String ASSESSMENT_CONFIG = "{\n" +
+            "  \"type\": \"assessment\",\n" +
+            "  \"identifier\": \"xhcsds\",\n" +
+            "  \"steps\": [\n" +
+            "    {\n" +
+            "      \"type\": \"choiceQuestion\",\n" +
+            "      \"identifier\": \"choiceQ1\",\n" +
+            "      \"title\": \"Choose which question to answer\",\n" +
+            "      \"baseType\": \"integer\",\n" +
+            "      \"singleChoice\": true,\n" +
+            "      \"choices\": [\n" +
+            "        {\n" +
+            "          \"value\": 1,\n" +
+            "          \"text\": \"Enter some text\"\n" +
+            "        },\n" +
+            "        {\n" +
+            "          \"value\": 2,\n" +
+            "          \"text\": \"Birth year\"\n" +
+            "        }\n" +
+            "      ]\n" +
+            "    },\n" +
+            "    {\n" +
+            "      \"type\": \"simpleQuestion\",\n" +
+            "      \"identifier\": \"simpleQ1\",\n" +
+            "      \"title\": \"Enter some text\",\n" +
+            "      \"inputItem\": {\n" +
+            "        \"type\": \"string\",\n" +
+            "        \"placeholder\": \"I like cake\"\n" +
+            "      }\n" +
+            "    }\n" +
+            "  ]\n" +
+            "}";
+
+    // Simplified metadata.json file with only the relevant fields.
+    private static final String METADATA_JSON_CONTENT = "{\n" +
+            "   \"deviceInfo\":\"" + DEVICE_INFO + "\",\n" +
+            "   \"startDate\":\"" + START_DATE_STR + "\",\n" +
+            "   \"endDate\":\"" + END_DATE_STR +  "\"\n" +
+            "}";
+
+    // Empty metadata.json to test branch coverage.
+    private static final String EMPTY_METADATA_JSON_CONTENT = "{}";
+
+    // Simplified assessmentResults.json file with only the relevant fields.
+    private static final String DUMMY_ASSESSMENT_RESULTS = "{\n" +
+            "   \"type\":\"assessment\",\n" +
+            "   \"identifier\":\"xhcsds\",\n" +
+            "   \"stepHistory\":[\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"choiceQ1\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"integer\"\n" +
+            "         },\n" +
+            "         \"value\":1\n" +
+            "      },\n" +
+            "      {\n" +
+            "         \"type\":\"answer\",\n" +
+            "         \"identifier\":\"simpleQ1\",\n" +
+            "         \"answerType\":{\n" +
+            "            \"type\":\"string\"\n" +
+            "         },\n" +
+            "         \"value\":\"test text\"\n" +
+            "      }\n" +
+            "   ]\n" +
+            "}";
+
+    // Empty assessmentResults.json to test branch coverage. Still need type and identifer or else the assessment
+    // summarizer throws.
+    private static final String EMPTY_ASSESSMENT_RESULTS = "{\n" +
+            "   \"type\":\"assessment\",\n" +
+            "   \"identifier\":\"xhcsds\"\n" +
+            "}";
 
     private static class EmptyCacheLoader extends CacheLoader<String, CmsEncryptor> {
         public static final LoadingCache<String, CmsEncryptor> LOADING_CACHE_INSTANCE = CacheBuilder.newBuilder()
@@ -163,6 +265,9 @@ public class Exporter3WorkerProcessorTest {
     @Mock
     private SynapseHelper mockSynapseHelper;
 
+    @Mock
+    private ZipHelper mockZipHelper;
+
     @InjectMocks
     @Spy
     private Exporter3WorkerProcessor processor;
@@ -175,6 +280,9 @@ public class Exporter3WorkerProcessorTest {
     @BeforeMethod
     public void beforeMethod() throws Exception {
         MockitoAnnotations.initMocks(this);
+
+        // Use the real assessment summarizer provider.
+        processor.setSummarizerProvider(new AssessmentSummarizerProvider());
 
         // Use InMemoryFileHelper for FileHelper.
         inMemoryFileHelper = new InMemoryFileHelper();
@@ -718,6 +826,307 @@ public class Exporter3WorkerProcessorTest {
     }
 
     @Test
+    public void uploadTableEnabled() throws Exception {
+        // Mock services.
+        App app = Exporter3TestUtil.makeAppWithEx3Config();
+        app.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        Upload mockUpload = mockUpload(false);
+        when(mockUpload.getRequestedOn()).thenReturn(REQUESTED_ON);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
+
+        Assessment assessment = new Assessment().guid(ASSESSMENT_GUID).identifier(ASSESSMENT_ID).title(ASSESSMENT_ID)
+                .frameworkIdentifier(AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER);
+        when(mockBridgeHelper.getAssessmentByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(assessment);
+
+        AssessmentConfig assessmentConfig = new AssessmentConfig().config(ASSESSMENT_CONFIG);
+        when(mockBridgeHelper.getAssessmentConfigByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(
+                assessmentConfig);
+
+        mockSynapseHelper();
+
+        // Mock timeline and record with metadata.
+        Map<String, String> timelineMetadataMap = new HashMap<>();
+        timelineMetadataMap.put(Exporter3WorkerProcessor.METADATA_KEY_ASSESSMENT_GUID, ASSESSMENT_GUID);
+        timelineMetadataMap.put("sessionGuid", SESSION_GUID);
+        timelineMetadataMap.put("sessionName", SESSION_NAME);
+        timelineMetadataMap.put("sessionStartEventId", SESSION_START_EVENT_ID);
+
+        TimelineMetadata meta = mock(TimelineMetadata.class);
+        when(meta.getMetadata()).thenReturn(timelineMetadataMap);
+        when(mockBridgeHelper.getTimelineMetadata(Exporter3TestUtil.APP_ID, INSTANCE_GUID)).thenReturn(meta);
+
+        HealthDataRecordEx3 record = makeRecord();
+        record.putMetadataItem(METADATA_KEY_INSTANCE_GUID, INSTANCE_GUID);
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(
+                record);
+
+        // Make 4 studies enabled for EX3.0. Studies 1, 2, and 4 are enabled for upload table. Study 3 isn't.
+        Study study1 = Exporter3TestUtil.makeStudyWithEx3Config().identifier(Exporter3TestUtil.STUDY_ID);
+        study1.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, Exporter3TestUtil.STUDY_ID)).thenReturn(study1);
+
+        Study study2 = Exporter3TestUtil.makeStudyWithEx3Config().identifier(STUDY_ID_2);
+        study2.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, STUDY_ID_2)).thenReturn(study2);
+
+        Study study3 = Exporter3TestUtil.makeStudyWithEx3Config().identifier(STUDY_ID_3);
+        study3.getExporter3Configuration().uploadTableEnabled(false);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, STUDY_ID_3)).thenReturn(study3);
+
+        Study study4 = Exporter3TestUtil.makeStudyWithEx3Config().identifier(STUDY_ID_4);
+        study4.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, STUDY_ID_4)).thenReturn(study4);
+
+        // Participant is enrolled in all 4 studies. Study 1 external ID is suffixed with the study ID. Study 2
+        // external ID is not. Studies 3 and 4 have no external IDs.
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockParticipant.getExternalIds()).thenReturn(ImmutableMap.of(
+                Exporter3TestUtil.STUDY_ID, EXTERNAL_ID_1_WITH_SUFFIX,
+                STUDY_ID_2, EXTERNAL_ID_2));
+        when(mockParticipant.getStudyIds()).thenReturn(ImmutableList.of(Exporter3TestUtil.STUDY_ID, STUDY_ID_2,
+                STUDY_ID_3, STUDY_ID_4));
+        // Server can return data groups in any order. We will need to sort them alphabetically. To simulate this,
+        // return data groups in a non-sorted order.
+        when(mockParticipant.getDataGroups()).thenReturn(ImmutableList.of(
+                Exporter3WorkerProcessor.DATA_GROUP_TEST_USER, DATA_GROUP_B, DATA_GROUP_A));
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
+
+        // Mock zip helper.
+        mockZipHelper(ImmutableMap.of(Exporter3WorkerProcessor.FILENAME_METADATA_JSON, METADATA_JSON_CONTENT,
+                AssessmentResultSummarizer.FILENAME_ASSESSMENT_RESULT_JSON, DUMMY_ASSESSMENT_RESULTS));
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // The details of the back-end calls are tested elsewhere. Just verify that we called Synapse.
+        verify(mockSynapseHelper, atLeastOnce()).createEntityWithRetry(any());
+
+        // Verify that we download and unzip the file.
+        ArgumentCaptor<File> downloadedZipFileCaptor = ArgumentCaptor.forClass(File.class);
+        verify(mockS3Helper).downloadS3File(eq(RAW_DATA_BUCKET), eq(EXPECTED_S3_KEY),
+                downloadedZipFileCaptor.capture());
+        File downloadedZipFile = downloadedZipFileCaptor.getValue();
+
+        verify(mockZipHelper).unzip(same(downloadedZipFile), any());
+
+        // Verify upload table rows.
+        ArgumentCaptor<UploadTableRow> tableRowCaptor = ArgumentCaptor.forClass(UploadTableRow.class);
+        verify(mockBridgeHelper).saveUploadTableRow(eq(Exporter3TestUtil.APP_ID), eq(Exporter3TestUtil.STUDY_ID),
+                tableRowCaptor.capture());
+        verifyUploadTableRow(tableRowCaptor.getValue(), EXTERNAL_ID_1);
+
+        tableRowCaptor = ArgumentCaptor.forClass(UploadTableRow.class);
+        verify(mockBridgeHelper).saveUploadTableRow(eq(Exporter3TestUtil.APP_ID), eq(STUDY_ID_2),
+                tableRowCaptor.capture());
+        verifyUploadTableRow(tableRowCaptor.getValue(), EXTERNAL_ID_2);
+
+        verify(mockBridgeHelper, never()).saveUploadTableRow(any(), eq(STUDY_ID_3), any());
+
+        tableRowCaptor = ArgumentCaptor.forClass(UploadTableRow.class);
+        verify(mockBridgeHelper).saveUploadTableRow(eq(Exporter3TestUtil.APP_ID), eq(STUDY_ID_4),
+                tableRowCaptor.capture());
+        verifyUploadTableRow(tableRowCaptor.getValue(), null);
+
+        // Verify we delete our files when we're done.
+        assertTrue(inMemoryFileHelper.isEmpty());
+    }
+
+    // branch coverage
+    @Test
+    public void uploadTableEnabled_getUploadTableRowThrows() throws Exception {
+        // Mock services.
+        App app = Exporter3TestUtil.makeAppWithEx3Config();
+        app.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        Upload mockUpload = mockUpload(false);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
+
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(
+                makeRecord());
+
+        mockSynapseHelper();
+
+        // We need at least one study with table rows enabled. Otherwise, it's ambiguous whether saveUploadTableRow()
+        // wasn't called because there was no row or because there was no study.
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockParticipant.getStudyIds()).thenReturn(ImmutableList.of(Exporter3TestUtil.STUDY_ID));
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
+
+        Study study = Exporter3TestUtil.makeStudyWithEx3Config().identifier(Exporter3TestUtil.STUDY_ID);
+        study.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, Exporter3TestUtil.STUDY_ID)).thenReturn(study);
+
+        // getUploadTableRow() throws.
+        doThrow(PollSqsWorkerBadRequestException.class).when(processor).getUploadTableRow(any(), any(), any(), any(),
+                any());
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // The details of the back-end calls are tested elsewhere. Just verify that we called Synapse.
+        verify(mockSynapseHelper, atLeastOnce()).createEntityWithRetry(any());
+
+        // However, because getUploadTableRow() throws, we don't save any upload table rows.
+        verify(mockBridgeHelper, never()).saveUploadTableRow(any(), any(), any());
+    }
+
+    @Test
+    public void getUploadTableRow_NoAssessmentGuid() throws Exception {
+        // Make inputs.
+        Upload mockUpload = mockUpload(false);
+        HealthDataRecordEx3 record = makeRecord();
+        StudyParticipant mockParticipant = mockParticipant();
+        Map<String, String> metadataMap = ImmutableMap.of();
+
+        // Execute.
+        UploadTableRow row = processor.getUploadTableRow(mockUpload, record, mockParticipant, RECORD_ID, metadataMap);
+        assertNull(row);
+    }
+
+    // branch coverage
+    @Test
+    public void getUploadTableRow_NoOptionalValues() throws Exception {
+        // Make inputs.
+        Upload mockUpload = mockUpload(false);
+        HealthDataRecordEx3 record = makeRecord();
+        StudyParticipant mockParticipant = mockParticipant();
+
+        Map<String, String> metadataMap = new HashMap<>();
+        metadataMap.put(Exporter3WorkerProcessor.METADATA_KEY_ASSESSMENT_GUID, ASSESSMENT_GUID);
+
+        // We still need an assessment and assessment config to exercise the code.
+        Assessment assessment = new Assessment().guid(ASSESSMENT_GUID).identifier(ASSESSMENT_ID).title(ASSESSMENT_ID)
+                .frameworkIdentifier(AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER);
+        when(mockBridgeHelper.getAssessmentByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(assessment);
+
+        AssessmentConfig assessmentConfig = new AssessmentConfig().config(ASSESSMENT_CONFIG);
+        when(mockBridgeHelper.getAssessmentConfigByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(
+                assessmentConfig);
+
+        // Mock zip helper. The files should still exist, but have no data, to exercise the code.
+        mockZipHelper(ImmutableMap.of(Exporter3WorkerProcessor.FILENAME_METADATA_JSON, EMPTY_METADATA_JSON_CONTENT,
+                AssessmentResultSummarizer.FILENAME_ASSESSMENT_RESULT_JSON, EMPTY_ASSESSMENT_RESULTS));
+
+        // Execute.
+        UploadTableRow row = processor.getUploadTableRow(mockUpload, record, mockParticipant, RECORD_ID, metadataMap);
+
+        // The code path that we're specifically interested in exercising is that the common metadata rows are still
+        // created, but with blank values.
+        Map<String, String> rowMetadataMap = row.getMetadata();
+        for (String key : Exporter3WorkerProcessor.TABLE_ROW_METADATA_JSON_KEYS) {
+            assertEquals(rowMetadataMap.get(key), "");
+        }
+        for (String key : Exporter3WorkerProcessor.TABLE_ROW_UPLOAD_METADATA_KEYS) {
+            assertEquals(rowMetadataMap.get(key), "");
+        }
+
+        // branch coverage: isTestData
+        assertFalse(row.isTestData());
+
+        // Verify that we download and unzip the file.
+        ArgumentCaptor<File> downloadedZipFileCaptor = ArgumentCaptor.forClass(File.class);
+        verify(mockS3Helper).downloadS3File(eq(RAW_DATA_BUCKET), eq(EXPECTED_S3_KEY),
+                downloadedZipFileCaptor.capture());
+        File downloadedZipFile = downloadedZipFileCaptor.getValue();
+
+        verify(mockZipHelper).unzip(same(downloadedZipFile), any());
+    }
+
+    // branch coverage
+    @Test
+    public void getUploadTableRow_NoMetadataJsonNoAssessmentResultJson() throws Exception {
+        // Make inputs.
+        Upload mockUpload = mockUpload(false);
+        HealthDataRecordEx3 record = makeRecord();
+        StudyParticipant mockParticipant = mockParticipant();
+
+        Map<String, String> metadataMap = new HashMap<>();
+        metadataMap.put(Exporter3WorkerProcessor.METADATA_KEY_ASSESSMENT_GUID, ASSESSMENT_GUID);
+
+        // We still need an assessment and assessment config to exercise the code.
+        Assessment assessment = new Assessment().guid(ASSESSMENT_GUID).identifier(ASSESSMENT_ID).title(ASSESSMENT_ID)
+                .frameworkIdentifier(AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER);
+        when(mockBridgeHelper.getAssessmentByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(assessment);
+
+        AssessmentConfig assessmentConfig = new AssessmentConfig().config(ASSESSMENT_CONFIG);
+        when(mockBridgeHelper.getAssessmentConfigByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(
+                assessmentConfig);
+
+        // Mock zip helper. In this test, the zip file is empty.
+        when(mockZipHelper.unzip(any(), any())).thenReturn(ImmutableMap.of());
+
+        // Execute.
+        UploadTableRow row = processor.getUploadTableRow(mockUpload, record, mockParticipant, RECORD_ID, metadataMap);
+        assertNotNull(row);
+
+        // We still download and unzip the file.
+        ArgumentCaptor<File> downloadedZipFileCaptor = ArgumentCaptor.forClass(File.class);
+        verify(mockS3Helper).downloadS3File(eq(RAW_DATA_BUCKET), eq(EXPECTED_S3_KEY),
+                downloadedZipFileCaptor.capture());
+        File downloadedZipFile = downloadedZipFileCaptor.getValue();
+
+        verify(mockZipHelper).unzip(same(downloadedZipFile), any());
+    }
+
+    // branch coverage
+    @Test
+    public void getUploadTableRow_AssessmentThrowsAssessmentConfigThrows() throws Exception {
+        // Make inputs.
+        Upload mockUpload = mockUpload(false);
+        HealthDataRecordEx3 record = makeRecord();
+        StudyParticipant mockParticipant = mockParticipant();
+
+        Map<String, String> metadataMap = new HashMap<>();
+        metadataMap.put(Exporter3WorkerProcessor.METADATA_KEY_ASSESSMENT_GUID, ASSESSMENT_GUID);
+
+        // getAssessment and getAssessmentConfig both throw EntityNotFoundExceptions.
+        when(mockBridgeHelper.getAssessmentByGuid(any(), any())).thenThrow(EntityNotFoundException.class);
+        when(mockBridgeHelper.getAssessmentConfigByGuid(any(), any())).thenThrow(EntityNotFoundException.class);
+
+        // Execute.
+        UploadTableRow row = processor.getUploadTableRow(mockUpload, record, mockParticipant, RECORD_ID, metadataMap);
+        assertNotNull(row);
+
+        // Now, we don't download or unzip the file.
+        verify(mockS3Helper, never()).downloadS3File(any(), any(), any());
+        verify(mockZipHelper, never()).unzip(any(), any());
+    }
+
+    // branch coverage
+    @Test
+    public void getUploadTableRow_WrongFrameworkIdentifier() throws Exception {
+        // Make inputs.
+        Upload mockUpload = mockUpload(false);
+        HealthDataRecordEx3 record = makeRecord();
+        StudyParticipant mockParticipant = mockParticipant();
+
+        Map<String, String> metadataMap = new HashMap<>();
+        metadataMap.put(Exporter3WorkerProcessor.METADATA_KEY_ASSESSMENT_GUID, ASSESSMENT_GUID);
+
+        // Make an assessment with the wrong framework identifier.
+        Assessment assessment = new Assessment().guid(ASSESSMENT_GUID).identifier(ASSESSMENT_ID).title(ASSESSMENT_ID)
+                .frameworkIdentifier("wrong-framework");
+        when(mockBridgeHelper.getAssessmentByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(assessment);
+
+        AssessmentConfig assessmentConfig = new AssessmentConfig().config(ASSESSMENT_CONFIG);
+        when(mockBridgeHelper.getAssessmentConfigByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(
+                assessmentConfig);
+
+        // Execute.
+        UploadTableRow row = processor.getUploadTableRow(mockUpload, record, mockParticipant, RECORD_ID, metadataMap);
+        assertNotNull(row);
+
+        // Now, we don't download or unzip the file.
+        verify(mockS3Helper, never()).downloadS3File(any(), any(), any());
+        verify(mockZipHelper, never()).unzip(any(), any());
+    }
+
+    @Test
     public void appAndStudiesNotConfigured() throws Exception {
         // Mock services.
         App app = new App();
@@ -789,6 +1198,23 @@ public class Exporter3WorkerProcessorTest {
         FileEntity createdFileEntity = new FileEntity();
         createdFileEntity.setId(EXPORTED_FILE_ENTITY_ID);
         when(mockSynapseHelper.createEntityWithRetry(any(FileEntity.class))).thenReturn(createdFileEntity);
+    }
+
+    private void mockZipHelper(Map<String, String> fileContentMap) throws Exception {
+        when(mockZipHelper.unzip(any(), any())).thenAnswer(invocation -> {
+            File destDir = invocation.getArgumentAt(1, File.class);
+            Map<String, File> fileMap = new HashMap<>();
+            for (Map.Entry<String, String> oneFileEntry : fileContentMap.entrySet()) {
+                String filename = oneFileEntry.getKey();
+                String fileContent = oneFileEntry.getValue();
+
+                File file = inMemoryFileHelper.newFile(destDir, filename);
+                inMemoryFileHelper.writeBytes(file, fileContent.getBytes(StandardCharsets.UTF_8));
+                fileMap.put(filename, file);
+            }
+
+            return fileMap;
+        });
     }
 
     private void verifyS3Metadata(ObjectMetadata s3Metadata) {
@@ -928,6 +1354,36 @@ public class Exporter3WorkerProcessorTest {
         assertEquals(recordInfo.getFileEntityId(), EXPORTED_FILE_ENTITY_ID);
         assertEquals(recordInfo.getS3Bucket(), RAW_DATA_BUCKET);
         assertEquals(recordInfo.getS3Key(), expectedS3Key);
+    }
+
+    private static void verifyUploadTableRow(UploadTableRow tableRow, String expectedExternalId) {
+        assertEquals(tableRow.getAssessmentGuid(), ASSESSMENT_GUID);
+        assertEquals(tableRow.getCreatedOn(), REQUESTED_ON);
+        assertEquals(tableRow.getRecordId(), RECORD_ID);
+        assertEquals(tableRow.getHealthCode(), HEALTH_CODE);
+        assertEquals(tableRow.getParticipantVersion().intValue(), PARTICIPANT_VERSION);
+        assertTrue(tableRow.isTestData());
+
+        Map<String, String> tableRowMetadataMap = tableRow.getMetadata();
+        assertEquals(tableRowMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_CLIENT_INFO), CLIENT_INFO);
+        assertEquals(tableRowMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_DATA_GROUPS),
+                DATA_GROUP_A + "," + DATA_GROUP_B + "," + Exporter3WorkerProcessor.DATA_GROUP_TEST_USER);
+        assertEquals(tableRowMetadataMap.get(Exporter3WorkerProcessor.METADATA_KEY_USER_AGENT), USER_AGENT);
+        assertEquals(tableRowMetadataMap.get("deviceInfo"), DEVICE_INFO);
+        assertEquals(tableRowMetadataMap.get("startDate"), START_DATE_STR);
+        assertEquals(tableRowMetadataMap.get("endDate"), END_DATE_STR);
+        assertEquals(tableRowMetadataMap.get("sessionGuid"), SESSION_GUID);
+        assertEquals(tableRowMetadataMap.get("sessionName"), SESSION_NAME);
+        assertEquals(tableRowMetadataMap.get("sessionStartEventId"), SESSION_START_EVENT_ID);
+        if (expectedExternalId != null) {
+            assertEquals(tableRowMetadataMap.get("externalId"), expectedExternalId);
+        } else {
+            assertNull(tableRowMetadataMap.get("externalId"));
+        }
+
+        Map<String, String> tableRowDataMap = tableRow.getData();
+        assertEquals(tableRowDataMap.get("choiceQ1"), "1");
+        assertEquals(tableRowDataMap.get("simpleQ1"), "test text");
     }
 
     private static Exporter3Request makeRequest() {
