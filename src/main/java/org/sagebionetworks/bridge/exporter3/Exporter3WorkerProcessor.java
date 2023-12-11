@@ -324,7 +324,7 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
                     study.getName() + ", recordId=" + recordId);
 
             // Save result table row to each study
-            if (tableRow != null && study.getExporter3Configuration().isUploadTableEnabled()) {
+            if (tableRow != null && Boolean.TRUE.equals(study.getExporter3Configuration().isUploadTableEnabled())) {
                 // Copy the table row. This way, stuff we do for one study doesn't affect the other.
                 UploadTableRow studyTableRow = copyRow(tableRow);
 
@@ -733,8 +733,12 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         copy.setTestData(tableRow.isTestData());
 
         // We need to make copies of these collections.
-        copy.setMetadata(new HashMap<>(tableRow.getMetadata()));
-        copy.setData(new HashMap<>(tableRow.getData()));
+        if (tableRow.getMetadata() != null) {
+            copy.setMetadata(new HashMap<>(tableRow.getMetadata()));
+        }
+        if (tableRow.getData() != null) {
+            copy.setData(new HashMap<>(tableRow.getData()));
+        }
 
         return copy;
     }

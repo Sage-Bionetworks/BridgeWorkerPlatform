@@ -7,6 +7,7 @@ import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -872,7 +873,7 @@ public class Exporter3WorkerProcessorTest {
         when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, STUDY_ID_2)).thenReturn(study2);
 
         Study study3 = Exporter3TestUtil.makeStudyWithEx3Config().identifier(STUDY_ID_3);
-        study3.getExporter3Configuration().uploadTableEnabled(false);
+        study3.getExporter3Configuration().uploadTableEnabled(null);
         when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, STUDY_ID_3)).thenReturn(study3);
 
         Study study4 = Exporter3TestUtil.makeStudyWithEx3Config().identifier(STUDY_ID_4);
@@ -973,6 +974,48 @@ public class Exporter3WorkerProcessorTest {
 
         // However, because getUploadTableRow() throws, we don't save any upload table rows.
         verify(mockBridgeHelper, never()).saveUploadTableRow(any(), any(), any());
+    }
+
+    @Test
+    public void uploadTableEnabled_EmptyRow() throws Exception {
+        // branch coverage: Make sure nothing crashes if the row has no values.
+
+        // Mock services.
+        App app = Exporter3TestUtil.makeAppWithEx3Config();
+        app.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getApp(Exporter3TestUtil.APP_ID)).thenReturn(app);
+
+        Upload mockUpload = mockUpload(false);
+        when(mockBridgeHelper.getUploadByUploadId(RECORD_ID)).thenReturn(mockUpload);
+
+        when(mockBridgeHelper.getHealthDataRecordForExporter3(Exporter3TestUtil.APP_ID, RECORD_ID)).thenReturn(
+                makeRecord());
+
+        mockSynapseHelper();
+
+        // Spy getUploadTableRow() to return an empty row.
+        doReturn(new UploadTableRow()).when(processor).getUploadTableRow(any(), any(), any(), any(), any());
+
+        // Make study enabled for EX3.0 and upload table.
+        Study study = Exporter3TestUtil.makeStudyWithEx3Config().identifier(Exporter3TestUtil.STUDY_ID);
+        study.getExporter3Configuration().uploadTableEnabled(true);
+        when(mockBridgeHelper.getStudy(Exporter3TestUtil.APP_ID, Exporter3TestUtil.STUDY_ID)).thenReturn(study);
+
+        // Participant is enrolled in study.
+        StudyParticipant mockParticipant = mockParticipant();
+        when(mockParticipant.getStudyIds()).thenReturn(ImmutableList.of(Exporter3TestUtil.STUDY_ID));
+        when(mockBridgeHelper.getParticipantByHealthCode(Exporter3TestUtil.APP_ID, HEALTH_CODE, false))
+                .thenReturn(mockParticipant);
+
+        // Execute.
+        processor.process(makeRequest());
+
+        // The details of the back-end calls are tested elsewhere. Just verify that we called Synapse.
+        verify(mockSynapseHelper, atLeastOnce()).createEntityWithRetry(any());
+
+        // We save one upload table. Don't bother verifying the contents of the row, since it's entirely blank.
+        verify(mockBridgeHelper).saveUploadTableRow(eq(Exporter3TestUtil.APP_ID), eq(Exporter3TestUtil.STUDY_ID),
+                any());
     }
 
     @Test
