@@ -14,8 +14,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.ClientManager;
 import org.sagebionetworks.bridge.rest.api.ForWorkersApi;
@@ -62,11 +60,7 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
     public final void setClientManager(ClientManager clientManager) {
         this.clientManager = clientManager;
     }
-    
-    DateTime getDateTime() {
-        return DateTime.now();
-    }
-    
+
     @Override
     public void accept(JsonNode node) throws Exception {
         WeeklyAdherenceReportRequest request;
@@ -102,6 +96,11 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
             appList = bridgeHelper.getAllApps();   
         }
         for (App app : appList) {
+            if (!Boolean.TRUE.equals(app.isAdherenceReportEnabled())) {
+                LOG.info("Skipping app '" + app.getIdentifier() + "': it has no adherence report enabled");
+                continue;
+            }
+
             Map<String, Integer> studyThresholds = new HashMap<>();
             
             Set<String> selectedStudies = request.getSelectedStudies().get(app.getIdentifier());
@@ -118,11 +117,8 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                 // and this study is not one of them. Right now this is hundreds of studies with thousands of users, 
                 // but we will need to continue to define limits to this processing as the system grows.
                 boolean isSelected = (selectedStudies == null || selectedStudies.contains(study.getIdentifier()));
-                
-                // Is this hour of execution the correct hour of the day in the local time of the study?
-                boolean atReportingHour = isReportingHourInLocale(study, request);
-                
-                if (atReportingHour && isSelected && study.getScheduleGuid() != null && ACTIVE_PHASES.contains(study.getPhase())) {
+
+                if (isSelected && study.getScheduleGuid() != null && ACTIVE_PHASES.contains(study.getPhase())) {
                     studyThresholds.put(study.getIdentifier(), getThresholdPercentage(study));
                 }
             }
@@ -130,7 +126,7 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
                 LOG.info("Skipping app '" + app.getIdentifier() + "': it has no reportable studies");
                 continue;
             } else {
-                LOG.info("Caching studies in app '" + app.getIdentifier() + "' starting at " + getDateTime());
+                LOG.info("Caching studies in app '" + app.getIdentifier() + "'");
             }
             Stopwatch appStopwatch = Stopwatch.createStarted();
             
@@ -182,15 +178,6 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
             LOG.info("Weekly adherence report caching for app " + app.getIdentifier() + " took "
                     + appStopwatch.elapsed(TimeUnit.SECONDS) + " seconds");
         }
-    }
-
-    boolean isReportingHourInLocale(Study study, WeeklyAdherenceReportRequest request) {
-        String zoneId = (study.getStudyTimeZone() != null) ? 
-                study.getStudyTimeZone() : request.getDefaultZoneId();
-        DateTimeZone zone = DateTimeZone.forID(zoneId);
-        DateTime now = getDateTime().withZone(zone);
-        
-        return request.getReportingHours().contains(now.getHourOfDay());
     }
 
     void recordOutOfCompliance(int userAdherencePercent, int studyThresholdPercent, String appId, String studyId, String userId) {

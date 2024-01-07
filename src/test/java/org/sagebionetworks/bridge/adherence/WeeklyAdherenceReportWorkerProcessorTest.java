@@ -8,8 +8,6 @@ import static org.testng.Assert.assertEquals;
 
 import java.lang.reflect.Field;
 
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
@@ -69,11 +67,7 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
     
     @Test
     public void test() throws Exception {
-        when(processor.getDateTime()).thenReturn(DateTime.parse("2020-02-02T06:00:00.000")
-                .withZoneRetainFields(DateTimeZone.forID("America/Chicago")));
-        
-        mockServer("America/Los_Angeles", "America/Los_Angeles", "America/Los_Angeles", "America/Los_Angeles",
-                "America/Los_Angeles");
+        mockServer();
 
         processor.accept(JsonNodeFactory.instance.objectNode()); // we're doing everything, and that's it.
         
@@ -112,11 +106,7 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
     
     @Test
     public void individualAccountErrorsDoNotPreventOtherAccountsFromRunning() throws Exception {
-        when(processor.getDateTime()).thenReturn(DateTime.parse("2020-02-02T06:00:00.000")
-                .withZoneRetainFields(DateTimeZone.forID("America/Chicago")));
-        
-        mockServer("America/Los_Angeles", "America/Los_Angeles", "America/Los_Angeles", "America/Los_Angeles",
-                "America/Los_Angeles");
+        mockServer();
         
         when(mockWorkersApi.getWeeklyAdherenceReportForWorker("app2", "study-app2a", "user1"))
                 .thenThrow(new BridgeSDKException("Error while processing adherence job", 500, ""));
@@ -147,11 +137,7 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
     
     @Test
     public void limitsScanToProvidedConfiguration() throws Exception {
-        // now is 2pm in Chicago, which should be 1pm in Denver, when the caller wants it to run
-        DateTime now = DateTime.parse("2020-02-02T14:00:00.000").withZoneRetainFields(DateTimeZone.forID("America/Chicago"));
-        when(processor.getDateTime()).thenReturn(now);
-        
-        mockServer("America/Chicago", "America/Chicago", "America/Chicago", "America/Chicago", "America/Chicago");
+        mockServer();
         
         WeeklyAdherenceReportRequest request = new WeeklyAdherenceReportRequest("America/Denver", ImmutableSet.of(14), 
                 ImmutableMap.of("app1", ImmutableSet.of("study-app1a"), "app2", ImmutableSet.of("study-app2a")));
@@ -171,61 +157,17 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
         verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2a", "user1");
         verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2a", "user2");
     }
-    
+
     @Test
-    public void timeZoneDefaults() throws Exception {
-        // Server time: 6am Chicago time, request defaults to Chicago time, studies have no time
-        // zones. Nothing happens because 6am is not a default reporting hour.
-        when(processor.getDateTime()).thenReturn(DateTime.parse("2020-02-02T06:00:00.000")
-                .withZoneRetainFields(DateTimeZone.forID("America/Chicago")));
-        mockServer(null, null, null, null, null);
+    public void appIsAdherenceReportEnabled() throws Exception {
+        mockServer(true, false);
+
         processor.accept(JsonNodeFactory.instance.objectNode());
-        
+
+        // app1 is enabled, but its studies ineligible. app2 is disabled. No calls to get reports.
         verify(mockWorkersApi, never()).getWeeklyAdherenceReportForWorker(any(), any(), any());
-        verify(processor, never()).recordOutOfCompliance(anyInt(), anyInt(), any(), any(), any());
     }
-    
-    @Test
-    public void timeZoneRetrievedFromStudy() throws Exception {
-        // Server time: 6am Chicago time, request defaults to Chicago time, and studies have a mix
-        // of time zones. The study in LA (study-app2b) is at 4am and that's a reporting hour for
-        // that study.
-        when(processor.getDateTime()).thenReturn(DateTime.parse("2020-02-02T06:00:00.000")
-                .withZoneRetainFields(DateTimeZone.forID("America/Chicago")));
-        mockServer(null, "Europe/London", "Europe/Paris", "America/Los_Angeles", "America/New_York");
-        processor.accept(JsonNodeFactory.instance.objectNode());
-        
-        // LA is at 4am and so this study (and only this study) matches
-        verify(mockWorkersApi, times(3)).getWeeklyAdherenceReportForWorker(any(), any(), any());
-        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2b", "user1");
-        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2b", "user2");
-        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2b", "user3");
-        
-        // One error. study 3 is defaulted to zero and doesn't appear here. The inactive user is 
-        // not reported.
-        verify(processor).recordOutOfCompliance(20, 60, "app2", "study-app2b", "user2");
-    }
-    
-    @Test
-    public void timeZoneRetrievedFromRequest() throws Exception {
-        // Server time: 3am Los Angeles time, request is in Denver time, and only one study has a time zone
-        // in Los Angeles (study-app2a). Denver is at 4am, so all studies EXCEPT study-app2a are 
-        // cached.
-        when(processor.getDateTime()).thenReturn(DateTime.parse("2020-02-02T03:00:00.000")
-                .withZoneRetainFields(DateTimeZone.forID("America/Los_Angeles")));
-        mockServer(null, null, "America/Los_Angeles", null, null);
-        WeeklyAdherenceReportRequest request = new WeeklyAdherenceReportRequest("America/Denver", null, null);
-        JsonNode node = new ObjectMapper().valueToTree(request);
-        processor.accept(node);
-        
-        verify(mockWorkersApi, times(5)).getWeeklyAdherenceReportForWorker(any(), any(), any());
-        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2b", "user1");
-        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2c", "user1");
-        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2b", "user2");
-        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2c", "user2");
-        verify(mockWorkersApi).getWeeklyAdherenceReportForWorker("app2", "study-app2b", "user3");
-    }
-    
+
     @Test
     public void errorDoesNotPutRequestBackOnQueue() throws Exception {
         // This logs the exception but does not allow it to be thrown, as this puts the message
@@ -238,16 +180,22 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
         
         processor.accept(node);
     }
+
+    private void mockServer() throws Exception {
+        mockServer(true, true);
+    }
     
-    @SuppressWarnings("unchecked")
-    private void mockServer(String zoneId1a, String zoneId1b, String zoneId2a, String zoneId2b, String zoneId2c) throws Exception {
+    @SuppressWarnings({ "SameParameterValue", "unchecked" })
+    private void mockServer(boolean app1Enabled, boolean app2Enabled) throws Exception {
         // Create api and target apps
         App app1 = new App();
         app1.setIdentifier("app1");
-        
+        app1.setAdherenceReportEnabled(app1Enabled);
+
         App app2 = new App();
         app2.setIdentifier("app2");
-        
+        app2.setAdherenceReportEnabled(app2Enabled);
+
         when(mockBridgeHelper.getAllApps()).thenReturn(ImmutableList.of(app1, app2));
         when(mockBridgeHelper.getApp("app1")).thenReturn(app1);
         when(mockBridgeHelper.getApp("app2")).thenReturn(app2);
@@ -256,7 +204,6 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
         Study app1StudyA = new Study();
         app1StudyA.setIdentifier("study-app1a");
         app1StudyA.setPhase(LEGACY);
-        app1StudyA.setStudyTimeZone(zoneId1a);
         setVariableValueInObject(app1StudyA, "scheduleGuid", "guid1");
         app1StudyA.setAdherenceThresholdPercentage(100);
         
@@ -264,7 +211,6 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
         Study app1StudyB = new Study();
         app1StudyB.setIdentifier("study-app1b");
         app1StudyB.setPhase(DESIGN);
-        app1StudyB.setStudyTimeZone(zoneId1b);
         app1StudyB.setAdherenceThresholdPercentage(100);
         
         StudyList apiStudyList1 = new StudyList();
@@ -281,21 +227,18 @@ public class WeeklyAdherenceReportWorkerProcessorTest extends Mockito {
         Study app2StudyA = new Study();
         app2StudyA.setIdentifier("study-app2a");
         app2StudyA.setPhase(DESIGN);
-        app2StudyA.setStudyTimeZone(zoneId2a);
         setVariableValueInObject(app2StudyA, "scheduleGuid", "guid1");
         app2StudyA.setAdherenceThresholdPercentage(60);
         
         Study app2StudyB = new Study();
         app2StudyB.setIdentifier("study-app2b");
         app2StudyB.setPhase(IN_FLIGHT);
-        app2StudyB.setStudyTimeZone(zoneId2b);
         setVariableValueInObject(app2StudyB, "scheduleGuid", "guid2");
         app2StudyB.setAdherenceThresholdPercentage(60);
         
         Study app2StudyC = new Study();
         app2StudyC.setIdentifier("study-app2c");
         app2StudyC.setPhase(IN_FLIGHT);
-        app2StudyC.setStudyTimeZone(zoneId2c);
         setVariableValueInObject(app2StudyC, "scheduleGuid", "guid3");
         // adherenceThresholdPercentage = 0
         
