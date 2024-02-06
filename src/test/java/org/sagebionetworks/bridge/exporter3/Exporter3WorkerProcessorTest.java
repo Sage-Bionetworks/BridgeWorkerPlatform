@@ -58,8 +58,10 @@ import org.testng.annotations.Test;
 import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.crypto.CmsEncryptor;
 import org.sagebionetworks.bridge.crypto.WrongEncryptionKeyException;
+import org.sagebionetworks.bridge.exporter3.results.ArcResultSummarizer;
 import org.sagebionetworks.bridge.exporter3.results.AssessmentResultSummarizer;
 import org.sagebionetworks.bridge.exporter3.results.AssessmentSummarizerProvider;
+import org.sagebionetworks.bridge.exporter3.results.TestJsonKt;
 import org.sagebionetworks.bridge.file.InMemoryFileHelper;
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.exceptions.EntityNotFoundException;
@@ -1079,6 +1081,76 @@ public class Exporter3WorkerProcessorTest {
 
         verify(mockZipHelper).unzip(same(downloadedZipFile), any());
     }
+
+    @Test
+    public void getUploadTableRow_DianAppResult() throws Exception {
+        String appID = "arc";
+        // Make inputs.
+        Upload mockUpload = mockUpload(false);
+        HealthDataRecordEx3 record = makeRecord();
+        record.setAppId(appID);
+        StudyParticipant mockParticipant = mockParticipant();
+
+        Map<String, String> metadataMap = new HashMap<>();
+
+        // Setup an ARC assessment and assessment config to exercise the code.
+        Assessment assessment = new Assessment().guid(ArcResultSummarizer.DIAN_APP_CONTAINER_ASSESSMENT_GUID)
+                .identifier(ArcResultSummarizer.DIAN_APP_CONTAINER_ASSESSMENT_IDENTIFIER)
+                .title(ArcResultSummarizer.DIAN_APP_CONTAINER_ASSESSMENT_IDENTIFIER)
+                .frameworkIdentifier(ArcResultSummarizer.FRAMEWORK_IDENTIFIER);
+        when(mockBridgeHelper.getAssessmentByGuid(appID, ArcResultSummarizer.DIAN_APP_CONTAINER_ASSESSMENT_GUID)).thenReturn(assessment);
+
+        AssessmentConfig assessmentConfig = new AssessmentConfig().config("");
+        when(mockBridgeHelper.getAssessmentConfigByGuid(appID, ArcResultSummarizer.DIAN_APP_CONTAINER_ASSESSMENT_GUID)).thenReturn(
+                assessmentConfig);
+
+        // Mock zip helper. The files should still exist, but have no data, to exercise the code.
+        mockZipHelper(ImmutableMap.of(Exporter3WorkerProcessor.FILENAME_METADATA_JSON, EMPTY_METADATA_JSON_CONTENT,
+                ArcResultSummarizer.FILENAME_ARC_RESULT_JSON, TestJsonKt.testArcDataJson_100534_85));
+
+        // Execute.
+        UploadTableRow row = processor.getUploadTableRow(mockUpload, record, mockParticipant, RECORD_ID, metadataMap);
+
+        // Verify we got the expected amount of data back
+        Map<String, String> rowDataMap = row.getData();
+        assertEquals(rowDataMap.size(), 26);
+
+    }
+
+    @Test
+    public void getUploadTableRow_ArcSymbolResult() throws Exception {
+        // Make inputs.
+        Upload mockUpload = mockUpload(false);
+        HealthDataRecordEx3 record = makeRecord();
+        StudyParticipant mockParticipant = mockParticipant();
+
+        Map<String, String> metadataMap = new HashMap<>();
+        metadataMap.put(Exporter3WorkerProcessor.METADATA_KEY_ASSESSMENT_GUID, ASSESSMENT_GUID);
+
+        // Setup an ARC assessment and assessment config to exercise the code.
+        Assessment assessment = new Assessment().guid(ASSESSMENT_GUID)
+                .identifier(ArcResultSummarizer.SYMBOL_ASSESSMENT_IDENTIFIER)
+                .title(ArcResultSummarizer.SYMBOL_ASSESSMENT_IDENTIFIER)
+                .frameworkIdentifier(ArcResultSummarizer.FRAMEWORK_IDENTIFIER);
+        when(mockBridgeHelper.getAssessmentByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(assessment);
+
+        AssessmentConfig assessmentConfig = new AssessmentConfig().config("");
+        when(mockBridgeHelper.getAssessmentConfigByGuid(Exporter3TestUtil.APP_ID, ASSESSMENT_GUID)).thenReturn(
+                assessmentConfig);
+
+        // Mock zip helper. The files should still exist, but have no data, to exercise the code.
+        mockZipHelper(ImmutableMap.of(Exporter3WorkerProcessor.FILENAME_METADATA_JSON, EMPTY_METADATA_JSON_CONTENT,
+                ArcResultSummarizer.FILENAME_ARC_RESULT_JSON, TestJsonKt.testArcDataJson_100534_85));
+
+        // Execute.
+        UploadTableRow row = processor.getUploadTableRow(mockUpload, record, mockParticipant, RECORD_ID, metadataMap);
+
+        // Verify we got the expected amount of data back
+        Map<String, String> rowDataMap = row.getData();
+        assertEquals(rowDataMap.size(), 5);
+
+    }
+
 
     // branch coverage
     @Test
