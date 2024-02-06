@@ -7,6 +7,7 @@ import org.sagebionetworks.bridge.rest.model.AssessmentConfig
 
 class AssessmentSummarizerProviderTest {
     private val SURVEY_ASSESSMENT = Assessment().frameworkIdentifier(AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER)
+    private val ARC_ASSESSMENT = Assessment().frameworkIdentifier(ArcResultSummarizer.FRAMEWORK_IDENTIFIER)
     private val OTHER_ASSESSMENT = Assessment().frameworkIdentifier("wrong one")
     private val ASSESSMENT_CONFIG = AssessmentConfig()
 
@@ -25,6 +26,10 @@ class AssessmentSummarizerProviderTest {
         // Survey assessment.
         summarizer = provider.getSummarizer(SURVEY_ASSESSMENT, ASSESSMENT_CONFIG)
         assert(summarizer is AssessmentResultSummarizer)
+
+        // Arc assessment.
+        summarizer = provider.getSummarizer(ARC_ASSESSMENT, ASSESSMENT_CONFIG)
+        assert(summarizer is ArcResultSummarizer)
 
         // Other assessment.
         summarizer = provider.getSummarizer(OTHER_ASSESSMENT, ASSESSMENT_CONFIG)
