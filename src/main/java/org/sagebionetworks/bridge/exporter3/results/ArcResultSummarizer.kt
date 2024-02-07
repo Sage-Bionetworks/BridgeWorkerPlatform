@@ -1,6 +1,10 @@
 package org.sagebionetworks.bridge.exporter3.results
 
-import edu.wustl.arc.result.*
+import edu.wustl.arc.result.ArcResult
+import edu.wustl.arc.result.GridTest
+import edu.wustl.arc.result.JsonCoder
+import edu.wustl.arc.result.PriceTest
+import edu.wustl.arc.result.SymbolTest
 import org.sagebionetworks.bridge.rest.model.Assessment
 import org.slf4j.LoggerFactory
 
