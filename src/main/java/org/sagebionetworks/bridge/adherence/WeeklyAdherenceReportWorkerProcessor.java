@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.sagebionetworks.bridge.json.DefaultObjectMapper;
 import org.sagebionetworks.bridge.rest.ClientManager;
@@ -84,18 +85,21 @@ public class WeeklyAdherenceReportWorkerProcessor implements ThrowingConsumer<Js
     
     private void process(WeeklyAdherenceReportRequest request) throws Exception {
         ForWorkersApi workersApi = clientManager.getClient(ForWorkersApi.class);
-        
-        List<App> appList = null;
+
+        // Get list of app IDs depending on request parameters.
+        List<String> appIdList;
         if (!request.getSelectedStudies().isEmpty()) {
-            appList = new ArrayList<>();
-            for (String appId : request.getSelectedStudies().keySet()) {
-                App app = bridgeHelper.getApp(appId);
-                appList.add(app);
-            }
+            appIdList = new ArrayList<>(request.getSelectedStudies().keySet());
         } else {
-            appList = bridgeHelper.getAllApps();   
+            List<App> appSummaryList = bridgeHelper.getAllApps();
+            appIdList = appSummaryList.stream().map(App::getIdentifier).collect(Collectors.toList());
         }
-        for (App app : appList) {
+
+        for (String appId : appIdList) {
+            // Slight pause between apps.
+            Thread.sleep(THREAD_SLEEP_INTERVAL);
+
+            App app = bridgeHelper.getApp(appId);
             if (!Boolean.TRUE.equals(app.isAdherenceReportEnabled())) {
                 LOG.info("Skipping app '" + app.getIdentifier() + "': it has no adherence report enabled");
                 continue;
