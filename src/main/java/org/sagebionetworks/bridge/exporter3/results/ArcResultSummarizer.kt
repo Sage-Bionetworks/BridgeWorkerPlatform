@@ -67,8 +67,8 @@ class ArcResultSummarizer(val assessment: Assessment) : AssessmentSummarizer {
         const val GRID_ASSESSMENT_IDENTIFIER = "grid_test"
         const val PRICE_ASSESSMENT_IDENTIFIER = "price_test"
         const val SYMBOL_ASSESSMENT_IDENTIFIER = "symbol_test"
-        const val DIAN_APP_CONTAINER_ASSESSMENT_IDENTIFIER = "dian_app_container_assessment" //TODO: Create special container assessment -nbrown 2/5/24
-        const val DIAN_APP_CONTAINER_ASSESSMENT_GUID = "TODO" //TODO: Create special container assessment -nbrown 2/5/24
+        const val DIAN_APP_CONTAINER_ASSESSMENT_IDENTIFIER = "dian_app_container_assessment" // Special container assessment -nbrown 2/5/24
+        const val DIAN_APP_CONTAINER_ASSESSMENT_GUID = "aFgKEr7cQKmhZcL5zFzpS1YH" // Special container assessment -nbrown 2/5/24
 
         private val LOG = LoggerFactory.getLogger(ArcResultSummarizer::class.java)
     }
