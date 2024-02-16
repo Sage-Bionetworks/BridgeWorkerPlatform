@@ -49,6 +49,7 @@ import org.sagebionetworks.bridge.config.Config;
 import org.sagebionetworks.bridge.crypto.CmsEncryptor;
 import org.sagebionetworks.bridge.crypto.WrongEncryptionKeyException;
 import org.sagebionetworks.bridge.exceptions.BridgeSynapseException;
+import org.sagebionetworks.bridge.exporter3.results.ArcResultSummarizer;
 import org.sagebionetworks.bridge.exporter3.results.AssessmentSummarizer;
 import org.sagebionetworks.bridge.exporter3.results.AssessmentSummarizerProvider;
 import org.sagebionetworks.bridge.file.FileHelper;
@@ -608,6 +609,20 @@ public class Exporter3WorkerProcessor implements ThrowingConsumer<JsonNode> {
         UploadTableRow tableRow = null;
         String assessmentGuid = metadataMap.get(METADATA_KEY_ASSESSMENT_GUID);
         String appId = record.getAppId();
+
+        /**
+         * If assessmentGuid is null then this is a session level upload, which may contain results from multiple assessments.
+         * The ARC/DIAN app sends 1 upload with 1 json file containing results from potentially 3 assessments and additional context
+         * surveys. Hacky workaround solution:
+         * 1. If Bridge APP is ARC or INV_ARC
+         * 2. Hardcode the assessmentGuid to a new special ARC container assessment
+         * 3. Use ArcResultSummarizer to generate a single TableRow containing all the data
+         *      - If the summarizer can't parse the results, then we will just get a mostly empty table row
+         */
+        if (assessmentGuid == null && ("arc".equals(appId) || "inv-arc".equals(appId))) {
+            assessmentGuid = ArcResultSummarizer.DIAN_APP_CONTAINER_ASSESSMENT_GUID;
+        }
+
 
         if (assessmentGuid != null) {
             // Top-level parameters.

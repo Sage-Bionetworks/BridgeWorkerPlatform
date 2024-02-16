@@ -10,7 +10,7 @@ class AssessmentSummarizerProvider {
         if (assessment == null || assessmentConfig == null) return null
         return when (assessment.frameworkIdentifier) {
             AssessmentResultSummarizer.FRAMEWORK_IDENTIFIER -> AssessmentResultSummarizer(assessment, assessmentConfig)
-            //TODO https://sagebionetworks.jira.com/browse/DHP-1025 Add ArcResultSummarizer here when it is ready
+            ArcResultSummarizer.FRAMEWORK_IDENTIFIER -> ArcResultSummarizer(assessment)
             else -> null
         }
     }
