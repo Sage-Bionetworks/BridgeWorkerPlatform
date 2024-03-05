@@ -150,12 +150,6 @@ public class UploadCsvWorkerProcessor implements ThrowingConsumer<JsonNode> {
 
     // Package-scoped for unit tests.
     void process(UploadCsvRequest request) throws IOException, PollSqsWorkerRetryableException {
-        // Log request params.
-        String assessmentGuidsAsString = "[" + Constants.COMMA_JOINER.join(request.getAssessmentGuids()) + "]";
-        LOG.info("Processing CSV request for appId=" + request.getAppId() + ", studyId=" + request.getStudyId() +
-                " assessmentGuids=" + assessmentGuidsAsString + " startTime=" + request.getStartTime() +
-                ", endTime=" + request.getEndTime() + " includeTestData=" + request.isIncludeTestData());
-
         // Get the table job from Bridge Server.
         UploadTableJob job = null;
         if (request.getJobGuid() != null) {
@@ -168,6 +162,13 @@ public class UploadCsvWorkerProcessor implements ThrowingConsumer<JsonNode> {
         try {
             // Get the study.
             Study study = bridgeHelper.getStudy(request.getAppId(), request.getStudyId());
+
+            // Log request params.
+            String assessmentGuidsAsString = "[" + Constants.COMMA_JOINER.join(request.getAssessmentGuids()) + "]";
+            LOG.info("Processing CSV request for appId=" + request.getAppId() + ", study=" + study.getIdentifier() +
+                    "-" + study.getName() + ", assessmentGuids=" + assessmentGuidsAsString + " startTime=" +
+                    request.getStartTime() + ", endTime=" + request.getEndTime() + " includeTestData=" +
+                    request.isIncludeTestData());
 
             // Call service to get table rows.
             Map<String, List<UploadTableRow>> rowsByAssessment;
