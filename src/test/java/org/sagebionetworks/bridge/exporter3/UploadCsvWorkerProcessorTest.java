@@ -663,13 +663,17 @@ public class UploadCsvWorkerProcessorTest {
                 .putMetadataItem("A", "A-1a").putMetadataItem("B", "B-1a")
                 .putDataItem("X", "X-1a").putDataItem("Y", "Y-1a");
 
-        // Execute.
-        processor.writeCsvRow(mockCsvWriter, STUDY, ASSESSMENT_A, metadataColumnList, dataColumnList, row);
+        try {
+            // Execute.
+            processor.writeCsvRow(mockCsvWriter, STUDY, ASSESSMENT_A, metadataColumnList, dataColumnList, row);
 
-        // Validate row.
-        verify(mockCsvWriter).writeNext(RECORD_ID_1A, STUDY_ID, STUDY_NAME, ASSESSMENT_GUID_A,
-                ASSESSMENT_ID_A, "1", ASSESSMENT_A_TITLE, CREATED_ON_1A.toString(), "false", HEALTH_CODE_1, "",
-                "A-1a", "B-1a", "", "X-1a", "Y-1a", "");
+            // Validate row.
+            verify(mockCsvWriter).writeNext(RECORD_ID_1A, STUDY_ID, STUDY_NAME, ASSESSMENT_GUID_A,
+                    ASSESSMENT_ID_A, "1", ASSESSMENT_A_TITLE, CREATED_ON_1A.toString(), "false", HEALTH_CODE_1, "",
+                    "A-1a", "B-1a", "", "X-1a", "Y-1a", "");
+        } catch(Exception e) {
+            fail("Should not have thrown any exception");
+        }
     }
 
     private static UploadCsvRequest makeRequest() {
