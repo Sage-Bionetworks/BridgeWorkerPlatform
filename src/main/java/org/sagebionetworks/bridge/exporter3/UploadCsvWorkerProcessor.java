@@ -380,7 +380,7 @@ public class UploadCsvWorkerProcessor implements ThrowingConsumer<JsonNode> {
         return csvFile;
     }
 
-    private void writeCsvHeaders(CSVWriter csvWriter, List<String> metadataColumnList, List<String> dataColumnList) {
+    private void writeCsvHeaders(CSVWriter csvWriter, List<String> metadataColumnList, List<String> dataColumnList) throws IOException {
         List<String> headerList = new ArrayList<>();
         headerList.addAll(Arrays.asList(COMMON_COLUMNS));
         headerList.addAll(metadataColumnList);
@@ -391,7 +391,7 @@ public class UploadCsvWorkerProcessor implements ThrowingConsumer<JsonNode> {
 
     // Package-scoped for unit tests.
     void writeCsvRow(CSVWriter csvWriter, Study study, Assessment assessment, List<String> metadataColumnList,
-            List<String> dataColumnList, UploadTableRow row) {
+            List<String> dataColumnList, UploadTableRow row) throws IOException {
         List<String> rowList = new ArrayList<>();
 
         // Common columns.
