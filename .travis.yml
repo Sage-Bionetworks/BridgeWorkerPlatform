@@ -1,3 +1,4 @@
+dist: focal
 language: java
 jdk:
 - openjdk8
@@ -9,8 +10,8 @@ branches:
   - uat
   - prod
 deploy:
-  skip_cleanup: true
   provider: elasticbeanstalk
+  edge: true
   access_key_id:
     develop: AKIAJQOD25TNB4GR4LFQ
     uat: AKIAJQOD25TNB4GR4LFQ
@@ -25,7 +26,7 @@ deploy:
   region: us-east-1
   app: bridgeworker-$TRAVIS_BRANCH-application
   env: bridgeworker-$TRAVIS_BRANCH
-  bucket_name:
+  bucket:
     develop: elasticbeanstalk-us-east-1-420786776710
     uat: elasticbeanstalk-us-east-1-420786776710
     prod: elasticbeanstalk-us-east-1-649232250620
