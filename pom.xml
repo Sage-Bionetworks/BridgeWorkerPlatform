@@ -11,9 +11,10 @@
 
     <properties>
         <aws.version>1.12.261</aws.version>
-        <jackson.version>2.12.6</jackson.version>
+        <jackson.version>2.12.7</jackson.version>
+        <jackson-databind.version>2.12.7.2</jackson-databind.version>
         <java.version>1.8</java.version>
-        <logback.version>1.2.9</logback.version>
+        <logback.version>1.2.13</logback.version>
         <log4j.version>2.17.1</log4j.version>
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
@@ -83,7 +84,7 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.12.6.1</version>
+            <version>${jackson-databind.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
@@ -162,7 +163,7 @@
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>1.2.0</version>
+            <version>${logback.version}</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
