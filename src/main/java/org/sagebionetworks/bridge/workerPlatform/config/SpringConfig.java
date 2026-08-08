@@ -181,6 +181,11 @@ public class SpringConfig {
         return Executors.newFixedThreadPool(bridgeConfig().getInt("threadpool.general.count"));
     }
 
+    @Bean(name = "appendTableExecutorService")
+    public ExecutorService appendTableExecutorService() {
+        return Executors.newFixedThreadPool(bridgeConfig().getInt("threadpool.append.table.count"));
+    }
+
     @Bean(name = "synapseExecutorService")
     public ExecutorService synapseExecutorService() {
         return Executors.newFixedThreadPool(bridgeConfig().getInt("threadpool.synapse.count"));
